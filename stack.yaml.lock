@@ -3,11 +3,46 @@
 # For more information, please see the documentation at:
 #   https://docs.haskellstack.org/en/stable/lock_files
 
+packages:
+- completed:
+    hackage: fused-effects-1.1.1.1@sha256:c029c5fb0b2154281221a71ff25709d2a11347fe061fa8c2398e7fe52a16008d,4932
+    pantry-tree:
+      size: 6345
+      sha256: 7d09ba6d70fc49a5fd2feef0e6b06122589b9f5e4539680c9d7933773e7273d7
+  original:
+    hackage: fused-effects-1.1.1.1@sha256:c029c5fb0b2154281221a71ff25709d2a11347fe061fa8c2398e7fe52a16008d,4932
+- completed:
+    hackage: HList-0.5.0.0@sha256:7d7a0bee8d01a7e0e10bf96c5214a21bebae3ecfc02d14fc13bf75458b38ac43,7137
+    pantry-tree:
+      size: 5718
+      sha256: 2881dd9fe6ee24dad62ecd68be6d98e834823d21b659f4ff0de87475e33371f1
+  original:
+    hackage: HList-0.5.0.0@sha256:7d7a0bee8d01a7e0e10bf96c5214a21bebae3ecfc02d14fc13bf75458b38ac43,7137
+- completed:
+    hackage: grpc-haskell-0.1.0@sha256:af109db9bf7d7d00a5088fb30dab1a03e3c54b19c66dc1ac0d8d61217524d11b,6334
+    pantry-tree:
+      size: 1934
+      sha256: d02f71fad7f9c8d734c30d6c039f1ad98e210e416ddb960c961d0669a4c184fc
+  original:
+    hackage: grpc-haskell-0.1.0@sha256:af109db9bf7d7d00a5088fb30dab1a03e3c54b19c66dc1ac0d8d61217524d11b,6334
+- completed:
+    hackage: grpc-haskell-core-0.1.0@sha256:50adbefd11be9e8b72ea98b7c3b5a4b2879fea211de4552b9759b91f2d4d8c51,3304
+    pantry-tree:
+      size: 2330
+      sha256: 5225c7c8413b57b43e94ec64a7efbc107fa764ccf66eb1fa6a7be22e5a98c683
+  original:
+    hackage: grpc-haskell-core-0.1.0@sha256:50adbefd11be9e8b72ea98b7c3b5a4b2879fea211de4552b9759b91f2d4d8c51,3304
+- completed:
+    hackage: proto3-suite-0.4.2@sha256:86ea244011eacdcde0e77181d83183e89c14ae1aba816e1c7df59f9df3195a93,6073
+    pantry-tree:
+      size: 3119
+      sha256: a4d659d1aec53305dcdfa9ebbcf349ff2ef7dbf886015b8c5faf4f19e927d647
+  original:
+    hackage: proto3-suite-0.4.2@sha256:86ea244011eacdcde0e77181d83183e89c14ae1aba816e1c7df59f9df3195a93,6073
 snapshots:
-- original:
-    url: https://mirrors.tuna.tsinghua.edu.cn/stackage/stackage-snapshots/lts/18/18.yaml
-  completed:
+- completed:
+    size: 586296
     url: https://mirrors.tuna.tsinghua.edu.cn/stackage/stackage-snapshots/lts/18/18.yaml
     sha256: 63539429076b7ebbab6daa7656cfb079393bf644971156dc349d7c0453694ac2
-    size: 586296
-packages: []
+  original:
+    url: https://mirrors.tuna.tsinghua.edu.cn/stackage/stackage-snapshots/lts/18/18.yaml

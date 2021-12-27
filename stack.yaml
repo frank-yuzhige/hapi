@@ -41,7 +41,12 @@ packages:
 #   commit: e7b331f14bcffb8367cd58fbfc8b40ec7642100a
 #
 # extra-deps: []
-
+extra-deps:
+  - fused-effects-1.1.1.1@sha256:c029c5fb0b2154281221a71ff25709d2a11347fe061fa8c2398e7fe52a16008d,4932
+  - HList-0.5.0.0@sha256:7d7a0bee8d01a7e0e10bf96c5214a21bebae3ecfc02d14fc13bf75458b38ac43,7137
+  - grpc-haskell-0.1.0@sha256:af109db9bf7d7d00a5088fb30dab1a03e3c54b19c66dc1ac0d8d61217524d11b,6334
+  - grpc-haskell-core-0.1.0@sha256:50adbefd11be9e8b72ea98b7c3b5a4b2879fea211de4552b9759b91f2d4d8c51,3304
+  - proto3-suite-0.4.2@sha256:86ea244011eacdcde0e77181d83183e89c14ae1aba816e1c7df59f9df3195a93,6073
 # Override default flag values for local packages and extra-deps
 # flags: {}
 
