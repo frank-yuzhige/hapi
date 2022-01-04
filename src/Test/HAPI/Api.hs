@@ -47,7 +47,7 @@ class RpcCall (api :: ApiDefinition) where
 newtype ApiAC (api :: ApiDefinition) m a = ApiAC { runApiAC :: ReaderC () m a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadFail)
 
-runApi :: ApiAC proc m a -> m a
+runApi :: ApiAC api m a -> m a
 runApi = runReader () . runApiAC
 
 -- | If the api call can map to relevant haskell functions, then it can be interpreted
@@ -59,10 +59,10 @@ instance (Algebra sig m, HasHaskellDef api) => Algebra (api :+: sig) (ApiAC api 
 newtype ApiIOAC (api :: ApiDefinition) m a = ApiIOAC { runApiIOAC :: ReaderC () m a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadFail)
 
-runApiIO :: ApiIOAC proc m a -> m a
+runApiIO :: ApiIOAC api m a -> m a
 runApiIO = runReader () . runApiIOAC
 
-instance (Algebra sig m, MonadIO m, MonadFail m, HaskellIOCall proc) => Algebra (proc :+: sig) (ApiIOAC proc m) where
+instance (Algebra sig m, MonadIO m, MonadFail m, HaskellIOCall api) => Algebra (api :+: sig) (ApiIOAC api m) where
   alg hdl sig ctx = ApiIOAC $ case sig of
     L call -> do
       liftIO $ putStrLn $ showArgs call

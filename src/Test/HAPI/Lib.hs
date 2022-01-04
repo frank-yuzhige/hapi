@@ -3,16 +3,21 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Test.HAPI.Lib where
 
-import Control.Algebra (Has, type (:+:), send)
+import Control.Algebra ( Has, type (:+:), send, Algebra )
 import Test.HAPI.Api
     ( HaskellIOCall(..), HasHaskellDef(..), runApi, runApiIO )
-import Test.HAPI.Property (PropertyA, runProperty, shouldBe, PropertyError)
+import Test.HAPI.Property (PropertyA, runProperty, shouldBe, PropertyError, PropertyAC (runPropertyTypeAC))
 import Text.Read (readMaybe)
-import Control.Carrier.Error.Either (Catch, Error, Throw)
-import Control.Monad.IO.Class (MonadIO)
+import Control.Carrier.Error.Church (Catch, Error, Throw, catchError, runError, ErrorC)
+import Control.Monad.IO.Class (MonadIO (liftIO))
+import Control.Monad (void)
+import Test.HAPI.GenT (GenA, liftGenA, GenAC (runGenAC), arbitraryA, genIO)
+import Test.QuickCheck.GenT (MonadGen(liftGen), runGenT)
+import Test.QuickCheck (Arbitrary(arbitrary), generate)
 
 data ArithApiA (m :: * -> *) a where
   AddA :: Int -> Int -> ArithApiA m Int
@@ -59,15 +64,40 @@ strA :: Has ShowApiA sig m => Int -> m String
 strA a = send $ StrA a
 
 -- | Example program, calling arithmetic and show API
-show3Plus5Is8 :: Has (ArithApiA :+: ShowApiA :+: PropertyA) sig m => m Bool
+show3Plus5Is8 :: Has (ArithApiA :+: ShowApiA :+: PropertyA) sig m => m ()
 show3Plus5Is8 = do
   x <- addA 3 5
   x <- mulA 5 x
   x <- strA x
   x `shouldBe` "40"
 
-prop :: (Has (Throw PropertyError) sig m , MonadIO m, MonadFail m) => m (Either PropertyError Bool)
-prop = runProperty @PropertyA
-     . runApi @ArithApiA
-     . runApiIO @ShowApiA
+prop2 :: (MonadIO m, MonadFail m, Has (Error PropertyError) sig m) => ErrorC PropertyError m ()
+prop2 = do
+  runProperty @PropertyA
+    . runApiIO @ArithApiA
+    . runApi @ShowApiA
+    $ catchError @PropertyError show3Plus5Is8 (liftIO . print)
+
+prop :: (MonadIO m, MonadFail m, Algebra sig m) => m ()
+prop = runError @PropertyError (fail . show) pure
+     . runProperty @PropertyA
+     . runApiIO @ArithApiA
+     . runApi @ShowApiA
      $ show3Plus5Is8
+
+arb :: Has (ShowApiA :+: PropertyA :+: GenA) sig m => m ()
+arb = do
+  x <- strA =<< arbitraryA @Int
+  x `shouldBe` "40"
+
+
+runArb :: forall m sig. (MonadIO m, MonadFail m, Algebra sig m) => m ()
+runArb = do
+        genIO
+          . runGenAC
+          . runError @PropertyError (fail . show) pure
+          . runProperty @PropertyA
+          . runApi @ShowApiA
+          $ arb
+-- propIO :: IO ()
+-- propIO = runError @PropertyError (fail . (++ " <<<<<< 2") . show) pure prop

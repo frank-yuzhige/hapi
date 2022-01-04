@@ -21,8 +21,11 @@ description:         Please see the README on GitHub at <https://github.com/gith
 
 dependencies:
 - base >= 4.7 && < 5
+- transformers >= 0.5.6.2
+- random >= 1.2.0
 - fused-effects >= 1.1.1.1
 - QuickCheck >= 2.14.2
+- quickcheck-transformer >= 0.3.1.1
 - HList >= 0.5.0.0
 - grpc-haskell >= 0.1.0
 

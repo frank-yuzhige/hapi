@@ -28,6 +28,7 @@ library
       Test.HAPI.Api
       Test.HAPI.Comm
       Test.HAPI.DataType
+      Test.HAPI.GenT
       Test.HAPI.Lib
       Test.HAPI.Property
   other-modules:
@@ -40,6 +41,9 @@ library
     , base >=4.7 && <5
     , fused-effects >=1.1.1.1
     , grpc-haskell >=0.1.0
+    , quickcheck-transformer >=0.3.1.1
+    , random >=1.2.0
+    , transformers >=0.5.6.2
   default-language: Haskell2010
 
 executable hapi-exe
@@ -56,6 +60,9 @@ executable hapi-exe
     , fused-effects >=1.1.1.1
     , grpc-haskell >=0.1.0
     , hapi
+    , quickcheck-transformer >=0.3.1.1
+    , random >=1.2.0
+    , transformers >=0.5.6.2
   default-language: Haskell2010
 
 test-suite hapi-test
@@ -73,4 +80,7 @@ test-suite hapi-test
     , fused-effects >=1.1.1.1
     , grpc-haskell >=0.1.0
     , hapi
+    , quickcheck-transformer >=0.3.1.1
+    , random >=1.2.0
+    , transformers >=0.5.6.2
   default-language: Haskell2010
