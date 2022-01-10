@@ -62,6 +62,9 @@ instance (Algebra sig m, HasHaskellDef api) => Algebra (api :+: sig) (ApiAC api 
     L call -> return (ctx $> evalHaskell call)
     R other -> alg (runApiAC . hdl) other ctx
 
+
+-- | Haskell IO Orchestration
+
 newtype ApiIOAC (api :: ApiDefinition) m a = ApiIOAC { runApiIOAC :: m a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadFail)
 
@@ -77,6 +80,9 @@ instance (Algebra sig m, MonadIO m, MonadFail m, HaskellIOCall api) => Algebra (
         Nothing -> fail "Parse error"
         Just o  -> return (ctx $> o)
     R other -> alg (runApiIOAC . hdl) other ctx
+
+
+-- | Foreign
 
 newtype ApiFFIAC (api :: ApiDefinition) m a = ApiFFIAC { runApiFFIAC :: m a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadFail)

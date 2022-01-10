@@ -24,10 +24,17 @@ import Control.Monad (join)
 
 data GenA (m :: * -> *) a where
   LiftGenA :: Gen a -> GenA m a
-  VariantA :: Integral k => k -> m a -> GenA m a
+  VariantA :: Integral k => k -> GenA m a -> GenA m a
   SizedA   :: (Int -> GenA m a) -> GenA m a
-  ResizeA  :: Int -> m a -> GenA m a
+  ResizeA  :: Int -> GenA m a -> GenA m a
   ChooseA  :: Random a => (a, a) -> GenA m a
+
+changeBasis :: GenA m a -> GenA n a
+changeBasis (LiftGenA gen) = LiftGenA gen
+changeBasis (VariantA k ma) = VariantA k (changeBasis ma)
+changeBasis (SizedA f) = SizedA $ \i -> changeBasis (f i)
+changeBasis (ResizeA n ma) = ResizeA n (changeBasis ma)
+changeBasis (ChooseA r) = ChooseA r
 
 liftGenA :: Has GenA sig m => Gen a -> m a
 liftGenA = send . LiftGenA
@@ -52,9 +59,9 @@ instance (Algebra sig m) => Algebra (GenA :+: sig) (GenAC m) where
       LiftGenA qcGen -> do
         g <- liftGen qcGen
         return $ ctx $> g
-      VariantA k g -> variant k (hdl (ctx $> g))
-      SizedA f -> undefined  -- TODO How to implement this???
-      ResizeA k g -> resize k (hdl (ctx $> g))
+      VariantA k g -> variant k $ alg (GenAC . runGenAC . hdl) (L g) ctx
+      SizedA f -> sized $ \i -> alg (GenAC . runGenAC . hdl) (L (f i)) ctx
+      ResizeA k g -> resize k $ alg (GenAC . runGenAC . hdl) (L g) ctx
       ChooseA r -> do
         c <- choose r
         return (ctx $> c)
