@@ -9,15 +9,18 @@ module Test.HAPI.Lib where
 
 import Control.Algebra ( Has, type (:+:), send, Algebra )
 import Test.HAPI.Api
-    ( HaskellIOCall(..), HasHaskellDef(..), runApi, runApiIO )
+    ( HaskellIOCall(..), HasHaskellDef(..), runApi, runApiIO, HasForeignDef (evalForeign), runApiFFI )
 import Test.HAPI.Property (PropertyA, runProperty, shouldBe, PropertyError, PropertyAC (runPropertyTypeAC))
 import Text.Read (readMaybe)
 import Control.Carrier.Error.Church (Catch, Error, Throw, catchError, runError, ErrorC)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad (void)
-import Test.HAPI.GenT (GenA, liftGenA, GenAC (runGenAC), arbitraryA, genIO)
+import Test.HAPI.GenT (GenA, liftGenA, GenAC (runGenAC), arbitraryA, runGenIO)
 import Test.QuickCheck.GenT (MonadGen(liftGen), runGenT)
 import Test.QuickCheck (Arbitrary(arbitrary), generate)
+import Test.HAPI.GenT (suchThat)
+import Test.HAPI.FFI (add, sub, mul, neg)
+import Control.Effect.Labelled (Labelled(Labelled))
 
 data ArithApiA (m :: * -> *) a where
   AddA :: Int -> Int -> ArithApiA m Int
@@ -44,6 +47,12 @@ instance HasHaskellDef ArithApiA where
   evalHaskell (MulA a b) = a * b
   evalHaskell (NegA a)   = -a
 
+instance HasForeignDef ArithApiA where
+  evalForeign (AddA a b) = fromIntegral <$> add (fromIntegral a) (fromIntegral b)
+  evalForeign (SubA a b) = fromIntegral <$> sub (fromIntegral a) (fromIntegral b)
+  evalForeign (MulA a b) = fromIntegral <$> mul (fromIntegral a) (fromIntegral b)
+  evalForeign (NegA a)   = fromIntegral <$> neg (fromIntegral a)
+
 instance HaskellIOCall ArithApiA where
   readOut (AddA _ _) = readMaybe
   readOut (SubA _ _) = readMaybe
@@ -67,37 +76,27 @@ strA a = send $ StrA a
 show3Plus5Is8 :: Has (ArithApiA :+: ShowApiA :+: PropertyA) sig m => m ()
 show3Plus5Is8 = do
   x <- addA 3 5
-  x <- mulA 5 x
+  x <- subA (-10005) x
   x <- strA x
   x `shouldBe` "40"
-
-prop2 :: (MonadIO m, MonadFail m, Has (Error PropertyError) sig m) => ErrorC PropertyError m ()
-prop2 = do
-  runProperty @PropertyA
-    . runApiIO @ArithApiA
-    . runApi @ShowApiA
-    $ catchError @PropertyError show3Plus5Is8 (liftIO . print)
 
 prop :: (MonadIO m, MonadFail m, Algebra sig m) => m ()
 prop = runError @PropertyError (fail . show) pure
      . runProperty @PropertyA
-     . runApiIO @ArithApiA
-     . runApi @ShowApiA
+     . runApiFFI @ArithApiA
+     . runApiIO @ShowApiA
      $ show3Plus5Is8
 
 arb :: Has (ShowApiA :+: PropertyA :+: GenA) sig m => m ()
 arb = do
-  x <- strA =<< arbitraryA @Int
+  x <- arbitraryA @Int `suchThat` even
+  x <- strA x
   x `shouldBe` "40"
 
 
 runArb :: forall m sig. (MonadIO m, MonadFail m, Algebra sig m) => m ()
-runArb = do
-        genIO
-          . runGenAC
+runArb = do runGenIO
           . runError @PropertyError (fail . show) pure
           . runProperty @PropertyA
-          . runApi @ShowApiA
+          . runApiIO @ShowApiA
           $ arb
--- propIO :: IO ()
--- propIO = runError @PropertyError (fail . (++ " <<<<<< 2") . show) pure prop

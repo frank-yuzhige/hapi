@@ -25,7 +25,7 @@ import Control.Monad (join)
 data GenA (m :: * -> *) a where
   LiftGenA :: Gen a -> GenA m a
   VariantA :: Integral k => k -> m a -> GenA m a
-  SizedA   :: (Int -> m a) -> GenA m a
+  SizedA   :: (Int -> GenA m a) -> GenA m a
   ResizeA  :: Int -> m a -> GenA m a
   ChooseA  :: Random a => (a, a) -> GenA m a
 
@@ -35,11 +35,16 @@ liftGenA = send . LiftGenA
 arbitraryA :: forall a m sig. (Has GenA sig m, Arbitrary a) => m a
 arbitraryA = liftGenA arbitrary
 
+suchThat :: (Has GenA sig m, Arbitrary a) => m a -> (a -> Bool) -> m a
+suchThat gen p = do
+  a <- gen
+  if p a then return a else suchThat gen p
+
 newtype GenAC m a = GenAC { runGenAC :: GenT m a }
   deriving (Functor, Applicative, Monad, MonadFail, MonadIO, MonadGen, MonadTrans)
 
-genIO :: MonadIO m => GenT m a -> m a
-genIO = join . liftIO . generate . runGenT
+runGenIO :: MonadIO m => GenAC m a -> m a
+runGenIO = join . liftIO . generate . runGenT . runGenAC
 
 instance (Algebra sig m) => Algebra (GenA :+: sig) (GenAC m) where
   alg hdl sig ctx = case sig of

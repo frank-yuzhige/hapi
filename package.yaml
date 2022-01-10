@@ -10,6 +10,12 @@ extra-source-files:
 - README.md
 - ChangeLog.md
 
+# extra-include-dirs:
+#   - ./test/test-api/broken-arith
+# extra-lib-dirs:
+#   - ./test/test-api/broken-arith
+# extra-libraries: broken-arith
+
 # Metadata used when publishing your package
 # synopsis:            Short description of your package
 # category:            Web
@@ -31,6 +37,8 @@ dependencies:
 
 library:
   source-dirs: src
+  c-sources:
+    - ./test/test-api/broken-arith/broken-arith.c
 
 executables:
   hapi-exe:

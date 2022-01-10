@@ -28,6 +28,7 @@ library
       Test.HAPI.Api
       Test.HAPI.Comm
       Test.HAPI.DataType
+      Test.HAPI.FFI
       Test.HAPI.GenT
       Test.HAPI.Lib
       Test.HAPI.Property
@@ -35,6 +36,8 @@ library
       Paths_hapi
   hs-source-dirs:
       src
+  c-sources:
+      ./test/test-api/broken-arith/broken-arith.c
   build-depends:
       HList >=0.5.0.0
     , QuickCheck >=2.14.2

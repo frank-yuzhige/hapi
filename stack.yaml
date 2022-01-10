@@ -65,8 +65,10 @@ extra-deps:
 # arch: x86_64
 #
 # Extra directories used by stack for building
-# extra-include-dirs: [/path/to/dir]
-# extra-lib-dirs: [/path/to/dir]
+# extra-include-dirs:
+  # - ./test/test-api/broken-arith
+# extra-lib-dirs:
+  # - ./test/test-api/broken-arith
 #
 # Allow a newer minor version of GHC than the snapshot specifies
 # compiler-check: newer-minor
