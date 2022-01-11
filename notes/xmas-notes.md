@@ -28,7 +28,9 @@
 - Papers?
   - A lot of fuzzer papers focusing on fuzzing techniques and tools
   - Cadar paper: Fuzzing: Challenges and Reflections
-    -
+    - Foci presented in this paper, approach these?
+      - Benchmarking (different handler in same semantics, more reliable comparison)
+      -
   - Papers focusing on technique unifications (e.g. Someone used monad transformer to implement fuzzer with different fuzzing techniques)
 
 ## Haskell Questions
@@ -36,6 +38,19 @@
 
 
 # Current Design
+
+```
+lib C ArithApi:
+  fun add(int, int): int
+  fun neg(int a): int
+    where a <= 100000 and a >= -100;
+  <function defs...>
+
+  expect add(a, b)
+
+
+
+```
 
 ### Effects
 - LibSpec (maybe TH-based DSL): Describes the behaviour of a range of libraries.

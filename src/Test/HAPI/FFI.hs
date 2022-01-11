@@ -5,6 +5,7 @@
 module Test.HAPI.FFI where
 
 import Control.Monad.IO.Class (MonadIO)
+import Foreign.C (CString)
 import Foreign.C.Types (CInt(CInt))
 
 newtype FFIO a = FFIO { unFFIO :: IO a }
@@ -19,5 +20,5 @@ foreign import ccall "stateful_multiply"
   mul :: CInt -> CInt -> FFIO CInt
 foreign import ccall "limited_input_range_negate"
   neg :: CInt -> FFIO CInt
-
-
+foreign import ccall "broken_str"
+  str :: CInt -> FFIO CString

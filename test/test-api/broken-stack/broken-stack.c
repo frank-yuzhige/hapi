@@ -1,9 +1,9 @@
+static const int LIMIT = 1024;
+
 typedef struct stack_t {
     int top;
-    int array[4096];
+    int array[LIMIT];
 } stack_t;
-
-static const int LIMIT = 1024;
 
 stack_t *create_stack() {
     stack_t *stack = malloc(sizeof(stack_t));
@@ -17,6 +17,10 @@ void push_stack(stack_t *stack, int elem) {
 
 void pop_stack(stack_t *stack) {
     stack->top--;
+}
+
+int peek_stack(stack_t *stack) {
+    return stack->array[stack->top - 1];
 }
 
 void get_stack_size(stack_t *stack) {

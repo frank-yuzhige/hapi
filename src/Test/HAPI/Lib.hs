@@ -10,17 +10,18 @@ module Test.HAPI.Lib where
 import Control.Algebra ( Has, type (:+:), send, Algebra )
 import Test.HAPI.Api
     ( HaskellIOCall(..), HasHaskellDef(..), runApi, runApiIO, HasForeignDef (evalForeign), runApiFFI )
-import Test.HAPI.Property (PropertyA, runProperty, shouldBe, PropertyError, PropertyAC (runPropertyTypeAC))
+import Test.HAPI.Property (PropertyA, runProperty, shouldBe, PropertyError, PropertyAC (runPropertyTypeAC), failed)
 import Text.Read (readMaybe)
 import Control.Carrier.Error.Church (Catch, Error, Throw, catchError, runError, ErrorC)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad (void)
-import Test.HAPI.GenT (GenA, liftGenA, GenAC (runGenAC), arbitraryA, runGenIO)
+import Test.HAPI.GenT (GenA, liftGenA, GenAC (runGenAC), anyVal, runGenIO)
 import Test.QuickCheck.GenT (MonadGen(liftGen), runGenT)
 import Test.QuickCheck (Arbitrary(arbitrary), generate)
-import Test.HAPI.GenT (suchThat)
-import Test.HAPI.FFI (add, sub, mul, neg)
+import Test.HAPI.GenT (suchThat, chooseA)
+import Test.HAPI.FFI (add, sub, mul, neg, str)
 import Control.Effect.Labelled (Labelled(Labelled))
+import Foreign.C (peekCString)
 
 data ArithApiA (m :: * -> *) a where
   AddA :: Int -> Int -> ArithApiA m Int
@@ -37,6 +38,10 @@ deriving instance Show (ShowApiA m a)
 instance HasHaskellDef ShowApiA where
   evalHaskell (StrA a) = show a
 
+instance HasForeignDef ShowApiA where
+  evalForeign (StrA a) = do
+    ptr <- str (fromIntegral a)
+    liftIO $ peekCString ptr
 instance HaskellIOCall ShowApiA where
   readOut (StrA _) = readMaybe
   showArgs = show
@@ -89,14 +94,36 @@ prop = runError @PropertyError (fail . show) pure
 
 arb :: Has (ShowApiA :+: PropertyA :+: GenA) sig m => m ()
 arb = do
-  x <- arbitraryA @Int `suchThat` even
-  x <- strA x
-  x `shouldBe` "40"
+  a <- chooseA (10000000, 20000000)
+  b <- chooseA (10000000, 20000000)
+  x <- strA a
+  x `shouldBe` show a
+  y <- strA b
+  y `shouldBe` show b
+  x <- strA a
+  x `shouldBe` show a
+
+prog1 :: Has (ArithApiA :+: PropertyA :+: GenA) sig m => m ()
+prog1 = do
+  a <- mulA 1 2
+  b <- mulA 3 4
+  c <- mulA 5 6
+  d <- mulA 7 8
+  e <- mulA 9 10
+  (a, b, c, d, e) `shouldBe` (2, 12, 30, 56, 90)
+  failed
 
 
 runArb :: forall m sig. (MonadIO m, MonadFail m, Algebra sig m) => m ()
 runArb = do runGenIO
           . runError @PropertyError (fail . show) pure
           . runProperty @PropertyA
-          . runApiIO @ShowApiA
+          . runApiFFI @ShowApiA
           $ arb
+
+runProg :: forall m sig. (MonadIO m, MonadFail m, Algebra sig m) => m ()
+runProg = do runGenIO
+          . runError @PropertyError (fail . show) pure
+          . runProperty @PropertyA
+          . runApiFFI @ArithApiA
+          $ prog1

@@ -20,6 +20,7 @@ import Control.Monad.Trans.Class (MonadTrans (lift))
 import Data.Functor (($>))
 import Test.QuickCheck.Gen (generate)
 import Control.Monad (join)
+import qualified Data.List.NonEmpty as NE
 
 
 data GenA (m :: * -> *) a where
@@ -29,23 +30,11 @@ data GenA (m :: * -> *) a where
   ResizeA  :: Int -> GenA m a -> GenA m a
   ChooseA  :: Random a => (a, a) -> GenA m a
 
-changeBasis :: GenA m a -> GenA n a
-changeBasis (LiftGenA gen) = LiftGenA gen
-changeBasis (VariantA k ma) = VariantA k (changeBasis ma)
-changeBasis (SizedA f) = SizedA $ \i -> changeBasis (f i)
-changeBasis (ResizeA n ma) = ResizeA n (changeBasis ma)
-changeBasis (ChooseA r) = ChooseA r
-
 liftGenA :: Has GenA sig m => Gen a -> m a
 liftGenA = send . LiftGenA
 
-arbitraryA :: forall a m sig. (Has GenA sig m, Arbitrary a) => m a
-arbitraryA = liftGenA arbitrary
-
-suchThat :: (Has GenA sig m, Arbitrary a) => m a -> (a -> Bool) -> m a
-suchThat gen p = do
-  a <- gen
-  if p a then return a else suchThat gen p
+chooseA :: (Has GenA sig m, Random a) => (a, a) -> m a
+chooseA = send. ChooseA
 
 newtype GenAC m a = GenAC { runGenAC :: GenT m a }
   deriving (Functor, Applicative, Monad, MonadFail, MonadIO, MonadGen, MonadTrans)
@@ -59,10 +48,48 @@ instance (Algebra sig m) => Algebra (GenA :+: sig) (GenAC m) where
       LiftGenA qcGen -> do
         g <- liftGen qcGen
         return $ ctx $> g
-      VariantA k g -> variant k $ alg (GenAC . runGenAC . hdl) (L g) ctx
-      SizedA f -> sized $ \i -> alg (GenAC . runGenAC . hdl) (L (f i)) ctx
-      ResizeA k g -> resize k $ alg (GenAC . runGenAC . hdl) (L g) ctx
+      VariantA k g ->
+        variant k $ alg (GenAC . runGenAC . hdl) (L g) ctx
+      SizedA f ->
+        sized $ \i -> alg (GenAC . runGenAC . hdl) (L (f i)) ctx
+      ResizeA k g ->
+        resize k $ alg (GenAC . runGenAC . hdl) (L g) ctx
       ChooseA r -> do
         c <- choose r
         return (ctx $> c)
     R other -> alg (GenAC . runGenAC . hdl) (R other) ctx
+
+-- | Lifted Operations
+
+anyVal :: forall a m sig. (Has GenA sig m, Arbitrary a) => m a
+anyVal = liftGenA arbitrary
+
+suchThat :: (Has GenA sig m, Arbitrary a) => m a -> (a -> Bool) -> m a
+suchThat gen p = do
+  a <- gen
+  if p a then return a else suchThat gen p
+
+oneof :: (Has GenA sig m) => NE.NonEmpty (m a) -> m a
+oneof xs = chooseA (0, length xs - 1) >>= (xs NE.!!)
+{-# INLINE oneof #-}
+
+oneof' :: (Has GenA sig m) => [m a] -> m a
+oneof' [] = error "oneof' used with empty list!"
+oneof' xs = oneof (NE.fromList xs)
+
+frequency :: (Has GenA sig m) => NE.NonEmpty (Int, m a) -> m a
+frequency freqs = chooseA (0, total) >>= (`pick` NE.toList freqs)
+  where
+    total = sum $ fmap fst freqs
+    pick n ((a, m) : xs)
+      | n <= a    = m
+      | otherwise = pick (n - a) xs
+    pick _ _ = error "pick on empty list"
+
+frequency' :: (Has GenA sig m) => [(Int, m a)] -> m a
+frequency' [] = error "frequency' used with empty list!"
+frequency' xs = frequency (NE.fromList xs)
+
+anyOf' :: (Has GenA sig m) => [a] -> m a
+anyOf' [] = error "anyOf' used with empty list!"
+anyOf' xs = (xs !!) <$> chooseA (0, length xs - 1)

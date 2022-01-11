@@ -38,6 +38,7 @@ library
       src
   c-sources:
       ./test/test-api/broken-arith/broken-arith.c
+      ./test/test-api/broken-show/broken-show.c
   build-depends:
       HList >=0.5.0.0
     , QuickCheck >=2.14.2

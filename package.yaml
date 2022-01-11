@@ -39,6 +39,7 @@ library:
   source-dirs: src
   c-sources:
     - ./test/test-api/broken-arith/broken-arith.c
+    - ./test/test-api/broken-show/broken-show.c
 
 executables:
   hapi-exe:

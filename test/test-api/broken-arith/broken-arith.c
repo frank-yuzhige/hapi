@@ -11,17 +11,17 @@ __int32_t broken_add(__int32_t a, __int32_t b) {
 
 __int32_t segfault_minus(__int32_t a, __int32_t b) {
     if (a < -10000) {
-        *(int *)NULL = 1;   // Segfault
+        *(int *)0 = 1;   // Segfault
     }
     return (__int32_t) (a - b);
 }
 
 __int32_t stateful_multiply(__int32_t a, __int32_t b) {
     static __int32_t bad_guy = -4;
+    bad_guy++;
     if (bad_guy > 0) {
         return a * b + bad_guy;
     }
-    bad_guy++;
     return a * b;
 }
 

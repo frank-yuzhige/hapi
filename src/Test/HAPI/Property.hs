@@ -26,15 +26,21 @@ type PropertyType = (* -> *) -> * -> *
 
 data PropertyError where
   MismatchError :: Show a => a -> a -> PropertyError
+  FailedError   :: PropertyError
 
 instance Show PropertyError where
   show (MismatchError a b) = "Error: " <> show a <> " != " <> show b
+  show FailedError         = "Error: Expect the property not to reach this point"
 
 data PropertyA (m :: * -> *) a where
-  ShouldBeA  :: (Eq a, Show a) => a -> a -> PropertyA m ()
+  ShouldBeA :: (Eq a, Show a) => a -> a -> PropertyA m ()
+  FailedA  :: PropertyA m ()
 
 shouldBe :: (Eq a, Show a, Has PropertyA sig m) => a -> a -> m ()
 shouldBe a b = send $ ShouldBeA a b
+
+failed :: (Has PropertyA sig m) => m ()
+failed = send FailedA
 
 newtype PropertyAC (prop :: PropertyType) err m a = PropertyAC { runPropertyTypeAC :: ErrorC err m a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadFail, MonadTrans)
@@ -46,7 +52,10 @@ class Property (prop :: PropertyType) err | prop -> err where
   evalProperty :: prop m a -> Either err a
 
 instance Property PropertyA PropertyError where
-  evalProperty (ShouldBeA a b) = if a == b then Right () else Left (MismatchError a b)
+  evalProperty (ShouldBeA a b)
+    | a == b    = Right ()
+    | otherwise = Left (MismatchError a b)
+  evalProperty FailedA = Left FailedError
 
 instance (Algebra sig m, Property prop err) => Algebra (prop :+: sig) (PropertyAC prop err m) where
   alg hdl sig ctx = PropertyAC $ case sig of
