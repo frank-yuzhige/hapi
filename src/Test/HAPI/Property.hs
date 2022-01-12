@@ -17,7 +17,7 @@ import Control.Algebra ( send, Algebra(..), Has, type (:+:)(..) )
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Class (MonadTrans)
 import Data.Functor (($>))
-import Control.Carrier.Error.Church( Catch, ErrorC, throwError, throwError )
+import Control.Carrier.Error.Church( Catch, ErrorC, throwError )
 import Control.Carrier.Cull.Church (MonadPlus)
 import Control.Effect.Error (Error)
 import Test.QuickCheck (Arbitrary)
@@ -34,7 +34,7 @@ instance Show PropertyError where
 
 data PropertyA (m :: * -> *) a where
   ShouldBeA :: (Eq a, Show a) => a -> a -> PropertyA m ()
-  FailedA  :: PropertyA m ()
+  FailedA   :: PropertyA m ()
 
 shouldBe :: (Eq a, Show a, Has PropertyA sig m) => a -> a -> m ()
 shouldBe a b = send $ ShouldBeA a b

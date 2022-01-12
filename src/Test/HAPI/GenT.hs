@@ -24,18 +24,25 @@ import qualified Data.List.NonEmpty as NE
 
 
 data GenA (m :: * -> *) a where
+  -- | Lift a Gen to effect
   LiftGenA :: Gen a -> GenA m a
-  VariantA :: Integral k => k -> GenA m a -> GenA m a
+  -- | Modifies a generator using an integer seed
+  VariantA :: Integral k => k -> m a -> GenA m a
+  -- | Used to construct generators that depend on the size parameter.
   SizedA   :: (Int -> GenA m a) -> GenA m a
-  ResizeA  :: Int -> GenA m a -> GenA m a
+  -- | Overrides the size parameter. Returns a generator which uses
+  -- the given size instead of the runtime-size parameter.
+  ResizeA  :: Int -> m a -> GenA m a
+  -- | Generates a random element in the given inclusive range.
   ChooseA  :: Random a => (a, a) -> GenA m a
 
 liftGenA :: Has GenA sig m => Gen a -> m a
 liftGenA = send . LiftGenA
 
 chooseA :: (Has GenA sig m, Random a) => (a, a) -> m a
-chooseA = send. ChooseA
+chooseA = send . ChooseA
 
+-- | Interpretation using GenT
 newtype GenAC m a = GenAC { runGenAC :: GenT m a }
   deriving (Functor, Applicative, Monad, MonadFail, MonadIO, MonadGen, MonadTrans)
 
@@ -44,16 +51,16 @@ runGenIO = join . liftIO . generate . runGenT . runGenAC
 
 instance (Algebra sig m) => Algebra (GenA :+: sig) (GenAC m) where
   alg hdl sig ctx = case sig of
-    L genA   -> case genA of
+    L genA -> case genA of
       LiftGenA qcGen -> do
         g <- liftGen qcGen
         return $ ctx $> g
       VariantA k g ->
-        variant k $ alg (GenAC . runGenAC . hdl) (L g) ctx
+        variant k $ hdl (ctx $> g)
       SizedA f ->
         sized $ \i -> alg (GenAC . runGenAC . hdl) (L (f i)) ctx
       ResizeA k g ->
-        resize k $ alg (GenAC . runGenAC . hdl) (L g) ctx
+        resize k $ hdl (ctx $> g)
       ChooseA r -> do
         c <- choose r
         return (ctx $> c)
@@ -90,6 +97,6 @@ frequency' :: (Has GenA sig m) => [(Int, m a)] -> m a
 frequency' [] = error "frequency' used with empty list!"
 frequency' xs = frequency (NE.fromList xs)
 
-anyOf' :: (Has GenA sig m) => [a] -> m a
-anyOf' [] = error "anyOf' used with empty list!"
-anyOf' xs = (xs !!) <$> chooseA (0, length xs - 1)
+anyof' :: (Has GenA sig m) => [a] -> m a
+anyof' [] = error "anyof' used with empty list!"
+anyof' xs = (xs !!) <$> chooseA (0, length xs - 1)
