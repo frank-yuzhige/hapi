@@ -39,14 +39,17 @@ data PropertyA (m :: * -> *) a where
 shouldBe :: (Eq a, Show a, Has PropertyA sig m) => a -> a -> m ()
 shouldBe a b = send $ ShouldBeA a b
 
+shouldReturn :: (Eq a, Show a, Has PropertyA sig m) => m a -> a -> m ()
+shouldReturn m a = m >>= (`shouldBe` a)
+
 failed :: (Has PropertyA sig m) => m ()
 failed = send FailedA
 
-newtype PropertyAC (prop :: PropertyType) err m a = PropertyAC { runPropertyTypeAC :: ErrorC err m a }
+newtype PropertyAC (prop :: PropertyType) err m a = PropertyAC { runPropertyAC :: ErrorC err m a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadFail, MonadTrans)
 
 runProperty :: forall prop err sig m a. PropertyAC prop err m a -> ErrorC err m a
-runProperty = runPropertyTypeAC
+runProperty = runPropertyAC
 
 class Property (prop :: PropertyType) err | prop -> err where
   evalProperty :: prop m a -> Either err a
@@ -63,4 +66,4 @@ instance (Algebra sig m, Property prop err) => Algebra (prop :+: sig) (PropertyA
       case evalProperty prop of
         Left  err -> throwError err
         Right a   -> return (ctx $> a)
-    R other -> alg (runPropertyTypeAC . hdl) (R other) ctx
+    R other -> alg (runPropertyAC . hdl) (R other) ctx

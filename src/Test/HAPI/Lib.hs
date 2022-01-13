@@ -4,24 +4,32 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DataKinds #-}
 
 module Test.HAPI.Lib where
 
 import Control.Algebra ( Has, type (:+:), send, Algebra )
 import Test.HAPI.Api
     ( HaskellIOCall(..), HasHaskellDef(..), runApi, runApiIO, HasForeignDef (evalForeign), runApiFFI )
-import Test.HAPI.Property (PropertyA, runProperty, shouldBe, PropertyError, PropertyAC (runPropertyTypeAC), failed)
+import Test.HAPI.Property (PropertyA, runProperty, shouldBe, PropertyError, PropertyAC (..), failed, shouldReturn)
 import Text.Read (readMaybe)
 import Control.Carrier.Error.Church (Catch, Error, Throw, catchError, runError, ErrorC)
 import Control.Monad.IO.Class (MonadIO (liftIO))
-import Control.Monad (void)
+import Control.Monad (void, replicateM, forM, forM_)
 import Test.HAPI.GenT (GenA, liftGenA, GenAC (runGenAC), anyVal, runGenIO)
 import Test.QuickCheck.GenT (MonadGen(liftGen), runGenT)
 import Test.QuickCheck (Arbitrary(arbitrary), generate)
 import Test.HAPI.GenT (suchThat, chooseA)
-import Test.HAPI.FFI (add, sub, mul, neg, str)
+import Test.HAPI.FFI (add, sub, mul, neg, str, Stack, createStack, pushStack, popStack, peekStack, getStackSize)
 import Control.Effect.Labelled (Labelled(Labelled))
 import Foreign.C (peekCString)
+import Test.HAPI.Fuzz (FuzzA (AnyA), FuzzQCGenAC (runFuzzQCGenAC), FuzzIOReadAC (runFuzzIOReadAC))
+import Test.QuickCheck.Random (QCGen(QCGen))
+import Data.Data (Proxy (Proxy))
+import Foreign (Ptr)
+import Test.HAPI.Constraint (type (:>>>:))
 
 data ArithApiA (m :: * -> *) a where
   AddA :: Int -> Int -> ArithApiA m Int
@@ -32,8 +40,16 @@ data ArithApiA (m :: * -> *) a where
 data ShowApiA (m :: * -> *) a where
   StrA :: Int -> ShowApiA m String
 
+data StackApiA (m :: * -> *) a where
+  CreateA :: StackApiA m (Ptr Stack)
+  PushA   :: Ptr Stack -> Int -> StackApiA m ()
+  PopA    :: Ptr Stack -> StackApiA m ()
+  PeekA   :: Ptr Stack -> StackApiA m Int
+  SizeA   :: Ptr Stack -> StackApiA m Int
+
 deriving instance Show (ArithApiA m a)
 deriving instance Show (ShowApiA m a)
+deriving instance Show (StackApiA m a)
 
 instance HasHaskellDef ShowApiA where
   evalHaskell (StrA a) = show a
@@ -42,6 +58,7 @@ instance HasForeignDef ShowApiA where
   evalForeign (StrA a) = do
     ptr <- str (fromIntegral a)
     liftIO $ peekCString ptr
+
 instance HaskellIOCall ShowApiA where
   readOut (StrA _) = readMaybe
   showArgs = show
@@ -64,6 +81,13 @@ instance HaskellIOCall ArithApiA where
   readOut (MulA _ _) = readMaybe
   readOut (NegA _) = readMaybe
   showArgs = show
+
+instance HasForeignDef StackApiA where
+  evalForeign CreateA       = createStack
+  evalForeign (PushA ptr n) = pushStack ptr (fromIntegral n)
+  evalForeign (PopA  ptr)   = popStack  ptr
+  evalForeign (PeekA ptr)   = fromIntegral <$> peekStack    ptr
+  evalForeign (SizeA ptr)   = fromIntegral <$> getStackSize ptr
 
 -- | Senders
 addA, subA, mulA :: Has ArithApiA sig m => Int -> Int -> m Int
@@ -92,18 +116,18 @@ prop = runError @PropertyError (fail . show) pure
      . runApiIO @ShowApiA
      $ show3Plus5Is8
 
-arb :: Has (ShowApiA :+: PropertyA :+: GenA) sig m => m ()
-arb = do
-  a <- chooseA (10000000, 20000000)
-  b <- chooseA (10000000, 20000000)
-  x <- strA a
-  x `shouldBe` show a
-  y <- strA b
-  y `shouldBe` show b
-  x <- strA a
-  x `shouldBe` show a
+arb :: forall t sig m. (Has (ShowApiA :+: PropertyA :+: FuzzA t) sig m, t Int)
+    => Proxy t
+    -> m ()
+arb _ = do
+  a <- send (AnyA @t)
+  b <- send (AnyA @t)
+  strA a `shouldReturn` show a
+  strA b `shouldReturn` show b
+  strA a `shouldReturn` show a
+  failed
 
-prog1 :: Has (ArithApiA :+: PropertyA :+: GenA) sig m => m ()
+prog1 :: Has (ArithApiA :+: PropertyA) sig m => m ()
 prog1 = do
   a <- mulA 1 2
   b <- mulA 3 4
@@ -114,12 +138,33 @@ prog1 = do
   failed
 
 
+prog2 :: forall t sig m. (Has (StackApiA :+: PropertyA :+: FuzzA t) sig m, t :>>>: '[Int]) => Proxy t -> m ()
+prog2 _ = do
+  stk <- send CreateA
+  n <- send (AnyA @t)
+  send $ PushA stk n
+  send (PeekA stk) `shouldReturn` n
+  send (SizeA stk) `shouldReturn` 1
+  send $ PopA stk
+  send (SizeA stk) `shouldReturn` 1
+
+prog3 :: forall t sig m. (Has (StackApiA :+: PropertyA :+: FuzzA t) sig m, t :>>>: '[Int]) => Proxy t -> m ()
+prog3 _ = do
+  stk <- send CreateA
+  n <- send (AnyA @t)
+  forM_ [1..n] $ \i -> do
+    send $ PushA stk (2 * i)
+  send (SizeA stk) `shouldReturn` n
+  send (PeekA stk) `shouldReturn` (2 * n)
+
 runArb :: forall m sig. (MonadIO m, MonadFail m, Algebra sig m) => m ()
 runArb = do runGenIO
+          . runFuzzQCGenAC
+          . runFuzzIOReadAC
           . runError @PropertyError (fail . show) pure
           . runProperty @PropertyA
           . runApiFFI @ShowApiA
-          $ arb
+          $ arb (Proxy @Read)
 
 runProg :: forall m sig. (MonadIO m, MonadFail m, Algebra sig m) => m ()
 runProg = do runGenIO
@@ -127,3 +172,10 @@ runProg = do runGenIO
           . runProperty @PropertyA
           . runApiFFI @ArithApiA
           $ prog1
+
+runProg2 :: forall m sig. (MonadIO m, MonadFail m, Algebra sig m) => m ()
+runProg2 = do runFuzzIOReadAC
+            . runError @PropertyError (fail . show) pure
+            . runProperty @PropertyA
+            . runApiFFI @StackApiA
+            $ prog3 (Proxy @Read)

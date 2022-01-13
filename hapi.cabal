@@ -27,8 +27,10 @@ library
   exposed-modules:
       Test.HAPI.Api
       Test.HAPI.Comm
+      Test.HAPI.Constraint
       Test.HAPI.DataType
       Test.HAPI.FFI
+      Test.HAPI.Fuzz
       Test.HAPI.GenT
       Test.HAPI.Lib
       Test.HAPI.Property
@@ -39,10 +41,13 @@ library
   c-sources:
       ./test/test-api/broken-arith/broken-arith.c
       ./test/test-api/broken-show/broken-show.c
+      ./test/test-api/broken-stack/broken-stack.c
   build-depends:
       HList >=0.5.0.0
     , QuickCheck >=2.14.2
     , base >=4.7 && <5
+    , c-storable-deriving >=0.1.3
+    , constraints >=0.13.2
     , fused-effects >=1.1.1.1
     , grpc-haskell >=0.1.0
     , quickcheck-transformer >=0.3.1.1
@@ -61,6 +66,8 @@ executable hapi-exe
       HList >=0.5.0.0
     , QuickCheck >=2.14.2
     , base >=4.7 && <5
+    , c-storable-deriving >=0.1.3
+    , constraints >=0.13.2
     , fused-effects >=1.1.1.1
     , grpc-haskell >=0.1.0
     , hapi
@@ -81,6 +88,8 @@ test-suite hapi-test
       HList >=0.5.0.0
     , QuickCheck >=2.14.2
     , base >=4.7 && <5
+    , c-storable-deriving >=0.1.3
+    , constraints >=0.13.2
     , fused-effects >=1.1.1.1
     , grpc-haskell >=0.1.0
     , hapi

@@ -34,15 +34,18 @@ import Control.Monad.Trans.Identity (IdentityT (runIdentityT))
 
 type ApiDefinition = (* -> *) -> * -> *
 
+-- | Given API spec has a direct mapping to its haskell pure implementation
 class HasHaskellDef (api :: ApiDefinition) where
   evalHaskell :: api m a -> a
 
+-- | Given API spec has a FFI
 class HasForeignDef (api :: ApiDefinition) where
   evalForeign :: api m a -> FFIO a
 
+-- | [DEBUG] Given API spec can be debugged (using Haskell IO to mock input/output)
 class HaskellIOCall (api :: ApiDefinition) where
   showArgs :: api m a -> String
-  readOut :: api m a -> String -> Maybe a
+  readOut  :: api m a -> String -> Maybe a
 
 class RpcCall (api :: ApiDefinition) where
   makeRpcCall :: api m a -> undefined

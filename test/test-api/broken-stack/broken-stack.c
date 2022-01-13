@@ -1,12 +1,18 @@
-static const int LIMIT = 1024;
+#include <stdlib.h>
+#include <stdio.h>
 
+#define LIMIT 32
+
+/**
+ * @brief To represent C struct in Haskell
+ */
 typedef struct stack_t {
-    int top;
     int array[LIMIT];
+    int top;
 } stack_t;
 
 stack_t *create_stack() {
-    stack_t *stack = malloc(sizeof(stack_t));
+    stack_t *stack = (stack_t *)malloc(sizeof(stack_t));
     stack->top = 0;
     return stack;
 }
@@ -23,6 +29,6 @@ int peek_stack(stack_t *stack) {
     return stack->array[stack->top - 1];
 }
 
-void get_stack_size(stack_t *stack) {
+int get_stack_size(stack_t *stack) {
     return stack->top;
 }
