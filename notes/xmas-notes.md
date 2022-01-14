@@ -9,6 +9,7 @@
     -  RPC encode coverage?
       - How does wrapper API gets the coverage?
 
+
 - Difference between property and libspec
   - Libspec going to be cumbersome?
 
@@ -45,6 +46,23 @@
       - Projection onto different languages' datatype
 
 
+# Answers
+- Stick with blackbox fuzzing
+- Use gcov, llvm-coverage for evaluation of the project.
+- Can use HPC for haskell coverage, less interesting though (maybe for spec?).
+- [MAIN CONCERN]: Fuzz on properties
+- For example: consider a Set API:
+  - if insert sth, the set will not be empty.
+  - if remove everything, the set will be empty.
+- Provide: expressive power (rewrite)
+- User can provide:
+  - Rigorous api spec
+  - Auto gen properties main focus
+- Spec needs to be more "abstract"
+- Key focus:
+  - Means to generating test cases with oracles in rigorous and elegant way.
+  - Write the building blocks for API call path generator,
+  - automatically produce oracle for API, comparable with formal verification.
 # Current Design
 
 ```
