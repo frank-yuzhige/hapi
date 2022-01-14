@@ -13,7 +13,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE QuantifiedConstraints #-}
-{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Test.HAPI.Api where
 
@@ -22,14 +22,15 @@ import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Carrier.State.Church (StateC(..), put, execState)
 import Control.Carrier.Cull.Church (MonadPlus)
 import Control.Carrier.Reader (ReaderC, runReader)
-import Control.Carrier.Writer.Strict (WriterC, tell)
+import Control.Carrier.Writer.Strict (WriterC, tell, runWriter)
 import Data.Functor (($>))
 import Data.Void (Void)
-import Data.Kind (Constraint)
+import Data.Kind (Constraint, Type)
 import Text.Read (readMaybe)
 import Control.Effect.Labelled (Labelled (Labelled), runLabelled)
 import Test.HAPI.FFI (FFIO(FFIO, unFFIO))
 import Control.Monad.Trans.Identity (IdentityT (runIdentityT))
+import Control.Monad.Trans.Class (MonadTrans (lift))
 
 
 type ApiDefinition = (* -> *) -> * -> *
@@ -98,3 +99,19 @@ instance (Algebra sig m, MonadIO m, HasForeignDef api) => Algebra (api :+: sig) 
       r <- liftIO $ unFFIO $ evalForeign call
       return (ctx $> r)
     R other -> alg (runApiFFIAC . hdl) other ctx
+
+
+-- | Call path record
+class HasCallPath (api :: ApiDefinition) where
+  showCall :: api m a -> String
+
+newtype CPRAC (apiAC :: ApiDefinition -> (* -> *) -> * -> *) (api :: ApiDefinition) m a = CPRAC { runCPRAC :: WriterC [String] (apiAC api m) a }
+  deriving (Functor, Applicative, Monad, MonadIO)
+
+instance (Algebra sig m, Algebra (api :+: sig) (apiAC api m), HasCallPath api) => Algebra (api :+: sig) (CPRAC apiAC api m) where
+  alg hdl sig ctx = CPRAC $ case sig of
+    L call -> do
+      tell @[String] [showCall call]
+      alg (runCPRAC . hdl) (R (L call)) ctx
+    R other -> alg (runCPRAC . hdl) (R (R other)) ctx
+

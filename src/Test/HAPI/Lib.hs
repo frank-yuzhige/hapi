@@ -12,7 +12,7 @@ module Test.HAPI.Lib where
 
 import Control.Algebra ( Has, type (:+:), send, Algebra )
 import Test.HAPI.Api
-    ( HaskellIOCall(..), HasHaskellDef(..), runApi, runApiIO, HasForeignDef (evalForeign), runApiFFI )
+    ( HaskellIOCall(..), HasHaskellDef(..), runApi, runApiIO, HasForeignDef (evalForeign), runApiFFI, CPRAC (runCPRAC), ApiFFIAC (ApiFFIAC) )
 import Test.HAPI.Property (PropertyA, runProperty, shouldBe, PropertyError, PropertyAC (..), failed, shouldReturn)
 import Text.Read (readMaybe)
 import Control.Carrier.Error.Church (Catch, Error, Throw, catchError, runError, ErrorC)
@@ -174,8 +174,12 @@ runProg = do runGenIO
           $ prog1
 
 runProg2 :: forall m sig. (MonadIO m, MonadFail m, Algebra sig m) => m ()
-runProg2 = do runFuzzIOReadAC
-            . runError @PropertyError (fail . show) pure
-            . runProperty @PropertyA
-            . runApiFFI @StackApiA
-            $ prog3 (Proxy @Read)
+runProg2 = do
+  x <- runFuzzIOReadAC
+     . runError @PropertyError (fail . show) pure
+     . runProperty @PropertyA
+     . runApiFFI @StackApiA
+    --  . runCPRAC @ApiFFIAC @StackApiA  TODO
+     $ prog3 (Proxy @Read)
+  liftIO $ print x
+  return ()

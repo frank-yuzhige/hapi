@@ -30,10 +30,10 @@ newtype FuzzQCGenAC m a = FuzzQCGenAC { runFuzzQCGenAC :: GenAC m a }
   deriving (Functor, Applicative, Monad, MonadFail, MonadIO)
 
 instance (Algebra sig m) => Algebra (FuzzA Arbitrary :+: sig) (FuzzQCGenAC m) where
-  alg hdl sig ctx = case sig of
+  alg hdl sig ctx = FuzzQCGenAC $ case sig of
     L fuzz -> case fuzz of
-      AnyA -> FuzzQCGenAC $ alg (runFuzzQCGenAC . hdl) (L (LiftGenA arbitrary)) ctx
-    R other -> alg (FuzzQCGenAC . runFuzzQCGenAC . hdl) (R other) ctx
+      AnyA -> alg (runFuzzQCGenAC . hdl) (L (LiftGenA arbitrary)) ctx
+    R other -> alg (runFuzzQCGenAC . hdl) (R other) ctx
 
 newtype FuzzIOReadAC m a = FuzzIOReadAC { runFuzzIOReadAC :: m a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadFail)
