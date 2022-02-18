@@ -17,4 +17,3 @@ module Test.HAPI.Comm where
 import Control.Algebra (Has, alg, send, Algebra, (:+:) (L, R))
 import Control.Carrier.State.Church (StateC)
 import Control.Monad.IO.Class (MonadIO)
-import Network.GRPC.HighLevel.Generated

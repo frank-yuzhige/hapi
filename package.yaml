@@ -33,12 +33,20 @@ dependencies:
 - QuickCheck >= 2.14.2
 - quickcheck-transformer >= 0.3.1.1
 - HList >= 0.5.0.0
-- grpc-haskell >= 0.1.0
+# - grpc-haskell >= 0.1.0
 - c-storable-deriving >= 0.1.3
 - constraints >= 0.13.2
 
+cc-options:
+  - -fsanitize=undefined
+  - -O0
+
 library:
   source-dirs: src
+  cc-options:
+    # - -fsanitize=address
+    - -fsanitize=undefined
+    - -O
   c-sources:
     - ./test/test-api/broken-arith/broken-arith.c
     - ./test/test-api/broken-show/broken-show.c
@@ -52,6 +60,9 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -dynamic
+    - -lasan
+    - -lubsan
     dependencies:
     - hapi
 

@@ -105,13 +105,17 @@ instance (Algebra sig m, MonadIO m, HasForeignDef api) => Algebra (api :+: sig) 
 class HasCallPath (api :: ApiDefinition) where
   showCall :: api m a -> String
 
-newtype CPRAC (apiAC :: ApiDefinition -> (* -> *) -> * -> *) (api :: ApiDefinition) m a = CPRAC { runCPRAC :: WriterC [String] (apiAC api m) a }
-  deriving (Functor, Applicative, Monad, MonadIO)
+newtype CPRAC (apiAC :: ApiDefinition -> (* -> *) -> * -> *) (api :: ApiDefinition) m a = CPRAC {
+  runCPRAC :: WriterC [String] (apiAC api m) a
+}  deriving (Functor, Applicative, Monad, MonadIO)
+
+
 
 instance (Algebra sig m, Algebra (api :+: sig) (apiAC api m), HasCallPath api) => Algebra (api :+: sig) (CPRAC apiAC api m) where
   alg hdl sig ctx = CPRAC $ case sig of
     L call -> do
       tell @[String] [showCall call]
       alg (runCPRAC . hdl) (R (L call)) ctx
+      return undefined  -- TODO
     R other -> alg (runCPRAC . hdl) (R (R other)) ctx
 

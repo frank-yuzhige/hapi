@@ -14,7 +14,7 @@
 module Test.HAPI.Property where
 
 import Control.Algebra ( send, Algebra(..), Has, type (:+:)(..) )
-import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Trans.Class (MonadTrans)
 import Data.Functor (($>))
 import Control.Carrier.Error.Church( Catch, ErrorC, throwError )

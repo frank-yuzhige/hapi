@@ -1,4 +1,5 @@
 module Main where
+import Test.HAPI.Lib (prop)
 
 main :: IO ()
-main = putStrLn "hello"
+main = prop
