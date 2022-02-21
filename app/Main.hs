@@ -1,5 +1,5 @@
 module Main where
-import Test.HAPI.Lib (prop)
+import Test.HAPI.Lib (prop, runProg2)
 
 main :: IO ()
-main = prop
+main = runProg2

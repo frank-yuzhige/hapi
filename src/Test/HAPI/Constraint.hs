@@ -13,6 +13,7 @@
 
 module Test.HAPI.Constraint where
 import Data.Kind (Constraint, Type)
+import Data.Data (Proxy)
 
 type family (c :: Type -> Constraint) :>>>: (ts :: [Type]) :: Constraint where
   c :>>>: '[] = ()
@@ -21,3 +22,4 @@ type family (c :: Type -> Constraint) :>>>: (ts :: [Type]) :: Constraint where
 type family (cs :: [Type -> Constraint]) :>>>>: (ts :: [Type]) :: Constraint where
   '[]      :>>>>: xs = ()
   (c : cs) :>>>>: xs = (c :>>>: xs, cs :>>>>: xs)
+

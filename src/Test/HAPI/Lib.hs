@@ -25,11 +25,12 @@ import Test.HAPI.GenT (suchThat, chooseA)
 import Test.HAPI.FFI (add, sub, mul, neg, str, Stack, createStack, pushStack, popStack, peekStack, getStackSize)
 import Control.Effect.Labelled (Labelled(Labelled))
 import Foreign.C (peekCString)
-import Test.HAPI.Fuzz (FuzzA (AnyA), FuzzQCGenAC (runFuzzQCGenAC), FuzzIOReadAC (runFuzzIOReadAC))
+import Test.HAPI.QVS (QVS (IntRange), QVSFuzzArbitraryCA (runQVSFuzzArbitraryCA), QVSFromStdin (runQVSFromStdin))
 import Test.QuickCheck.Random (QCGen(QCGen))
 import Data.Data (Proxy (Proxy))
 import Foreign (Ptr)
 import Test.HAPI.Constraint (type (:>>>:))
+import Test.HAPI.DataType (BasicSpec, WFTypeSpec, type (:&:))
 
 data ArithApiA (m :: * -> *) a where
   AddA :: Int -> Int -> ArithApiA m Int
@@ -116,12 +117,12 @@ prop = runError @PropertyError (fail . show) pure
      . runApiIO @ShowApiA
      $ show3Plus5Is8
 
-arb :: forall t sig m. (Has (ShowApiA :+: PropertyA :+: FuzzA t) sig m, t Int)
-    => Proxy t
+arb :: forall c sig m. (Has (ShowApiA :+: PropertyA :+: QVS (BasicSpec c)) sig m, WFTypeSpec (BasicSpec c))
+    => Proxy c
     -> m ()
 arb _ = do
-  a <- send (AnyA @t)
-  b <- send (AnyA @t)
+  a <- send (IntRange @(BasicSpec c) 0 100)
+  b <- send (IntRange @(BasicSpec c) 0 100)
   strA a `shouldReturn` show a
   strA b `shouldReturn` show b
   strA a `shouldReturn` show a
@@ -138,20 +139,20 @@ prog1 = do
   failed
 
 
-prog2 :: forall t sig m. (Has (StackApiA :+: PropertyA :+: FuzzA t) sig m, t :>>>: '[Int]) => Proxy t -> m ()
+prog2 :: forall c sig m. (Has (StackApiA :+: PropertyA :+: QVS (BasicSpec c)) sig m, WFTypeSpec (BasicSpec c)) => Proxy c -> m ()
 prog2 _ = do
   stk <- send CreateA
-  n <- send (AnyA @t)
+  n <- send (IntRange @(BasicSpec c) 0 100)
   send $ PushA stk n
   send (PeekA stk) `shouldReturn` n
   send (SizeA stk) `shouldReturn` 1
   send $ PopA stk
   send (SizeA stk) `shouldReturn` 1
 
-prog3 :: forall t sig m. (Has (StackApiA :+: PropertyA :+: FuzzA t) sig m, t :>>>: '[Int]) => Proxy t -> m ()
+prog3 :: forall c sig m. (Has (StackApiA :+: PropertyA :+: QVS (BasicSpec c)) sig m, WFTypeSpec (BasicSpec c)) => Proxy c -> m ()
 prog3 _ = do
   stk <- send CreateA
-  n <- send (AnyA @t)
+  n <- send (IntRange @(BasicSpec c) 0 100)
   forM_ [1..n] $ \i -> do
     send $ PushA stk (2 * i)
   send (SizeA stk) `shouldReturn` n
@@ -159,8 +160,7 @@ prog3 _ = do
 
 runArb :: forall m sig. (MonadIO m, MonadFail m, Algebra sig m) => m ()
 runArb = do runGenIO
-          . runFuzzQCGenAC
-          . runFuzzIOReadAC
+          . runQVSFromStdin @(BasicSpec Read)
           . runError @PropertyError (fail . show) pure
           . runProperty @PropertyA
           . runApiFFI @ShowApiA
@@ -175,7 +175,7 @@ runProg = do runGenIO
 
 runProg2 :: forall m sig. (MonadIO m, MonadFail m, Algebra sig m) => m ()
 runProg2 = do
-  x <- runFuzzIOReadAC
+  x <- runQVSFromStdin @(BasicSpec Read)
      . runError @PropertyError (fail . show) pure
      . runProperty @PropertyA
      . runApiFFI @StackApiA
