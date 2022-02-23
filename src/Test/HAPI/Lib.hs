@@ -7,6 +7,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Test.HAPI.Lib where
 
@@ -118,9 +119,8 @@ prop = runError @PropertyError (fail . show) pure
      $ show3Plus5Is8
 
 arb :: forall c sig m. (Has (ShowApiA :+: PropertyA :+: QVS (BasicSpec c)) sig m, WFTypeSpec (BasicSpec c))
-    => Proxy c
-    -> m ()
-arb _ = do
+    => m ()
+arb = do
   a <- send (IntRange @(BasicSpec c) 0 100)
   b <- send (IntRange @(BasicSpec c) 0 100)
   strA a `shouldReturn` show a
@@ -139,8 +139,8 @@ prog1 = do
   failed
 
 
-prog2 :: forall c sig m. (Has (StackApiA :+: PropertyA :+: QVS (BasicSpec c)) sig m, WFTypeSpec (BasicSpec c)) => Proxy c -> m ()
-prog2 _ = do
+prog2 :: forall c sig m. (Has (StackApiA :+: PropertyA :+: QVS (BasicSpec c)) sig m, WFTypeSpec (BasicSpec c)) => m ()
+prog2 = do
   stk <- send CreateA
   n <- send (IntRange @(BasicSpec c) 0 100)
   send $ PushA stk n
@@ -149,8 +149,8 @@ prog2 _ = do
   send $ PopA stk
   send (SizeA stk) `shouldReturn` 1
 
-prog3 :: forall c sig m. (Has (StackApiA :+: PropertyA :+: QVS (BasicSpec c)) sig m, WFTypeSpec (BasicSpec c)) => Proxy c -> m ()
-prog3 _ = do
+prog3 :: forall c sig m. (Has (StackApiA :+: PropertyA :+: QVS (BasicSpec c)) sig m, WFTypeSpec (BasicSpec c)) => m ()
+prog3 = do
   stk <- send CreateA
   n <- send (IntRange @(BasicSpec c) 0 100)
   forM_ [1..n] $ \i -> do
@@ -164,7 +164,7 @@ runArb = do runGenIO
           . runError @PropertyError (fail . show) pure
           . runProperty @PropertyA
           . runApiFFI @ShowApiA
-          $ arb (Proxy @Read)
+          $ arb @Read
 
 runProg :: forall m sig. (MonadIO m, MonadFail m, Algebra sig m) => m ()
 runProg = do runGenIO
@@ -180,6 +180,6 @@ runProg2 = do
      . runProperty @PropertyA
      . runApiFFI @StackApiA
     --  . runCPRAC @ApiFFIAC @StackApiA  -- TODO
-     $ prog3 (Proxy @Read)
+     $ prog3 @Read
   liftIO $ print x
   return ()

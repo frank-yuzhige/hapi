@@ -25,9 +25,11 @@ source-repository head
 
 library
   exposed-modules:
+      Test.HAPI.AASTG.Core
       Test.HAPI.Api
       Test.HAPI.Comm
       Test.HAPI.Constraint
+      Test.HAPI.Data.NatMap
       Test.HAPI.DataType
       Test.HAPI.FFI
       Test.HAPI.GenT
@@ -50,11 +52,14 @@ library
     , base >=4.7 && <5
     , c-storable-deriving >=0.1.3
     , constraints >=0.13.2
+    , containers >=0.4.0.0
     , data-fix >=0.3.2
     , fused-effects >=1.1.1.1
     , quickcheck-transformer >=0.3.1.1
     , random >=1.2.0
     , transformers >=0.5.6.2
+    , type-level-sets >=0.8.9.0
+    , type-map >=0.1.6.0
   default-language: Haskell2010
 
 executable hapi-exe
@@ -72,12 +77,15 @@ executable hapi-exe
     , base >=4.7 && <5
     , c-storable-deriving >=0.1.3
     , constraints >=0.13.2
+    , containers >=0.4.0.0
     , data-fix >=0.3.2
     , fused-effects >=1.1.1.1
     , hapi
     , quickcheck-transformer >=0.3.1.1
     , random >=1.2.0
     , transformers >=0.5.6.2
+    , type-level-sets >=0.8.9.0
+    , type-map >=0.1.6.0
   default-language: Haskell2010
 
 test-suite hapi-test
@@ -94,10 +102,13 @@ test-suite hapi-test
     , base >=4.7 && <5
     , c-storable-deriving >=0.1.3
     , constraints >=0.13.2
+    , containers >=0.4.0.0
     , data-fix >=0.3.2
     , fused-effects >=1.1.1.1
     , hapi
     , quickcheck-transformer >=0.3.1.1
     , random >=1.2.0
     , transformers >=0.5.6.2
+    , type-level-sets >=0.8.9.0
+    , type-map >=0.1.6.0
   default-language: Haskell2010

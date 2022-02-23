@@ -36,7 +36,10 @@ dependencies:
 # - grpc-haskell >= 0.1.0
 - c-storable-deriving >= 0.1.3
 - constraints >= 0.13.2
+- containers >= 0.4.0.0
 - data-fix >= 0.3.2
+- type-map >= 0.1.6.0
+- type-level-sets >= 0.8.9.0
 
 library:
   source-dirs: src
