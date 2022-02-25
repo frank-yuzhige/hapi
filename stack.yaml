@@ -49,6 +49,7 @@ extra-deps:
   - proto3-suite-0.4.2@sha256:86ea244011eacdcde0e77181d83183e89c14ae1aba816e1c7df59f9df3195a93,6073
   - c-storable-deriving-0.1.3@sha256:510aa8423d6b3df57a39365569195ddc5bd4b04b0ff58ba1345c1f309ae6f89e,1030
   - type-level-sets-0.8.9.0@sha256:e29f4045b68e46e0f88153c63f48fb026917eeacafd9b81fc059417a85e68031,3123
+  - tuple-hlist-0.2.0.1@sha256:b567c5eb6e9012b5076d425c3999bdd99af2ea66a6f370b3874fc3754c4854a3,1016
 # Override default flag values for local packages and extra-deps
 # flags: {}
 

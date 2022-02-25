@@ -14,6 +14,9 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Test.HAPI.Api where
 
@@ -31,26 +34,33 @@ import Control.Effect.Labelled (Labelled (Labelled), runLabelled)
 import Test.HAPI.FFI (FFIO(FFIO, unFFIO))
 import Control.Monad.Trans.Identity (IdentityT (runIdentityT))
 import Control.Monad.Trans.Class (MonadTrans (lift))
+import Data.HList (HList (HNil, HCons), HBuild')
+import Test.HAPI.Args (Args)
+import Data.Tuple.HList (HLst (toHList))
+import Test.HAPI.Common (Fuzzable)
 
 
-type ApiDefinition = (* -> *) -> * -> *
+type ApiDefinition = [Type] -> Type -> Type
 
 -- | Given API spec has a direct mapping to its haskell pure implementation
 class HasHaskellDef (api :: ApiDefinition) where
-  evalHaskell :: api m a -> a
+  evalHaskell :: api p a -> HList p -> a
 
 -- | Given API spec has a FFI
 class HasForeignDef (api :: ApiDefinition) where
-  evalForeign :: api m a -> FFIO a
+  evalForeign :: api p a -> HList p -> FFIO a
 
 -- | [DEBUG] Given API spec can be debugged (using Haskell IO to mock input/output)
 class HaskellIOCall (api :: ApiDefinition) where
-  showArgs :: api m a -> String
-  readOut  :: api m a -> String -> Maybe a
+  showArgs :: api p a -> String
+  readOut  :: api p a -> String -> Maybe a
 
-class RpcCall (api :: ApiDefinition) where
-  makeRpcCall :: api m a -> undefined
+-- | Wrapper to the original Api
+data Api (api :: ApiDefinition) (m :: Type -> Type) a where
+  MkCall :: api p a -> Args p -> Api api m a
 
+mkCall :: (Has (Api api) sig m, Fuzzable a) => api p a -> Args p -> m a
+mkCall = (send .) . MkCall
 
 -- | Encode api call's type into its underlying interpretation to ensure functional dependency for Algebra holds
 newtype ApiAC (api :: ApiDefinition) m a = ApiAC { runApiAC :: m a }
@@ -60,10 +70,10 @@ runApi :: ApiAC api m a -> m a
 runApi = runApiAC
 
 -- | If the api call can map to relevant haskell functions, then it can be interpreted
-instance (Algebra sig m, HasHaskellDef api) => Algebra (api :+: sig) (ApiAC api m) where
+instance (Algebra sig m, HasHaskellDef api) => Algebra (Api api :+: sig) (ApiAC api m) where
   alg hdl sig ctx = ApiAC $ case sig of
-    L call -> return (ctx $> evalHaskell call)
-    R other -> alg (runApiAC . hdl) other ctx
+    L (MkCall call args) -> return (ctx $> evalHaskell call args)
+    R other              -> alg (runApiAC . hdl) other ctx
 
 
 -- | Haskell IO Orchestration
@@ -74,9 +84,9 @@ newtype ApiIOAC (api :: ApiDefinition) m a = ApiIOAC { runApiIOAC :: m a }
 runApiIO :: ApiIOAC api m a -> m a
 runApiIO = runApiIOAC
 
-instance (Algebra sig m, MonadIO m, MonadFail m, HaskellIOCall api) => Algebra (api :+: sig) (ApiIOAC api m) where
+instance (Algebra sig m, MonadIO m, MonadFail m, HaskellIOCall api) => Algebra (Api api :+: sig) (ApiIOAC api m) where
   alg hdl sig ctx = ApiIOAC $ case sig of
-    L call -> do
+    L (MkCall call args) -> do
       liftIO $ putStrLn $ showArgs call
       out <- liftIO (readOut call <$> getLine)
       case out of
@@ -93,29 +103,28 @@ newtype ApiFFIAC (api :: ApiDefinition) m a = ApiFFIAC { runApiFFIAC :: m a }
 runApiFFI :: ApiFFIAC api m a -> m a
 runApiFFI = runApiFFIAC
 
-instance (Algebra sig m, MonadIO m, HasForeignDef api) => Algebra (api :+: sig) (ApiFFIAC api m) where
+instance (Algebra sig m, MonadIO m, HasForeignDef api) => Algebra (Api api :+: sig) (ApiFFIAC api m) where
   alg hdl sig ctx = ApiFFIAC $ case sig of
-    L call  -> do
-      r <- liftIO $ unFFIO $ evalForeign call
+    L (MkCall call args) -> do
+      r <- liftIO $ unFFIO $ evalForeign call args
       return (ctx $> r)
     R other -> alg (runApiFFIAC . hdl) other ctx
 
+-- -- | Call path record
+-- class HasCallPath (api :: ApiDefinition) where
+--   showCall :: api p a -> String
 
--- | Call path record
-class HasCallPath (api :: ApiDefinition) where
-  showCall :: api m a -> String
-
-newtype CPRAC (apiAC :: ApiDefinition -> (* -> *) -> * -> *) (api :: ApiDefinition) m a = CPRAC {
-  runCPRAC :: WriterC [String] (apiAC api m) a
-}  deriving (Functor, Applicative, Monad, MonadIO)
-
+-- newtype CPRAC (apiAC :: ApiDefinition -> (* -> *) -> * -> *) (api :: ApiDefinition) m a = CPRAC {
+--   runCPRAC :: WriterC [String] (apiAC api m) a
+-- }  deriving (Functor, Applicative, Monad, MonadIO)
 
 
-instance (Algebra sig m, Algebra (api :+: sig) (apiAC api m), HasCallPath api) => Algebra (api :+: sig) (CPRAC apiAC api m) where
-  alg hdl sig ctx = CPRAC $ case sig of
-    L call -> do
-      tell @[String] [showCall call]
-      alg (runCPRAC . hdl) (R (L call)) ctx
-      return undefined  -- TODO
-    R other -> alg (runCPRAC . hdl) (R (R other)) ctx
+
+-- instance (Algebra sig m, Algebra (api p api :+: sig) (apiAC api m), HasCallPath api) => Algebra (api p api :+: sig) (CPRAC apiAC api m) where
+--   alg hdl sig ctx = CPRAC $ case sig of
+--     L (MkCall call) -> do
+--       tell @[String] [showCall call]
+--       alg (runCPRAC . hdl) (R (L call)) ctx
+--       return undefined  -- TODO
+--     R other -> alg (runCPRAC . hdl) (R (R other)) ctx
 
