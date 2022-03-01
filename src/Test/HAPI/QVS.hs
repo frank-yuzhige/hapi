@@ -1,8 +1,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -37,8 +35,10 @@ import Test.QuickCheck.GenT (MonadGen (liftGen))
 import Test.HAPI.PState (PKey, PState, PStateSupports (lookUp))
 import Test.HAPI.Common (Fuzzable)
 import Data.Maybe (fromJust)
-import Data.HList (HList (HNil))
-import Test.HAPI.Args (pattern (:::))
+import Data.HList (HList (HNil), HMap)
+import Data.SOP
+import Test.HAPI.Args (Args, pattern (:::))
+import Data.SOP.Dict (mapAll, Dict (Dict))
 
 data Attribute a where
   Anything :: (Fuzzable a) => Attribute a
@@ -53,19 +53,20 @@ data QVS (c :: Type -> Constraint) (m :: Type -> Type) a where
   QVS :: (c a) => Attribute a -> QVS c m a
 
 
-type family ArgsAttributes s (p :: [Type]) :: [Type] where
-  ArgsAttributes s '[] = '[]
-  ArgsAttributes s (x : xs) = Attribute x : ArgsAttributes s xs
 
-class Attributes2QVSs attr qvs | qvs -> attr where
-  attributes2QVSs :: HList attr -> HList qvs
+-- https://hackage.haskell.org/package/sop-core-0.5.0.2/docs/Data-SOP-NP.html
+type LiftArgs (f :: Type -> Type) (p :: [Type]) = NP f p
 
-instance Attributes2QVSs '[] '[] where
-  attributes2QVSs _ = HNil
 
-instance (Attributes2QVSs as qs, c a) => Attributes2QVSs (Attribute a : as) (QVS c m a : qs) where
-  attributes2QVSs (a ::: as) = QVS a ::: attributes2QVSs as
+attributes2QVSs :: forall c p m. (All c p) => NP Attribute p -> NP (QVS c m) p
+attributes2QVSs = hcmap (Proxy @c) QVS
 
+qvs2m :: (Has (QVS c) sig m) => LiftArgs (QVS c m) p -> m (Args p)
+qvs2m Nil = return HNil
+qvs2m (qvs :* q) = do
+  a <- send qvs
+  s <- qvs2m q
+  return (a ::: s)
 
 newtype QVSFuzzArbitraryCA s m a = QVFuzzArbitraryCA { runQVSFuzzArbitraryCA :: m a }
   deriving (Functor, Applicative, Monad, MonadFail, MonadIO)

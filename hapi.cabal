@@ -57,6 +57,7 @@ library
     , fused-effects >=1.1.1.1
     , quickcheck-transformer >=0.3.1.1
     , random >=1.2.0
+    , sop-core >=0.5.0.2
     , template-haskell >=2.16.0.0
     , transformers >=0.5.6.2
     , tuple-hlist >=0.2.0.1
@@ -85,6 +86,7 @@ executable hapi-exe
     , hapi
     , quickcheck-transformer >=0.3.1.1
     , random >=1.2.0
+    , sop-core >=0.5.0.2
     , template-haskell >=2.16.0.0
     , transformers >=0.5.6.2
     , tuple-hlist >=0.2.0.1
@@ -112,6 +114,7 @@ test-suite hapi-test
     , hapi
     , quickcheck-transformer >=0.3.1.1
     , random >=1.2.0
+    , sop-core >=0.5.0.2
     , template-haskell >=2.16.0.0
     , transformers >=0.5.6.2
     , tuple-hlist >=0.2.0.1
