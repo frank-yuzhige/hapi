@@ -11,7 +11,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Test.HAPI.Property where
+module Test.HAPI.Effect.Property where
 
 import Control.Algebra ( send, Algebra(..), Has, type (:+:)(..) )
 import Control.Monad.IO.Class (MonadIO (liftIO))

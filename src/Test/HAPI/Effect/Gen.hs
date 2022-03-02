@@ -9,7 +9,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Test.HAPI.GenT where
+module Test.HAPI.Effect.Gen where
 import Test.QuickCheck (Gen, Arbitrary (arbitrary), resize)
 import System.Random (Random)
 import Test.QuickCheck.GenT (GenT (GenT), MonadGen, runGenT)

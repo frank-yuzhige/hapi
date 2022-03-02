@@ -24,6 +24,8 @@ import Language.Haskell.TH.Quote (QuasiQuoter (quoteDec, quotePat, quoteType, qu
 import Data.Data (Proxy)
 import Data.HList.HList (hBuild)
 import Data.HList.CommonMain (hEnd)
+import Data.SOP (NP (Nil, (:*)))
+import Data.Functor.Identity (Identity (Identity))
 
 type Args a = HList a
 
@@ -37,6 +39,10 @@ noArgs = HNil
 
 mkArgs :: (HBuild' '[] r) => r
 mkArgs = hBuild
+
+np2Args :: (forall t. f t -> t) -> NP f a -> Args a
+np2Args _   Nil        = HNil
+np2Args alg (fa :* np) = alg fa ::: np2Args alg np
 
 args :: QuasiQuoter
 args = QuasiQuoter {

@@ -1,6 +1,5 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -13,15 +12,16 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 {-
 Quantified Value Generation Effect
 -}
 
-module Test.HAPI.QVS where
+module Test.HAPI.Effect.QVS where
 import Control.Algebra (Algebra (alg), type (:+:) (L, R), Has, send)
 import Control.Monad.IO.Class (MonadIO (liftIO))
-import Test.HAPI.GenT (GenAC(runGenAC), GenA (LiftGenA), liftGenA)
+import Test.HAPI.Effect.Gen (GenAC(runGenAC), GenA (LiftGenA), liftGenA)
 import Test.QuickCheck (Arbitrary(arbitrary), chooseInt, chooseEnum)
 import Data.Kind (Constraint, Type)
 import Data.Functor (($>))
@@ -53,14 +53,15 @@ data QVS (c :: Type -> Constraint) (m :: Type -> Type) a where
   QVS :: (c a) => Attribute a -> QVS c m a
 
 
-
 -- https://hackage.haskell.org/package/sop-core-0.5.0.2/docs/Data-SOP-NP.html
 type LiftArgs (f :: Type -> Type) (p :: [Type]) = NP f p
 
 
+-- | Convert attribute to QVS
 attributes2QVSs :: forall c p m. (All c p) => NP Attribute p -> NP (QVS c m) p
 attributes2QVSs = hcmap (Proxy @c) QVS
 
+-- | Generate values in HList
 qvs2m :: (Has (QVS c) sig m) => LiftArgs (QVS c m) p -> m (Args p)
 qvs2m Nil = return HNil
 qvs2m (qvs :* q) = do
@@ -95,19 +96,20 @@ instance (Algebra sig m, MonadIO m) => Algebra (QVS Read :+: sig) (QVSFromStdin 
   alg hdl sig ctx = case sig of
     L qvs -> do
       liftIO (putStrLn "Please provide input: ")
-      input <- liftIO $ case qvs of QVS {} -> readAndValidate qvs
+      input <- liftIO $ case qvs of QVS attr -> readAndValidate attr
       return (ctx $> input)
     R other -> QVSFromStdin $ alg (runQVSFromStdin . hdl) other ctx
     where
-      readAndValidate qvs = do
+      readAndValidate attr = do
         a <- readLn
-        if validate qvs a
+        if validate attr a
           then return a
           else fail "Not in range"
 
 
-validate :: QVS c m a -> a -> Bool
-validate (QVS attr) a = case attr of
+-- | Check if the provided value satisfies the
+validate :: Attribute a -> a -> Bool
+validate attr a = case attr of
   IntRange l r -> l <= a && a <= r
   Range    l r -> l <= a && a <= r
   _            -> True

@@ -12,12 +12,13 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 module Test.HAPI.AASTG.Core where
-import Test.HAPI.QVS (QVS (QVS), Attribute, LiftArgs, attributes2QVSs, qvs2m)
+import Test.HAPI.Effect.QVS (QVS (QVS), Attribute, LiftArgs, attributes2QVSs, qvs2m)
 import GHC.TypeNats (Nat)
 import Data.Kind (Type)
 import Data.HList (HList (HCons, HNil), hMap)
 import Test.HAPI.Lib (ArithApiA(AddA))
-import Test.HAPI.Api (ApiDefinition, Api, mkCall)
+import Test.HAPI.Api (ApiDefinition)
+import Test.HAPI.Effect.Api(Api, mkCall)
 import Control.Effect.Sum (Member)
 import Control.Algebra (Has, Algebra, type (:+:))
 import Test.HAPI.Args (Args)
@@ -28,32 +29,31 @@ import Data.SOP (All)
 
 -- Abstract API state transition graph
 
-type PStateID = Nat
-
+type NodeID = Int
 
 data Edge sig c where
   APICall :: (Member (Api api) sig, Fuzzable a, All c p)
-          => Int   -- From
-          -> Int   -- To
-          -> api p a               -- API call (constructor)
+          => NodeID  -- From
+          -> NodeID   -- To
+          -> api p a -- API call (constructor)
           -> LiftArgs Attribute p
           -> Edge sig c
 
-start :: Edge api c -> Int
-start (APICall s _ _ _) = s
-
-end :: Edge api c -> Int
-end (APICall _ e _ _) = e
-
 data AASTG sig c = AASTG {
-  getStart :: Int,
+  getStart :: NodeID,
   getEdges :: [Edge sig c]
 }
 
-edgesFrom :: Int -> AASTG api c -> [Edge api c]
+start :: Edge api c -> NodeID
+start (APICall s _ _ _) = s
+
+end :: Edge api c -> NodeID
+end (APICall _ e _ _) = e
+
+edgesFrom :: NodeID -> AASTG api c -> [Edge api c]
 edgesFrom i (AASTG _ es) = filter ((== i) . start) es
 
-edgesTo :: Int -> AASTG api c -> [Edge api c]
+edgesTo :: NodeID -> AASTG api c -> [Edge api c]
 edgesTo i (AASTG _ es) = filter ((== i) . end) es
 
 synthStub :: forall apis sig c m. (Has (apis :+: QVS c :+: State PState) sig m) => AASTG sig c -> [m ()]
@@ -61,16 +61,14 @@ synthStub aastg@(AASTG start edges) = synth start
   where
     synth i = return ()
             : concat [(synthOneStep e >>) <$> synth (end e) | e <- edgesFrom i aastg]
-    synthOneStep :: (Has (apis :+: QVS c :+: State PState) sig m) => Edge sig c -> m ()
-    synthOneStep (APICall s e (api :: api p a) (args :: LiftArgs Attribute p)) = do
+    synthOneStep :: Edge sig c -> m ()
+    synthOneStep (APICall s e api args) = do
       -- TODO
       -- 1. Resolve Attributes (Into QVS)
-      let qvss = attributes2QVSs @c args
-      args <- qvs2m @c @sig @m qvss
+      args <- qvs2m @c @sig @m (attributes2QVSs @c args)
       -- 2. Make APICall using qvs
       r <- mkCall api args
-      -- 3. Check if return value satisfies condition
+      -- 3. Check if return value satisfies condition (TODO)
 
       -- 4. Store return value in state
-      modify @PState (record (PKey 42) r)
-      return ()
+      modify @PState (record (PKey s) r)

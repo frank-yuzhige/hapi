@@ -31,12 +31,13 @@ library
       Test.HAPI.Common
       Test.HAPI.Constraint
       Test.HAPI.DataType
+      Test.HAPI.Effect.Api
+      Test.HAPI.Effect.Gen
+      Test.HAPI.Effect.Property
+      Test.HAPI.Effect.QVS
       Test.HAPI.FFI
-      Test.HAPI.GenT
       Test.HAPI.Lib
-      Test.HAPI.Property
       Test.HAPI.PState
-      Test.HAPI.QVS
   other-modules:
       Paths_hapi
   hs-source-dirs:

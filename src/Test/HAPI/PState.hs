@@ -1,8 +1,5 @@
-{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -36,6 +33,7 @@ data PKey t = PKey { getPKeyID :: Int }
 newtype PTable t = PTable { getMap :: M.Map (PKey t) t }
 
 newtype PState = PState { getPTables :: TM.TypeRepMap PTable }
+  deriving (Show)
 
 class (Typeable t) => PStateSupports s t where
   record  :: PKey t -> t -> s -> s
