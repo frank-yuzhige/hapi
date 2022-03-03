@@ -56,14 +56,15 @@ library
     , containers >=0.4.0.0
     , data-fix >=0.3.2
     , fused-effects >=1.1.1.1
+    , haskell-src-meta >=0.8.7
     , quickcheck-transformer >=0.3.1.1
     , random >=1.2.0
-    , sop-core >=0.5.0.2
+    , sop-core >=0.5.0.1
     , template-haskell >=2.16.0.0
     , transformers >=0.5.6.2
     , tuple-hlist >=0.2.0.1
     , type-level-sets >=0.8.9.0
-    , typerep-map >=0.5.0.0
+    , typerep-map >=0.3.3.0
   default-language: Haskell2010
 
 executable hapi-exe
@@ -72,8 +73,9 @@ executable hapi-exe
       Paths_hapi
   hs-source-dirs:
       app
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N -dynamic
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -dynamic -lasan
   extra-libraries:
+      asan
       ubsan
   build-depends:
       HList >=0.5.0.0
@@ -85,14 +87,15 @@ executable hapi-exe
     , data-fix >=0.3.2
     , fused-effects >=1.1.1.1
     , hapi
+    , haskell-src-meta >=0.8.7
     , quickcheck-transformer >=0.3.1.1
     , random >=1.2.0
-    , sop-core >=0.5.0.2
+    , sop-core >=0.5.0.1
     , template-haskell >=2.16.0.0
     , transformers >=0.5.6.2
     , tuple-hlist >=0.2.0.1
     , type-level-sets >=0.8.9.0
-    , typerep-map >=0.5.0.0
+    , typerep-map >=0.3.3.0
   default-language: Haskell2010
 
 test-suite hapi-test
@@ -113,12 +116,13 @@ test-suite hapi-test
     , data-fix >=0.3.2
     , fused-effects >=1.1.1.1
     , hapi
+    , haskell-src-meta >=0.8.7
     , quickcheck-transformer >=0.3.1.1
     , random >=1.2.0
-    , sop-core >=0.5.0.2
+    , sop-core >=0.5.0.1
     , template-haskell >=2.16.0.0
     , transformers >=0.5.6.2
     , tuple-hlist >=0.2.0.1
     , type-level-sets >=0.8.9.0
-    , typerep-map >=0.5.0.0
+    , typerep-map >=0.3.3.0
   default-language: Haskell2010

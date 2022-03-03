@@ -37,7 +37,7 @@ import Test.HAPI.Common (Fuzzable)
 import Data.Maybe (fromJust)
 import Data.HList (HList (HNil), HMap)
 import Data.SOP
-import Test.HAPI.Args (Args, pattern (:::))
+import Test.HAPI.Args (Args, pattern (::*))
 import Data.SOP.Dict (mapAll, Dict (Dict))
 
 data Attribute a where
@@ -63,11 +63,11 @@ attributes2QVSs = hcmap (Proxy @c) QVS
 
 -- | Generate values in HList
 qvs2m :: (Has (QVS c) sig m) => LiftArgs (QVS c m) p -> m (Args p)
-qvs2m Nil = return HNil
+qvs2m Nil = return Nil
 qvs2m (qvs :* q) = do
   a <- send qvs
   s <- qvs2m q
-  return (a ::: s)
+  return (a ::* s)
 
 newtype QVSFuzzArbitraryCA s m a = QVFuzzArbitraryCA { runQVSFuzzArbitraryCA :: m a }
   deriving (Functor, Applicative, Monad, MonadFail, MonadIO)
@@ -89,10 +89,10 @@ instance (Algebra sig m, Members (State PState :+: GenA) sig) => Algebra (QVS Ar
         return (ctx $> fromJust a)
     R other -> alg (runQVSFuzzArbitraryCA . hdl) other ctx
 
-newtype QVSFromStdin s m a = QVSFromStdin { runQVSFromStdin :: m a }
+newtype QVSFromStdin m a = QVSFromStdin { runQVSFromStdin :: m a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadFail)
 
-instance (Algebra sig m, MonadIO m) => Algebra (QVS Read :+: sig) (QVSFromStdin spec m) where
+instance (Algebra sig m, MonadIO m) => Algebra (QVS Read :+: sig) (QVSFromStdin m) where
   alg hdl sig ctx = case sig of
     L qvs -> do
       liftIO (putStrLn "Please provide input: ")

@@ -13,9 +13,10 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Test.HAPI.Args where
-import Data.HList (HList (HCons, HNil), HBuild')
+import Data.HList (HList (HCons, HNil), HBuild', HList2List (hList2List))
 import GHC.Base (Nat)
 import Data.Kind (Type)
 import GHC.TypeLits (type (-), type (+))
@@ -24,35 +25,44 @@ import Language.Haskell.TH.Quote (QuasiQuoter (quoteDec, quotePat, quoteType, qu
 import Data.Data (Proxy)
 import Data.HList.HList (hBuild)
 import Data.HList.CommonMain (hEnd)
-import Data.SOP (NP (Nil, (:*)))
+import Data.SOP (NP (Nil, (:*)), All)
 import Data.Functor.Identity (Identity (Identity))
+import Data.List (intercalate)
+import Language.Haskell.Meta (parseExp)
 
-type Args a = HList a
+type Args a = NP Identity a
 
-pattern (:::) :: x -> Args xs -> Args (x : xs)
-pattern a ::: b = HCons a b
-{-# COMPLETE (:::) :: HList #-}
-infixr 2 :::
+pattern (::*) :: x -> Args xs -> Args (x : xs)
+pattern a ::* b = Identity a :* b
+{-# COMPLETE (::*) :: NP #-}
+infixr 2 ::*
 
 noArgs :: Args '[]
-noArgs = HNil
-
-mkArgs :: (HBuild' '[] r) => r
-mkArgs = hBuild
+noArgs = Nil
 
 np2Args :: (forall t. f t -> t) -> NP f a -> Args a
-np2Args _   Nil        = HNil
-np2Args alg (fa :* np) = alg fa ::: np2Args alg np
+np2Args _   Nil        = Nil
+np2Args alg (fa :* np) = Identity (alg fa) :* np2Args alg np
+
+showArgs :: forall p. All Show p => Args p -> String
+showArgs args = "(" <> intercalate ", " (go args) <> ")"
+  where
+    go :: forall p. All Show p => Args p -> [String]
+    go Nil                = []
+    go (Identity a :* as) = show a : go as
 
 args :: QuasiQuoter
 args = QuasiQuoter {
-    quoteExp = err,
+    quoteExp = exp . words,
     quoteType = err,
     quotePat = pat . words,
     quoteDec = err
   }
   where
     err = error "args is for pattern"
-    pat []       = [p|HNil|]
-    pat (x : xs) = [p|(HCons $(return (if x == "_" then WildP else VarP (mkName x))) $(pat xs))|]
-
+    pat []       = [p|Nil|]
+    pat (x : xs) = [p|Identity $(return (if x == "_" then WildP else VarP (mkName x))) :* $(pat xs)|]
+    exp []       = [e|Nil|]
+    exp (x : xs) = case parseExp x of
+      Left err -> fail err
+      Right r  -> [e|Identity $(return r) :* $(exp xs)|]

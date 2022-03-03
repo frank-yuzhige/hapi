@@ -6,21 +6,32 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE QuantifiedConstraints #-}
+{-# LANGUAGE FlexibleContexts #-}
+
 module Test.HAPI.Effect.Api where
-import Test.HAPI.Api (ApiDefinition, HasHaskellDef (evalHaskell), HaskellIOCall (showArgs, readOut), HasForeignDef (evalForeign))
+import Test.HAPI.Api (ApiDefinition, HasHaskellDef (evalHaskell), HaskellIOCall (readOut), HasForeignDef (evalForeign), ApiName (apiName), ApiTrace (ApiTrace), ApiTraceEntry (CallOf))
 import Data.Kind (Type)
-import Test.HAPI.Args (Args)
+import Test.HAPI.Args (Args, showArgs)
 import Test.HAPI.Common (Fuzzable)
 import Control.Algebra (Has, Algebra (alg), type (:+:) (L, R), send)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Functor (($>))
 import Test.HAPI.FFI (FFIO(unFFIO))
+import Data.List (intercalate)
+import Control.Carrier.Writer.Strict (Writer, tell)
+import Control.Effect.Sum (Member, Members)
+import Control.Effect.Trace (Trace, trace)
+import Data.SOP (All)
 
 -- | Wrapper to the original Api
 data Api (api :: ApiDefinition) (m :: Type -> Type) a where
-  MkCall :: api p a -> Args p -> Api api m a
+  MkCall :: (ApiName api, All Show p) =>  api p a -> Args p -> Api api m a
 
-mkCall :: (Has (Api api) sig m, Fuzzable a) => api p a -> Args p -> m a
+mkCall :: (Has (Api api) sig m, Fuzzable a, ApiName api, All Show p) => api p a -> Args p -> m a
 mkCall = (send .) . MkCall
 
 -- | Encode api call's type into its underlying interpretation to ensure functional dependency for Algebra holds
@@ -48,7 +59,7 @@ runApiIO = runApiIOAC
 instance (Algebra sig m, MonadIO m, MonadFail m, HaskellIOCall api) => Algebra (Api api :+: sig) (ApiIOAC api m) where
   alg hdl sig ctx = ApiIOAC $ case sig of
     L (MkCall call args) -> do
-      liftIO $ putStrLn $ showArgs call
+      liftIO $ putStrLn $ apiName call
       out <- liftIO (readOut call <$> getLine)
       case out of
         Nothing -> fail "Parse error"
@@ -70,3 +81,34 @@ instance (Algebra sig m, MonadIO m, HasForeignDef api) => Algebra (Api api :+: s
       r <- liftIO $ unFFIO $ evalForeign call args
       return (ctx $> r)
     R other -> alg (runApiFFIAC . hdl) other ctx
+
+-- | Logging
+newtype ApiTracingAC underlying (api :: ApiDefinition) m a = ApiTracingAC {
+  runApiTracingAC :: (forall m b. underlying api m b -> m b) -> (forall m b. m b -> underlying api m b) -> m a
+}
+
+runApiTracing :: forall api underlying m a. (forall m b. underlying api m b -> m b) -> (forall m b. m b -> underlying api m b) -> ApiTracingAC underlying api m a -> m a
+runApiTracing f u (ApiTracingAC c) = c f u
+
+instance (Algebra (Api api :+: sig) (underlying api m),
+          Algebra sig m,
+          Members (Writer (ApiTrace api) :+: Trace) sig,
+          MonadIO m)
+          => Algebra (Api api :+: sig) (ApiTracingAC underlying api m) where
+  alg hdl sig ctx = ApiTracingAC $ \u c -> case sig of
+    L api@(MkCall f args) -> do
+      tell @(ApiTrace api) $ ApiTrace [CallOf f args]
+      trace (apiName f <> showArgs args)
+      u (alg (c . runApiTracing u c . hdl) (L api) ctx)
+    R other -> alg (runApiTracing u c . hdl) other ctx
+
+
+instance (Functor (underlying api m), Functor m) => Functor (ApiTracingAC underlying api m) where
+  fmap f (ApiTracingAC ac) = ApiTracingAC $ \u c -> fmap f (ac u c)
+
+instance (Applicative (underlying api m), Applicative m) => Applicative (ApiTracingAC underlying api m) where
+  pure a  = ApiTracingAC $ \_ _ -> pure a
+  (ApiTracingAC f) <*> (ApiTracingAC a) = ApiTracingAC $ \u c -> f u c <*> a u c
+
+instance (Monad (underlying api m), Monad m) => Monad (ApiTracingAC underlying api m) where
+  (ApiTracingAC a) >>= f = ApiTracingAC $ \u c -> a u c >>= (runApiTracing u c . f)

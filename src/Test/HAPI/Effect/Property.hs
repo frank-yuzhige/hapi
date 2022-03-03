@@ -6,7 +6,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RankNTypes #-}
@@ -18,7 +17,6 @@ import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Trans.Class (MonadTrans)
 import Data.Functor (($>))
 import Control.Carrier.Error.Church( Catch, ErrorC, throwError )
-import Control.Carrier.Cull.Church (MonadPlus)
 import Control.Effect.Error (Error)
 import Test.QuickCheck (Arbitrary)
 

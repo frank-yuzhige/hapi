@@ -17,7 +17,7 @@ import GHC.TypeNats (Nat)
 import Data.Kind (Type)
 import Data.HList (HList (HCons, HNil), hMap)
 import Test.HAPI.Lib (ArithApiA(AddA))
-import Test.HAPI.Api (ApiDefinition)
+import Test.HAPI.Api (ApiDefinition, ApiName)
 import Test.HAPI.Effect.Api(Api, mkCall)
 import Control.Effect.Sum (Member)
 import Control.Algebra (Has, Algebra, type (:+:))
@@ -32,7 +32,7 @@ import Data.SOP (All)
 type NodeID = Int
 
 data Edge sig c where
-  APICall :: (Member (Api api) sig, Fuzzable a, All c p)
+  APICall :: (Member (Api api) sig, Fuzzable a, All c p, ApiName api, All Show p)
           => NodeID  -- From
           -> NodeID   -- To
           -> api p a -- API call (constructor)
@@ -62,12 +62,12 @@ synthStub aastg@(AASTG start edges) = synth start
     synth i = return ()
             : concat [(synthOneStep e >>) <$> synth (end e) | e <- edgesFrom i aastg]
     synthOneStep :: Edge sig c -> m ()
-    synthOneStep (APICall s e api args) = do
+    synthOneStep (APICall s e (api :: api p a) args) = do
       -- TODO
       -- 1. Resolve Attributes (Into QVS)
       args <- qvs2m @c @sig @m (attributes2QVSs @c args)
       -- 2. Make APICall using qvs
-      r <- mkCall api args
+      r <- mkCall (api :: api p a) args
       -- 3. Check if return value satisfies condition (TODO)
 
       -- 4. Store return value in state

@@ -35,43 +35,42 @@ import Test.HAPI.FFI (FFIO(FFIO, unFFIO))
 import Control.Monad.Trans.Identity (IdentityT (runIdentityT))
 import Control.Monad.Trans.Class (MonadTrans (lift))
 import Data.HList (HList (HNil, HCons), HBuild')
-import Test.HAPI.Args (Args)
+import Test.HAPI.Args (Args, showArgs)
 import Data.Tuple.HList (HLst (toHList))
 import Test.HAPI.Common (Fuzzable)
+import Data.SOP (All)
 
 
 type ApiDefinition = [Type] -> Type -> Type
 
+-- | Name of an API call
+class ApiName (api :: ApiDefinition) where
+  apiName :: api p a -> String
+
+instance {-# OVERLAPPABLE #-}
+  (forall p a. Show (api p a)) => ApiName api where
+  apiName = show
+
 -- | Given API spec has a direct mapping to its haskell pure implementation
 class HasHaskellDef (api :: ApiDefinition) where
-  evalHaskell :: api p a -> HList p -> a
+  evalHaskell :: api p a -> Args p -> a
 
 -- | Given API spec has a FFI
 class HasForeignDef (api :: ApiDefinition) where
-  evalForeign :: api p a -> HList p -> FFIO a
+  evalForeign :: api p a -> Args p -> FFIO a
 
 -- | [DEBUG] Given API spec can be debugged (using Haskell IO to mock input/output)
-class HaskellIOCall (api :: ApiDefinition) where
-  showArgs :: api p a -> String
+class (ApiName api) => HaskellIOCall (api :: ApiDefinition) where
   readOut  :: api p a -> String -> Maybe a
 
+data ApiTraceEntry (api :: ApiDefinition) where
+  CallOf :: All Show p => api p a -> Args p -> ApiTraceEntry api
 
+instance ApiName api => Show (ApiTraceEntry api) where
+  show (CallOf api args) = apiName api <> showArgs args
 
--- -- | Call path record
--- class HasCallPath (api :: ApiDefinition) where
---   showCall :: api p a -> String
+newtype ApiTrace (api :: ApiDefinition) = ApiTrace { apiTrace2List :: [ApiTraceEntry api] }
+  deriving (Semigroup, Monoid)
 
--- newtype CPRAC (apiAC :: ApiDefinition -> (* -> *) -> * -> *) (api :: ApiDefinition) m a = CPRAC {
---   runCPRAC :: WriterC [String] (apiAC api m) a
--- }  deriving (Functor, Applicative, Monad, MonadIO)
-
-
-
--- instance (Algebra sig m, Algebra (api p api :+: sig) (apiAC api m), HasCallPath api) => Algebra (api p api :+: sig) (CPRAC apiAC api m) where
---   alg hdl sig ctx = CPRAC $ case sig of
---     L (MkCall call) -> do
---       tell @[String] [showCall call]
---       alg (runCPRAC . hdl) (R (L call)) ctx
---       return undefined  -- TODO
---     R other -> alg (runCPRAC . hdl) (R (R other)) ctx
-
+instance Show (ApiTraceEntry api) => Show (ApiTrace api) where
+  show (ApiTrace xs) = "ApiTrace " <> show xs

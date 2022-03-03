@@ -35,6 +35,9 @@ newtype PTable t = PTable { getMap :: M.Map (PKey t) t }
 newtype PState = PState { getPTables :: TM.TypeRepMap PTable }
   deriving (Show)
 
+empty :: PState
+empty = PState TM.empty
+
 class (Typeable t) => PStateSupports s t where
   record  :: PKey t -> t -> s -> s
   lookUp  :: PKey t -> s -> Maybe t
