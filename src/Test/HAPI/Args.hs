@@ -40,10 +40,6 @@ infixr 2 ::*
 noArgs :: Args '[]
 noArgs = Nil
 
-np2Args :: (forall t. f t -> t) -> NP f a -> Args a
-np2Args _   Nil        = Nil
-np2Args alg (fa :* np) = Identity (alg fa) :* np2Args alg np
-
 showArgs :: forall p. All Show p => Args p -> String
 showArgs args = "(" <> intercalate ", " (go args) <> ")"
   where

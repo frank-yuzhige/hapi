@@ -32,12 +32,16 @@ library
       Test.HAPI.Constraint
       Test.HAPI.DataType
       Test.HAPI.Effect.Api
+      Test.HAPI.Effect.FF
       Test.HAPI.Effect.Gen
+      Test.HAPI.Effect.Orchestration
       Test.HAPI.Effect.Property
       Test.HAPI.Effect.QVS
       Test.HAPI.FFI
       Test.HAPI.Lib
       Test.HAPI.PState
+      Test.HAPI.Serialize
+      Test.HAPI.VPtr
   other-modules:
       Paths_hapi
   hs-source-dirs:
@@ -51,10 +55,13 @@ library
       HList >=0.5.0.0
     , QuickCheck >=2.14.2
     , base >=4.7 && <5
+    , bytestring >=0.11.3.0
     , c-storable-deriving >=0.1.3
+    , cereal >=0.5.8.2
     , constraints >=0.13.2
     , containers >=0.4.0.0
     , data-fix >=0.3.2
+    , dlist >=0.5.6.2
     , fused-effects >=1.1.1.1
     , haskell-src-meta >=0.8.7
     , quickcheck-transformer >=0.3.1.1
@@ -73,7 +80,7 @@ executable hapi-exe
       Paths_hapi
   hs-source-dirs:
       app
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N -dynamic -lasan
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -dynamic
   extra-libraries:
       asan
       ubsan
@@ -81,10 +88,13 @@ executable hapi-exe
       HList >=0.5.0.0
     , QuickCheck >=2.14.2
     , base >=4.7 && <5
+    , bytestring >=0.11.3.0
     , c-storable-deriving >=0.1.3
+    , cereal >=0.5.8.2
     , constraints >=0.13.2
     , containers >=0.4.0.0
     , data-fix >=0.3.2
+    , dlist >=0.5.6.2
     , fused-effects >=1.1.1.1
     , hapi
     , haskell-src-meta >=0.8.7
@@ -110,10 +120,13 @@ test-suite hapi-test
       HList >=0.5.0.0
     , QuickCheck >=2.14.2
     , base >=4.7 && <5
+    , bytestring >=0.11.3.0
     , c-storable-deriving >=0.1.3
+    , cereal >=0.5.8.2
     , constraints >=0.13.2
     , containers >=0.4.0.0
     , data-fix >=0.3.2
+    , dlist >=0.5.6.2
     , fused-effects >=1.1.1.1
     , hapi
     , haskell-src-meta >=0.8.7

@@ -8,8 +8,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-{-# HLINT ignore "Use newtype instead of data" #-}
 
 module Test.HAPI.PState where
 import Prelude hiding (lookup)
@@ -27,7 +25,7 @@ import qualified Data.TypeRepMap as TM
 import GHC.Base (Symbol)
 import Data.Functor.Identity (Identity)
 
-data PKey t = PKey { getPKeyID :: Int }
+newtype PKey t = PKey { getPKeyID :: Int }
   deriving (Eq, Ord, Show)
 
 newtype PTable t = PTable { getMap :: M.Map (PKey t) t }

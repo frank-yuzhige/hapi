@@ -5,7 +5,7 @@
 
 module Test.HAPI.FFI where
 
-import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.IO.Class (MonadIO (liftIO))
 import Foreign.C (CString)
 import Foreign.C.Types (CInt(CInt))
 import Foreign ( Ptr, Storable(poke, sizeOf), Storable(peek) )
@@ -15,6 +15,10 @@ import Foreign.CStorable (CStorable(cSizeOf, cAlignment, cPoke, cPeek))
 
 newtype FFIO a = FFIO { unFFIO :: IO a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadFail)
+
+ffi :: MonadIO m => FFIO a -> m a
+ffi = liftIO . unFFIO
+
 
 -- Need to use CInt instead of Int to prevent negative number underflow error
 foreign import ccall "broken_add"
@@ -39,6 +43,8 @@ instance Storable Stack where
   alignment = cAlignment
   poke = cPoke
   peek = cPeek
+
+-- TODO: pointer translation (Ptr <-> Pointer)
 
 foreign import ccall "create_stack"
   createStack  :: FFIO (Ptr Stack)

@@ -12,7 +12,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 module Test.HAPI.AASTG.Core where
-import Test.HAPI.Effect.QVS (QVS (QVS), Attribute, LiftArgs, attributes2QVSs, qvs2m)
+import Test.HAPI.Effect.QVS (QVS (QVS), Attribute, attributes2QVSs, qvs2m)
 import GHC.TypeNats (Nat)
 import Data.Kind (Type)
 import Data.HList (HList (HCons, HNil), hMap)
@@ -25,7 +25,7 @@ import Test.HAPI.Args (Args)
 import Test.HAPI.PState (PKey (PKey), PState (PState), PStateSupports (record))
 import Test.HAPI.Common (Fuzzable)
 import Control.Effect.State (State, modify)
-import Data.SOP (All)
+import Data.SOP (All, NP)
 
 -- Abstract API state transition graph
 
@@ -36,7 +36,7 @@ data Edge sig c where
           => NodeID  -- From
           -> NodeID   -- To
           -> api p a -- API call (constructor)
-          -> LiftArgs Attribute p
+          -> NP Attribute p
           -> Edge sig c
 
 data AASTG sig c = AASTG {

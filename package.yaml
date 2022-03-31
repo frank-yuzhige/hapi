@@ -28,6 +28,7 @@ description:         Please see the README on GitHub at <https://github.com/gith
 dependencies:
 - base >= 4.7 && < 5
 - transformers >= 0.5.6.2
+- dlist >= 0.5.6.2
 - random >= 1.2.0
 - fused-effects >= 1.1.1.1
 - QuickCheck >= 2.14.2
@@ -43,6 +44,8 @@ dependencies:
 - tuple-hlist >= 0.2.0.1
 - typerep-map >= 0.3.3.0
 - sop-core >= 0.5.0.1
+- cereal >= 0.5.8.2
+- bytestring >= 0.11.3.0
 
 library:
   source-dirs: src
@@ -67,7 +70,6 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     - -dynamic
-    - -lasan
     dependencies:
     - hapi
 

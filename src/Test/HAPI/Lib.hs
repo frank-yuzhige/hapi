@@ -13,12 +13,13 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Redundant bracket" #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Test.HAPI.Lib where
 
 import Control.Algebra ( Has, type (:+:), send, Algebra )
-import Test.HAPI.Api ( HaskellIOCall(..), HasHaskellDef(..), HasForeignDef (evalForeign), ApiDefinition, ApiTrace (ApiTrace) )
-import Test.HAPI.Effect.Api (runApi, runApiIO, runApiFFI, ApiFFIAC (ApiFFIAC), Api, mkCall, runApiTracing)
+import Test.HAPI.Api ( HaskellIOCall(..), HasHaskellDef(..), HasForeignDef (evalForeign), ApiDefinition, ApiTrace (ApiTrace), newVPtr, getPtr, ApiError )
+import Test.HAPI.Effect.Api (runApi, runApiIO, runApiFFI, ApiFFIAC (ApiFFIAC), Api, mkCall)
 import Test.HAPI.Effect.Property (PropertyA, runProperty, shouldBe, PropertyError, PropertyAC (..), failed, shouldReturn)
 import Text.Read (readMaybe)
 import Control.Carrier.Error.Church (Catch, Error, Throw, catchError, runError, ErrorC)
@@ -27,10 +28,10 @@ import Control.Monad (void, replicateM, forM, forM_)
 import Test.HAPI.Effect.Gen (GenA, liftGenA, GenAC (runGenAC), anyVal, runGenIO, suchThat, chooseA)
 import Test.QuickCheck.GenT (MonadGen(liftGen), runGenT)
 import Test.QuickCheck (Arbitrary(arbitrary), generate)
-import Test.HAPI.FFI (add, sub, mul, neg, str, Stack, createStack, pushStack, popStack, peekStack, getStackSize)
+import Test.HAPI.FFI (add, sub, mul, neg, str, Stack, createStack, pushStack, popStack, peekStack, getStackSize, FFIO (unFFIO), ffi)
 import Control.Effect.Labelled (Labelled(Labelled))
 import Foreign.C (peekCString)
-import Test.HAPI.Effect.QVS (QVS (QVS), QVSFuzzArbitraryCA (runQVSFuzzArbitraryCA), QVSFromStdin (runQVSFromStdin), Attribute (IntRange))
+import Test.HAPI.Effect.QVS (QVS (QVS), QVSFuzzArbitraryAC (runQVSFuzzArbitraryAC), QVSFromStdinAC (runQVSFromStdinAC), Attribute (IntRange))
 import Test.QuickCheck.Random (QCGen(QCGen))
 import Data.Data (Proxy (Proxy))
 import Foreign (Ptr)
@@ -40,8 +41,12 @@ import Data.HList (HList(HNil, HCons))
 import Test.HAPI.Args (args, noArgs, pattern (::*))
 import Control.Carrier.Writer.Strict (runWriter)
 import Control.Carrier.Trace.Printing (runTrace)
-import Control.Carrier.State.Strict (runState)
+import Control.Carrier.State.Strict (runState, put, modify, gets)
 import Test.HAPI.PState (PState(PState), empty)
+import Test.HAPI.VPtr (VPtr, VPtrTable, storePtr, ptr2VPtr, vPtr2Ptr)
+import Test.HAPI.Effect.FF (ff, runFFAC)
+import Control.Monad.Trans.Class (lift)
+import Control.Carrier.Fresh.Strict (runFresh)
 
 
 data ArithApiA :: ApiDefinition where
@@ -54,11 +59,11 @@ data ShowApiA :: ApiDefinition where
   StrA :: ShowApiA '[Int] String
 
 data StackApiA :: ApiDefinition where
-  CreateA :: StackApiA '[]               (Ptr Stack)
-  PushA   :: StackApiA '[Ptr Stack, Int] ()
-  PopA    :: StackApiA '[Ptr Stack]     ()
-  PeekA   :: StackApiA '[Ptr Stack]     Int
-  SizeA   :: StackApiA '[Ptr Stack]     Int
+  CreateA :: StackApiA '[]               (VPtr Stack)
+  PushA   :: StackApiA '[VPtr Stack, Int] ()
+  PopA    :: StackApiA '[VPtr Stack]     ()
+  PeekA   :: StackApiA '[VPtr Stack]     Int
+  SizeA   :: StackApiA '[VPtr Stack]     Int
 
 deriving instance Show (ArithApiA p a)
 deriving instance Show (ShowApiA p a)
@@ -69,7 +74,7 @@ instance HasHaskellDef ShowApiA where
 
 instance HasForeignDef ShowApiA where
   evalForeign StrA [args|a|] = do
-    ptr <- str (fromIntegral a)
+    ptr <- ffi $ str (fromIntegral a)
     liftIO $ peekCString ptr
 
 instance HaskellIOCall ShowApiA where
@@ -83,10 +88,10 @@ instance HasHaskellDef ArithApiA where
   evalHaskell NegA [args|a b|] = -a
 
 instance HasForeignDef ArithApiA where
-  evalForeign AddA [args|a b|] = fromIntegral <$> add (fromIntegral a) (fromIntegral b)
-  evalForeign SubA [args|a b|] = fromIntegral <$> sub (fromIntegral a) (fromIntegral b)
-  evalForeign MulA [args|a b|] = fromIntegral <$> mul (fromIntegral a) (fromIntegral b)
-  evalForeign NegA [args|a b|] = fromIntegral <$> neg (fromIntegral a)
+  evalForeign AddA [args|a b|] = fromIntegral <$> ffi (add (fromIntegral a) (fromIntegral b))
+  evalForeign SubA [args|a b|] = fromIntegral <$> ffi (sub (fromIntegral a) (fromIntegral b))
+  evalForeign MulA [args|a b|] = fromIntegral <$> ffi (mul (fromIntegral a) (fromIntegral b))
+  evalForeign NegA [args|a b|] = fromIntegral <$> ffi (neg (fromIntegral a))
 
 instance HaskellIOCall ArithApiA where
   readOut AddA = readMaybe
@@ -95,11 +100,13 @@ instance HaskellIOCall ArithApiA where
   readOut NegA = readMaybe
 
 instance HasForeignDef StackApiA where
-  evalForeign CreateA [args||]  = createStack
-  evalForeign PushA   [args|ptr n|] = pushStack ptr (fromIntegral n)
-  evalForeign PopA    [args|ptr  |] = popStack  ptr
-  evalForeign PeekA   [args|ptr  |] = fromIntegral <$> peekStack    ptr
-  evalForeign SizeA   [args|ptr  |] = fromIntegral <$> getStackSize ptr
+  evalForeign CreateA [args||]      = ffi createStack >>= newVPtr
+  evalForeign PushA   [args|ptr n|] = do
+    p <- getPtr ptr
+    ffi $ pushStack p (fromIntegral n)
+  evalForeign PopA    [args|ptr  |] = ffi . popStack =<< getPtr ptr
+  evalForeign PeekA   [args|ptr  |] = fmap fromIntegral (ffi . peekStack    =<< getPtr ptr)
+  evalForeign SizeA   [args|ptr  |] = fmap fromIntegral (ffi . getStackSize =<< getPtr ptr)
 
 -- | Example program, calling arithmetic and show API
 show3Plus5Is8 :: Has (Api ArithApiA :+: Api ShowApiA :+: PropertyA) sig m => m ()
@@ -109,12 +116,12 @@ show3Plus5Is8 = do
   x <- mkCall StrA [args|x|]
   x `shouldBe` "40"
 
-prop :: (MonadIO m, MonadFail m, Algebra sig m) => m ()
-prop = runError @PropertyError (fail . show) pure
-     . runProperty @PropertyA
-     . runApiFFI @ArithApiA
-     . runApiIO @ShowApiA
-     $ show3Plus5Is8
+-- prop :: (MonadIO m, MonadFail m, Algebra sig m) => m ()
+-- prop = runError @PropertyError (fail . show) pure
+--      . runProperty @PropertyA
+--      . runApiFFI @ArithApiA
+--      . runApiIO @ShowApiA
+--      $ show3Plus5Is8
 
 arb :: forall c sig m. (Has (Api ShowApiA :+: PropertyA :+: QVS c) sig m, WFTypeSpec (BasicSpec c))
     => m ()
@@ -156,31 +163,46 @@ prog3 = do
   mkCall SizeA [args|stk|] `shouldReturn` n
   mkCall PeekA ([args|stk|]) `shouldReturn` (2 * n)
 
-runArb :: forall m sig. (MonadIO m, MonadFail m, Algebra sig m) => m ()
-runArb = do runGenIO
-          . runQVSFromStdin
-          . runError @PropertyError (fail . show) pure
-          . runProperty @PropertyA
-          . runApiFFI @ShowApiA
-          $ arb @Read
+-- runArb :: forall m sig. (MonadIO m, MonadFail m, Algebra sig m) => m ()
+-- runArb = do runGenIO
+--           . runQVSFromStdinAC
+--           . runError @PropertyError (fail . show) pure
+--           . runProperty @PropertyA
+--           . runApiFFI @ShowApiA
+--           $ arb @Read
 
-runProg :: forall m sig. (MonadIO m, MonadFail m, Algebra sig m) => m ()
-runProg = do runGenIO
-          . runError @PropertyError (fail . show) pure
-          . runProperty @PropertyA
-          . runApiFFI @ArithApiA
-          $ prog1
+-- runProg :: forall m sig. (MonadIO m, MonadFail m, Algebra sig m) => m ()
+-- runProg = do runGenIO
+--           . runError @PropertyError (fail . show) pure
+--           . runProperty @PropertyA
+--           . runApiFFI @ArithApiA
+--           $ prog1
 
 runProg2 :: forall m sig. (MonadIO m, MonadFail m, Algebra sig m) => m ()
 runProg2 = do
+  -- let x = prog3 @Arbitrary
+  -- let x1 = runApiFFI @StackApiA x
+  -- let x2 = runError @ApiError (fail . show) pure x1
+  -- let x3 = runFFAC x2
+  -- let x4 = runFresh 0 x3
+  -- let x5 = runTrace x4
+  -- let x6 = runProperty @PropertyA x5
+  -- let x7 = runError @PropertyError (fail . show) pure x6
+  -- let x8 = runWriter @(ApiTrace StackApiA) x7
+  -- let x9 = runQVSFuzzArbitraryAC x8
+  -- let x10 = runState empty x9
+  -- x <- runGenIO x10
   x <- runGenIO
-     . runState empty
-     . runQVSFuzzArbitraryCA
+     . runError @ApiError (fail . show) pure
      . runWriter @(ApiTrace StackApiA)
+     . runTrace
+     . runFresh 0
+     . runState empty
+     . runFFAC
      . runError @PropertyError (fail . show) pure
      . runProperty @PropertyA
-     . runTrace
-     . runApiTracing @StackApiA runApiFFI ApiFFIAC
+     . runApiFFI @StackApiA
+     . runQVSFuzzArbitraryAC
      $ prog3 @Arbitrary
   liftIO $ print $ fst x
   return ()
