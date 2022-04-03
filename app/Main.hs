@@ -1,5 +1,6 @@
 module Main where
-import Test.HAPI.Lib (runProg2)
+import Test.HAPI.Lib (runProg2, runGraph1)
+import Control.Monad (forever)
 
 main :: IO ()
-main = runProg2
+main = runGraph1

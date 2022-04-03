@@ -21,7 +21,7 @@ Quantified Value Generation Effect
 module Test.HAPI.Effect.QVS where
 import Control.Algebra (Algebra (alg), type (:+:) (L, R), Has, send)
 import Control.Monad.IO.Class (MonadIO (liftIO))
-import Test.HAPI.Effect.Gen (GenAC(runGenAC), GenA (LiftGenA), liftGenA)
+import Test.HAPI.Effect.Gen (GenAC(runGenAC), GenA (LiftGenA), liftGenA, oneof, oneof')
 import Test.QuickCheck (Arbitrary(arbitrary), chooseInt, chooseEnum)
 import Data.Kind (Constraint, Type)
 import Data.Functor (($>))
@@ -43,11 +43,13 @@ import Data.Serialize (Serialize)
 import Test.HAPI.Effect.Orchestration (Orchestration, readFromOrchestration)
 
 data Attribute a where
+  Value    :: (Fuzzable a) => a -> Attribute a
   Anything :: (Fuzzable a) => Attribute a
   IntRange :: Int -> Int -> Attribute Int
   Range    :: (Fuzzable a, Ord a, Enum a)
            => a -> a -> Attribute a
   Get      :: (Fuzzable a) => PKey a -> Attribute a
+  AnyOf    :: (Fuzzable a) => [a] -> Attribute a
 
 
 -- Quantified Value Supplier
@@ -79,7 +81,9 @@ newtype QVSFuzzArbitraryAC s m a = QVSFuzzArbitraryAC { runQVSFuzzArbitraryAC ::
 instance (Algebra sig m, Members (State PState :+: GenA) sig) => Algebra (QVS Arbitrary :+: sig) (QVSFuzzArbitraryAC spec m) where
   alg hdl sig ctx = QVSFuzzArbitraryAC $ case sig of
     L (QVS attr) -> case attr of
-      Anything          -> do
+      Value v      -> do
+        return (ctx $> v)
+      Anything     -> do
         a <- liftGenA arbitrary
         return (ctx $> a)
       IntRange l r -> do
@@ -91,6 +95,9 @@ instance (Algebra sig m, Members (State PState :+: GenA) sig) => Algebra (QVS Ar
       Get k        -> do
         a <- gets @PState (lookUp k)
         return (ctx $> fromJust a)
+      AnyOf xs     -> do
+        a <- oneof' (return <$> xs)
+        return (ctx $> a)
     R other -> alg (runQVSFuzzArbitraryAC . hdl) other ctx
 
 newtype QVSFromStdinAC m a = QVSFromStdinAC { runQVSFromStdinAC :: m a }

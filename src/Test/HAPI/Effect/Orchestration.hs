@@ -22,6 +22,8 @@ import Data.ByteString (ByteString)
 import Control.Carrier.State.Strict (StateC, get, put)
 import qualified Data.Serialize as S
 import Data.Functor (($>))
+import Control.Effect.Error (Error, throwError)
+import Control.Effect.Sum (Members)
 
 data Orchestration (m :: Type -> Type) a where
   ReadFromOrchestration :: (Fuzzable a) => Orchestration m a
@@ -29,15 +31,20 @@ data Orchestration (m :: Type -> Type) a where
 readFromOrchestration :: forall a sig m. (Has Orchestration sig m, Fuzzable a) => m a
 readFromOrchestration = send ReadFromOrchestration
 
+data OrchestrationError = CerealError String
+
+instance Show OrchestrationError where
+  show (CerealError err) = "Cereal Error: " <> err
+
 newtype OrchestrationViaBytesAC m a = OrchestrationViaBytesAC { runOrchestrationViaBytesAC :: StateC ByteString m a }
   deriving (Functor, Applicative, Monad)
 
-instance (Algebra sig m, MonadFail m) => Algebra (Orchestration :+: sig) (OrchestrationViaBytesAC m) where
+instance (Algebra sig m, Members (Error OrchestrationError) sig) => Algebra (Orchestration :+: sig) (OrchestrationViaBytesAC m) where
   alg hdl sig ctx = OrchestrationViaBytesAC $ case sig of
     L (ReadFromOrchestration :: Orchestration n a) -> do
       bs <- get @ByteString
       case S.runGetState (S.get @a) bs 0 of
-        Left err -> fail err
+        Left err -> throwError @OrchestrationError $ CerealError err
         Right (a, bs') -> do
           put @ByteString bs'
           return (ctx $> a)

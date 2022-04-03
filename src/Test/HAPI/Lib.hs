@@ -14,6 +14,7 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Redundant bracket" #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Test.HAPI.Lib where
 
@@ -31,11 +32,11 @@ import Test.QuickCheck (Arbitrary(arbitrary), generate)
 import Test.HAPI.FFI (add, sub, mul, neg, str, Stack, createStack, pushStack, popStack, peekStack, getStackSize, FFIO (unFFIO), ffi)
 import Control.Effect.Labelled (Labelled(Labelled))
 import Foreign.C (peekCString)
-import Test.HAPI.Effect.QVS (QVS (QVS), QVSFuzzArbitraryAC (runQVSFuzzArbitraryAC), QVSFromStdinAC (runQVSFromStdinAC), Attribute (IntRange))
+import Test.HAPI.Effect.QVS (QVS (QVS), QVSFuzzArbitraryAC (runQVSFuzzArbitraryAC), QVSFromStdinAC (runQVSFromStdinAC), Attribute (IntRange, Anything, Get, Value))
 import Test.QuickCheck.Random (QCGen(QCGen))
 import Data.Data (Proxy (Proxy))
 import Foreign (Ptr)
-import Test.HAPI.Constraint (type (:>>>:))
+import Data.SOP (NP (Nil, (:*)), All)
 import Test.HAPI.DataType (BasicSpec, WFTypeSpec, type (:&:))
 import Data.HList (HList(HNil, HCons))
 import Test.HAPI.Args (args, noArgs, pattern (::*))
@@ -47,6 +48,8 @@ import Test.HAPI.VPtr (VPtr, VPtrTable, storePtr, ptr2VPtr, vPtr2Ptr)
 import Test.HAPI.Effect.FF (ff, runFFAC)
 import Control.Monad.Trans.Class (lift)
 import Control.Carrier.Fresh.Strict (runFresh)
+import Test.HAPI.AASTG.Core (AASTG (AASTG), Edge (Update, APICall), synthStub)
+import Control.Effect.Sum (Members)
 
 
 data ArithApiA :: ApiDefinition where
@@ -193,7 +196,6 @@ runProg2 = do
   -- let x10 = runState empty x9
   -- x <- runGenIO x10
   x <- runGenIO
-     . runError @ApiError (fail . show) pure
      . runWriter @(ApiTrace StackApiA)
      . runTrace
      . runFresh 0
@@ -201,8 +203,38 @@ runProg2 = do
      . runFFAC
      . runError @PropertyError (fail . show) pure
      . runProperty @PropertyA
+     . runError @ApiError (fail . show) pure
      . runApiFFI @StackApiA
      . runQVSFuzzArbitraryAC
      $ prog3 @Arbitrary
   liftIO $ print $ fst x
   return ()
+
+
+graph1 :: forall c. (c Int) => AASTG (ArithApiA) c
+graph1 = AASTG 0 [
+    Update  @c @Int 0 1 "a" (Value 10)
+  , Update  @c @Int 1 2 "b" Anything
+  , Update  @c @Int 2 3 "x" Anything
+  , APICall @c @Int 3 4 (Just "a") AddA (Get "a" :* Get "b"  :* Nil)
+  , APICall @c @Int 3 5 (Just "a") SubA (Get "a" :* Anything :* Nil)
+  , APICall @c @Int 4 6 (Just "b") AddA (Get "a" :* Get "a"  :* Nil)
+  , APICall @c @Int 5 6 (Just "b") AddA (Get "a" :* Get "a"  :* Nil)
+  ]
+
+runGraph1 :: forall m sig. (MonadIO m, MonadFail m, Algebra sig m) => m ()
+runGraph1 = do
+  forM_ (synthStub (graph1 @Arbitrary)) $ \stub -> do
+    x <- runGenIO
+       . runWriter @(ApiTrace ArithApiA)
+       . runTrace
+       . runFresh 0
+       . runState empty
+       . runFFAC
+       . runError @PropertyError (fail . show) pure
+       . runProperty @PropertyA
+       . runError @ApiError (fail . show) pure
+       . runApiFFI @ArithApiA
+       . runQVSFuzzArbitraryAC
+       $ stub
+    liftIO $ print $ fst x
