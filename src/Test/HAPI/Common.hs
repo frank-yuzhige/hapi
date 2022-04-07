@@ -8,6 +8,6 @@ import Data.Data (Typeable)
 import Control.Algebra (Has, type (:+:))
 import Data.Serialize (Serialize)
 
-class (Typeable t, Show t, Serialize t) => Fuzzable t
+class (Typeable t, Show t, Eq t, Serialize t) => Fuzzable t
 
-instance (Typeable t, Show t, Serialize t) => Fuzzable t
+instance (Typeable t, Show t, Eq t, Serialize t) => Fuzzable t

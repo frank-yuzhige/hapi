@@ -48,6 +48,8 @@ import Test.HAPI.Effect.FF (FF)
 import Control.Effect.Error (Error, throwError)
 import Data.DList (DList)
 import qualified Data.DList as DL
+import Data.Type.Equality (testEquality, castWith)
+import Type.Reflection (typeOf)
 
 
 -- TODO: make a data class
@@ -55,20 +57,16 @@ type ApiError = String
 
 type ApiDefinition = [Type] -> Type -> Type
 
--- | Name of an API call
-class (forall p a. Eq (api p a)) => ApiName (api :: ApiDefinition) where
-  apiName :: api p a -> String
+-- | Given API spec has a FFI
+type ForeignA = (State VPtrTable :+: Fresh :+: Error ApiError)
 
-instance {-# OVERLAPPABLE #-}
-  (forall p a. Show (api p a), forall p a. Eq (api p a)) => ApiName api where
-  apiName = show
+-- | Name of an API call
+class (forall p a. Eq (api p a), Typeable api) => ApiName (api :: ApiDefinition) where
+  apiName :: api p a -> String
 
 -- | Given API spec has a direct mapping to its haskell pure implementation
 class HasHaskellDef (api :: ApiDefinition) where
   evalHaskell :: api p a -> Args p -> a
-
--- | Given API spec has a FFI
-type ForeignA = (State VPtrTable :+: Fresh :+: Error ApiError)
 
 class HasForeignDef (api :: ApiDefinition) where
   evalForeign :: (Has ForeignA sig m, MonadIO m) => api p a -> Args p -> m a
@@ -90,6 +88,11 @@ getPtr v = do
     Nothing -> throwError "Ptr not in there"
     Just ptr -> return ptr
 
+apiEq :: (ApiName api, Typeable p, Typeable a, Typeable q, Typeable b) => api p a -> api q b -> Bool
+apiEq a b = case testEquality (typeOf a) (typeOf b) of
+  Nothing    -> False
+  Just proof -> castWith proof a == b
+
 -- | [DEBUG] Given API spec can be debugged (using Haskell IO to mock input/output)
 class (ApiName api) => HaskellIOCall (api :: ApiDefinition) where
   readOut  :: api p a -> String -> Maybe a
@@ -108,3 +111,7 @@ apiTrace = ApiTrace . DL.singleton
 
 instance Show (ApiTraceEntry api) => Show (ApiTrace api) where
   show (ApiTrace xs) = "ApiTrace " <> show xs
+
+instance {-# OVERLAPPABLE #-}
+  (forall p a. Show (api p a), forall p a. Eq (api p a), Typeable api) => ApiName api where
+  apiName = show

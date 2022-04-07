@@ -16,15 +16,15 @@
 {-# LANGUAGE StandaloneDeriving #-}
 
 module Test.HAPI.AASTG.Core where
-import Test.HAPI.Effect.QVS (QVS (QVS), Attribute (Get, Anything), attributes2QVSs, qvs2m)
+import Test.HAPI.Effect.QVS (QVS (QVS), attributes2QVSs, qvs2m)
 import GHC.TypeNats (Nat)
 import Data.Kind (Type)
-import Data.HList (HList (HCons, HNil), hMap)
-import Test.HAPI.Api (ApiDefinition, ApiName (apiName))
+import Data.HList (HList (HCons, HNil), hMap, typeRep)
+import Test.HAPI.Api (ApiDefinition, ApiName (apiName), apiEq)
 import Test.HAPI.Effect.Api(Api, mkCall)
 import Control.Effect.Sum (Member, Members)
 import Control.Algebra (Has, Algebra, type (:+:), send)
-import Test.HAPI.Args (Args, showArgs)
+import Test.HAPI.Args (Args, showArgs, Attribute (Get), attributeEq, attributesEq, anyEq)
 import Test.HAPI.PState (PKey (PKey), PState (PState), PStateSupports (record))
 import Test.HAPI.Common (Fuzzable)
 import Control.Effect.State (State, modify)
@@ -37,6 +37,8 @@ import Control.Effect.Error (throwError, Error)
 import Test.HAPI.Effect.Property (shouldBe, PropertyA)
 import Data.Maybe (fromMaybe)
 import Data.Serialize (Serialize)
+import Type.Reflection (Typeable)
+import Data.SOP.Constraint (Compose)
 
 -- Abstract API state transition graph
 
@@ -57,7 +59,7 @@ data Edge api c where
           -> PKey a            -- Variable x
           -> PKey a            -- Variable y
           -> Edge api c
-  APICall :: forall a sig api p c. (Fuzzable a, All c p, ApiName api, All Fuzzable p)
+  APICall :: forall a sig api p c. (Fuzzable a, All c p, All (Compose Eq Attribute) p, ApiName api, All Fuzzable p, Typeable p)
           => NodeID             -- From
           -> NodeID             -- To
           -> Maybe (PKey a)     -- Store result to variable
@@ -69,7 +71,7 @@ data AASTG sig c = AASTG {
   getStart     :: !NodeID,
   getEdgesFrom :: !(Map NodeID [Edge sig c]),
   getEdgesTo   :: !(Map NodeID [Edge sig c])
-}
+} deriving Eq
 
 data TaggedEdge t api c = TE { getTag :: t, getEdge :: Edge api c }
 
@@ -138,3 +140,12 @@ instance Show (Edge api c) where
     (APICall s e mx api args) -> header s e <> apiName api <> "(" <> "..." <> ")" <> maybe "" ((" -> " <>) . show) mx
     where
       header s e = show s <> " -> " <> show e <> ": "
+
+instance Eq (Edge api c) where
+  Update  s e k a == Update s' e' k' a' =
+    s == s' && e == e' && anyEq k k' && attributeEq a a'
+  Assert s e x y == Assert s' e' x' y' =
+    s == s' && e == e' && anyEq x x' && anyEq y y'
+  APICall s e mx api args == APICall s' e' mx' api' args' =
+    s == s' && e == e' && anyEq mx mx' && apiEq api api' && attributesEq args args'
+  _ == _ = False

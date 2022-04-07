@@ -14,6 +14,8 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 module Test.HAPI.Args where
 import Data.HList (HList (HCons, HNil), HBuild', HList2List (hList2List))
@@ -22,16 +24,20 @@ import Data.Kind (Type)
 import GHC.TypeLits (type (-), type (+))
 import Language.Haskell.TH hiding (Type)
 import Language.Haskell.TH.Quote (QuasiQuoter (quoteDec, quotePat, quoteType, quoteExp, QuasiQuoter))
-import Data.Data (Proxy)
 import Data.HList.HList (hBuild)
 import Data.HList.CommonMain (hEnd)
-import Data.SOP (NP (Nil, (:*)), All)
+import Data.SOP (NP (Nil, (:*)), All, Compose)
 import Data.Functor.Identity (Identity (Identity))
 import Data.List (intercalate)
 import Language.Haskell.Meta (parseExp)
 import Test.HAPI.Common (Fuzzable)
+import Test.HAPI.PState (PKey)
+import Data.Data (Typeable)
+import Data.Type.Equality (testEquality, castWith)
+import Type.Reflection (typeOf)
 
-type Args a = NP Identity a
+type Args       a = NP Identity  a
+type Attributes a = NP Attribute a
 
 pattern (::*) :: x -> Args xs -> Args (x : xs)
 pattern a ::* b = Identity a :* b
@@ -63,3 +69,45 @@ args = QuasiQuoter {
     exp (x : xs) = case parseExp x of
       Left err -> fail err
       Right r  -> [e|Identity $(return r) :* $(exp xs)|]
+
+
+data Attribute a where
+  Value    :: (Fuzzable a) => a -> Attribute a
+  Anything :: (Fuzzable a) => Attribute a
+  IntRange :: Int -> Int -> Attribute Int
+  Range    :: (Fuzzable a, Ord a, Enum a)
+           => a -> a -> Attribute a
+  Get      :: (Fuzzable a) => PKey a -> Attribute a
+  AnyOf    :: (Fuzzable a) => [Attribute a] -> Attribute a
+
+-- | Check if the provided value satisfies the attribute
+validate :: Attribute a -> a -> Bool
+validate attr a = case attr of
+  IntRange l r -> l <= a && a <= r
+  Range    l r -> l <= a && a <= r
+  _            -> True
+
+attributeEq :: forall a b. (Typeable a, Typeable b, Eq b, Eq a) => Attribute a -> Attribute b -> Bool
+attributeEq = anyEq
+
+
+attributesEq :: forall a b. (Typeable a, Typeable b, All (Compose Eq Attribute) a, All (Compose Eq Attribute) b) => Attributes a -> Attributes b -> Bool
+attributesEq a b = case testEquality (typeOf a) (typeOf b) of
+  Nothing    -> False
+  Just proof -> castWith proof a == b
+
+anyEq :: forall f a b. (Typeable (f a), Typeable (f b), Eq (f b)) => f a -> f b -> Bool
+anyEq a b = case testEquality (typeOf a) (typeOf b) of
+  Nothing    -> False
+  Just proof -> castWith proof a == b
+
+
+instance Show a => Show (Attribute a) where
+  show (Value a) = show a
+  show Anything = "Anything"
+  show (IntRange n i) = "[" <> show n <> ".." <> show i <> "]"
+  show (Range a a') = "[" <> show a <> ".." <> show a' <> "]"
+  show (Get pk) = show pk
+  show (AnyOf ats) = "Any of " <> show ats
+
+deriving instance Eq a => Eq (Attribute a)

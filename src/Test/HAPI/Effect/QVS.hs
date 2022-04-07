@@ -26,7 +26,6 @@ import Test.HAPI.Effect.Gen (GenAC(runGenAC), GenA (LiftGenA), liftGenA, oneof, 
 import Test.QuickCheck (Arbitrary(arbitrary), chooseInt, chooseEnum)
 import Data.Kind (Constraint, Type)
 import Data.Functor (($>))
-import Data.Data (Proxy, Typeable)
 import Control.Carrier.State.Church (StateC, get)
 import Control.Effect.State ( State, gets )
 import Control.Effect.Sum (Member, Members)
@@ -36,21 +35,14 @@ import Test.QuickCheck.GenT (MonadGen (liftGen))
 import Test.HAPI.PState (PKey, PState, PStateSupports (lookUp))
 import Test.HAPI.Common (Fuzzable)
 import Data.Maybe (fromJust)
-import Data.HList (HList (HNil), HMap)
+import Data.HList (HList (HNil), HMap,type  (:~:) (Refl))
 import Data.SOP
-import Test.HAPI.Args (Args, pattern (::*))
+import Test.HAPI.Args (Args, pattern (::*), Attribute (Value, Anything, IntRange, Range, Get, AnyOf), validate)
 import Data.SOP.Dict (mapAll, Dict (Dict))
 import Data.Serialize (Serialize)
 import Test.HAPI.Effect.Orchestration (Orchestration, readFromOrchestration)
-
-data Attribute a where
-  Value    :: (Fuzzable a) => a -> Attribute a
-  Anything :: (Fuzzable a) => Attribute a
-  IntRange :: Int -> Int -> Attribute Int
-  Range    :: (Fuzzable a, Ord a, Enum a)
-           => a -> a -> Attribute a
-  Get      :: (Fuzzable a) => PKey a -> Attribute a
-  AnyOf    :: (Fuzzable a) => [Attribute a] -> Attribute a
+import Data.Type.Equality (castWith, TestEquality (testEquality), apply)
+import Type.Reflection ( TypeRep, typeOf, Typeable )
 
 
 -- Quantified Value Supplier
@@ -69,12 +61,7 @@ qvs2m (qvs :* q) = do
   s <- qvs2m q
   return (a ::* s)
 
--- | Check if the provided value satisfies the attribute
-validate :: Attribute a -> a -> Bool
-validate attr a = case attr of
-  IntRange l r -> l <= a && a <= r
-  Range    l r -> l <= a && a <= r
-  _            -> True
+
 
 newtype QVSFuzzArbitraryAC s m a = QVSFuzzArbitraryAC { runQVSFuzzArbitraryAC :: m a }
   deriving (Functor, Applicative, Monad, MonadFail, MonadIO)
@@ -129,13 +116,3 @@ instance (Algebra sig m, Member Orchestration sig) => Algebra (QVS Fuzzable :+: 
       x <- readFromOrchestration @a
       return (ctx $> x)
     R other -> alg (runQVSFromOrchestrationAC . hdl) other ctx
-
-instance Show a => Show (Attribute a) where
-  show (Value a) = show a
-  show Anything = "Anything"
-  show (IntRange n i) = "[" <> show n <> ".." <> show i <> "]"
-  show (Range a a') = "[" <> show a <> ".." <> show a' <> "]"
-  show (Get pk) = show pk
-  show (AnyOf ats) = "Any of " <> show ats
-
-deriving instance Eq a => Eq (Attribute a)

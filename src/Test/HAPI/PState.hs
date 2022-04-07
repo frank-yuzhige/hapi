@@ -17,7 +17,6 @@ import Control.Algebra (Has, type (:+:))
 import Control.Effect.State (State)
 import Control.Carrier.Fresh.Church (Fresh)
 import Control.Effect.Labelled (Labelled)
-import Data.Data (Proxy(Proxy), Typeable, typeOf)
 
 import qualified Data.Map.Strict as M
 import GHC.TypeNats (Nat, KnownNat, natVal)
@@ -25,6 +24,7 @@ import qualified Data.TypeRepMap as TM
 import GHC.Base (Symbol)
 import Data.Functor.Identity (Identity)
 import Data.String (IsString (fromString))
+import Data.Data (Typeable)
 
 newtype PKey t = PKey { getPKeyID :: String }
   deriving (Eq, Ord)
