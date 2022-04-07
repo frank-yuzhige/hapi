@@ -34,9 +34,9 @@ import Control.Effect.Error ( Error )
 
 -- | Wrapper to the original Api
 data Api (api :: ApiDefinition) (m :: Type -> Type) a where
-  MkCall :: (ApiName api, All Show p) =>  api p a -> Args p -> Api api m a
+  MkCall :: (ApiName api, All Fuzzable p) =>  api p a -> Args p -> Api api m a
 
-mkCall :: (Has (Api api) sig m, Fuzzable a, ApiName api, All Show p) => api p a -> Args p -> m a
+mkCall :: (Has (Api api) sig m, Fuzzable a, ApiName api, All Fuzzable p) => api p a -> Args p -> m a
 mkCall = (send .) . MkCall
 
 -- | Encode api call's type into its underlying interpretation to ensure functional dependency for Algebra holds

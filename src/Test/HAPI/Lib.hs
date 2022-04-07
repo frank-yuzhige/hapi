@@ -48,7 +48,7 @@ import Test.HAPI.VPtr (VPtr, VPtrTable, storePtr, ptr2VPtr, vPtr2Ptr)
 import Test.HAPI.Effect.FF (ff, runFFAC)
 import Control.Monad.Trans.Class (lift)
 import Control.Carrier.Fresh.Strict (runFresh)
-import Test.HAPI.AASTG.Core (AASTG (AASTG), Edge (Update, APICall), synthStub)
+import Test.HAPI.AASTG.Core (AASTG (AASTG), Edge (Update, APICall), synthStub, newAASTG)
 import Control.Effect.Sum (Members)
 
 
@@ -62,15 +62,18 @@ data ShowApiA :: ApiDefinition where
   StrA :: ShowApiA '[Int] String
 
 data StackApiA :: ApiDefinition where
-  CreateA :: StackApiA '[]               (VPtr Stack)
+  CreateA :: StackApiA '[]                (VPtr Stack)
   PushA   :: StackApiA '[VPtr Stack, Int] ()
-  PopA    :: StackApiA '[VPtr Stack]     ()
-  PeekA   :: StackApiA '[VPtr Stack]     Int
-  SizeA   :: StackApiA '[VPtr Stack]     Int
+  PopA    :: StackApiA '[VPtr Stack]      ()
+  PeekA   :: StackApiA '[VPtr Stack]      Int
+  SizeA   :: StackApiA '[VPtr Stack]      Int
 
 deriving instance Show (ArithApiA p a)
 deriving instance Show (ShowApiA p a)
 deriving instance Show (StackApiA p a)
+deriving instance Eq (ArithApiA p a)
+deriving instance Eq (ShowApiA p a)
+deriving instance Eq (StackApiA p a)
 
 instance HasHaskellDef ShowApiA where
   evalHaskell StrA [args|a|] = show a
@@ -164,7 +167,7 @@ prog3 = do
   forM_ [1..n] $ \i -> do
     mkCall PushA [args|stk 2*i|]
   mkCall SizeA [args|stk|] `shouldReturn` n
-  mkCall PeekA ([args|stk|]) `shouldReturn` (2 * n)
+  mkCall PeekA [args|stk|] `shouldReturn` (2 * n)
 
 -- runArb :: forall m sig. (MonadIO m, MonadFail m, Algebra sig m) => m ()
 -- runArb = do runGenIO
@@ -212,14 +215,14 @@ runProg2 = do
 
 
 graph1 :: forall c. (c Int) => AASTG (ArithApiA) c
-graph1 = AASTG 0 [
-    Update  @c @Int 0 1 "a" (Value 10)
-  , Update  @c @Int 1 2 "b" Anything
-  , Update  @c @Int 2 3 "x" Anything
-  , APICall @c @Int 3 4 (Just "a") AddA (Get "a" :* Get "b"  :* Nil)
-  , APICall @c @Int 3 5 (Just "a") SubA (Get "a" :* Anything :* Nil)
-  , APICall @c @Int 4 6 (Just "b") AddA (Get "a" :* Get "a"  :* Nil)
-  , APICall @c @Int 5 6 (Just "b") AddA (Get "a" :* Get "a"  :* Nil)
+graph1 = newAASTG [
+    Update  @Int 0 1 "a" (Value 10)
+  , Update  @Int 1 2 "b" Anything
+  , Update  @Int 2 3 "x" Anything
+  , APICall @Int 3 4 (Just "a") AddA (Get "a" :* Get "b"  :* Nil)
+  , APICall @Int 3 5 (Just "a") SubA (Get "a" :* Anything :* Nil)
+  , APICall @Int 4 6 (Just "b") AddA (Get "a" :* Get "a"  :* Nil)
+  , APICall @Int 5 6 (Just "b") AddA (Get "a" :* Get "a"  :* Nil)
   ]
 
 runGraph1 :: forall m sig. (MonadIO m, MonadFail m, Algebra sig m) => m ()

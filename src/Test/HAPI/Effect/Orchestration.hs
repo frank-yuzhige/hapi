@@ -12,6 +12,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 module Test.HAPI.Effect.Orchestration where
 import Data.Kind (Type)
@@ -31,7 +32,7 @@ data Orchestration (m :: Type -> Type) a where
 readFromOrchestration :: forall a sig m. (Has Orchestration sig m, Fuzzable a) => m a
 readFromOrchestration = send ReadFromOrchestration
 
-data OrchestrationError = CerealError String
+newtype OrchestrationError = CerealError String
 
 instance Show OrchestrationError where
   show (CerealError err) = "Cereal Error: " <> err

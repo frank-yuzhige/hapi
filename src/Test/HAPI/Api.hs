@@ -56,11 +56,11 @@ type ApiError = String
 type ApiDefinition = [Type] -> Type -> Type
 
 -- | Name of an API call
-class ApiName (api :: ApiDefinition) where
+class (forall p a. Eq (api p a)) => ApiName (api :: ApiDefinition) where
   apiName :: api p a -> String
 
 instance {-# OVERLAPPABLE #-}
-  (forall p a. Show (api p a)) => ApiName api where
+  (forall p a. Show (api p a), forall p a. Eq (api p a)) => ApiName api where
   apiName = show
 
 -- | Given API spec has a direct mapping to its haskell pure implementation
@@ -95,7 +95,7 @@ class (ApiName api) => HaskellIOCall (api :: ApiDefinition) where
   readOut  :: api p a -> String -> Maybe a
 
 data ApiTraceEntry (api :: ApiDefinition) where
-  CallOf :: All Show p => api p a -> Args p -> ApiTraceEntry api
+  CallOf :: All Fuzzable p => api p a -> Args p -> ApiTraceEntry api
 
 instance ApiName api => Show (ApiTraceEntry api) where
   show (CallOf api args) = apiName api <> showArgs args

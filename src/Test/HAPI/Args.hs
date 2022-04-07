@@ -29,6 +29,7 @@ import Data.SOP (NP (Nil, (:*)), All)
 import Data.Functor.Identity (Identity (Identity))
 import Data.List (intercalate)
 import Language.Haskell.Meta (parseExp)
+import Test.HAPI.Common (Fuzzable)
 
 type Args a = NP Identity a
 
@@ -40,10 +41,10 @@ infixr 2 ::*
 noArgs :: Args '[]
 noArgs = Nil
 
-showArgs :: forall p. All Show p => Args p -> String
+showArgs :: forall p. All Fuzzable p => Args p -> String
 showArgs args = "(" <> intercalate ", " (go args) <> ")"
   where
-    go :: forall p. All Show p => Args p -> [String]
+    go :: forall p. All Fuzzable p => Args p -> [String]
     go Nil                = []
     go (Identity a :* as) = show a : go as
 

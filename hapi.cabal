@@ -60,6 +60,7 @@ library
     , cereal >=0.5.8.2
     , constraints >=0.13.2
     , containers >=0.4.0.0
+    , cryptohash-md5 >=0.11.101.0
     , data-fix >=0.3.2
     , dlist >=0.5.6.2
     , fused-effects >=1.1.1.1
@@ -69,6 +70,7 @@ library
     , random >=1.2.0
     , sop-core >=0.5.0.1
     , template-haskell >=2.16.0.0
+    , text >=2.0
     , transformers >=0.5.6.2
     , tuple-hlist >=0.2.0.1
     , type-level-sets >=0.8.9.0
@@ -94,6 +96,7 @@ executable hapi-exe
     , cereal >=0.5.8.2
     , constraints >=0.13.2
     , containers >=0.4.0.0
+    , cryptohash-md5 >=0.11.101.0
     , data-fix >=0.3.2
     , dlist >=0.5.6.2
     , fused-effects >=1.1.1.1
@@ -104,6 +107,7 @@ executable hapi-exe
     , random >=1.2.0
     , sop-core >=0.5.0.1
     , template-haskell >=2.16.0.0
+    , text >=2.0
     , transformers >=0.5.6.2
     , tuple-hlist >=0.2.0.1
     , type-level-sets >=0.8.9.0
@@ -127,6 +131,7 @@ test-suite hapi-test
     , cereal >=0.5.8.2
     , constraints >=0.13.2
     , containers >=0.4.0.0
+    , cryptohash-md5 >=0.11.101.0
     , data-fix >=0.3.2
     , dlist >=0.5.6.2
     , fused-effects >=1.1.1.1
@@ -137,6 +142,7 @@ test-suite hapi-test
     , random >=1.2.0
     , sop-core >=0.5.0.1
     , template-haskell >=2.16.0.0
+    , text >=2.0
     , transformers >=0.5.6.2
     , tuple-hlist >=0.2.0.1
     , type-level-sets >=0.8.9.0

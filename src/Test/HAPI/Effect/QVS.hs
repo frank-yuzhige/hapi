@@ -13,6 +13,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 {-
 Quantified Value Generation Effect
@@ -49,7 +50,7 @@ data Attribute a where
   Range    :: (Fuzzable a, Ord a, Enum a)
            => a -> a -> Attribute a
   Get      :: (Fuzzable a) => PKey a -> Attribute a
-  AnyOf    :: (Fuzzable a) => [a] -> Attribute a
+  AnyOf    :: (Fuzzable a) => [Attribute a] -> Attribute a
 
 
 -- Quantified Value Supplier
@@ -80,25 +81,27 @@ newtype QVSFuzzArbitraryAC s m a = QVSFuzzArbitraryAC { runQVSFuzzArbitraryAC ::
 
 instance (Algebra sig m, Members (State PState :+: GenA) sig) => Algebra (QVS Arbitrary :+: sig) (QVSFuzzArbitraryAC spec m) where
   alg hdl sig ctx = QVSFuzzArbitraryAC $ case sig of
-    L (QVS attr) -> case attr of
-      Value v      -> do
-        return (ctx $> v)
-      Anything     -> do
-        a <- liftGenA arbitrary
-        return (ctx $> a)
-      IntRange l r -> do
-        a <- liftGenA (chooseInt (l, r))
-        return (ctx $> a)
-      Range    l r -> do
-        a <- liftGenA (chooseEnum (l, r))
-        return (ctx $> a)
-      Get k        -> do
-        a <- gets @PState (lookUp k)
-        return (ctx $> fromJust a)
-      AnyOf xs     -> do
-        a <- oneof' (return <$> xs)
-        return (ctx $> a)
+    L qvs   -> resolveQVS qvs
     R other -> alg (runQVSFuzzArbitraryAC . hdl) other ctx
+    where
+      resolveQVS (QVS attr) = case attr of
+        Value v      -> do
+          return (ctx $> v)
+        Anything     -> do
+          v <- liftGenA arbitrary
+          return (ctx $> v)
+        IntRange l r -> do
+          v <- liftGenA (chooseInt (l, r))
+          return (ctx $> v)
+        Range    l r -> do
+          v <- liftGenA (chooseEnum (l, r))
+          return (ctx $> v)
+        Get k        -> do
+          v <- gets @PState (lookUp k)
+          return (ctx $> fromJust v)   -- TODO Exception
+        AnyOf xs     -> do
+          a <- oneof' (return <$> xs)
+          resolveQVS (QVS a)
 
 newtype QVSFromStdinAC m a = QVSFromStdinAC { runQVSFromStdinAC :: m a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadFail)
@@ -126,3 +129,13 @@ instance (Algebra sig m, Member Orchestration sig) => Algebra (QVS Fuzzable :+: 
       x <- readFromOrchestration @a
       return (ctx $> x)
     R other -> alg (runQVSFromOrchestrationAC . hdl) other ctx
+
+instance Show a => Show (Attribute a) where
+  show (Value a) = show a
+  show Anything = "Anything"
+  show (IntRange n i) = "[" <> show n <> ".." <> show i <> "]"
+  show (Range a a') = "[" <> show a <> ".." <> show a' <> "]"
+  show (Get pk) = show pk
+  show (AnyOf ats) = "Any of " <> show ats
+
+deriving instance Eq a => Eq (Attribute a)
