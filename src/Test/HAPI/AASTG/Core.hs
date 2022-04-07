@@ -13,7 +13,6 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE StandaloneDeriving #-}
 
 module Test.HAPI.AASTG.Core where
 import Test.HAPI.Effect.QVS (QVS (QVS), attributes2QVSs, qvs2m)
@@ -24,8 +23,8 @@ import Test.HAPI.Api (ApiDefinition, ApiName (apiName), apiEq)
 import Test.HAPI.Effect.Api(Api, mkCall)
 import Control.Effect.Sum (Member, Members)
 import Control.Algebra (Has, Algebra, type (:+:), send)
-import Test.HAPI.Args (Args, showArgs, Attribute (Get), attributeEq, attributesEq, anyEq)
-import Test.HAPI.PState (PKey (PKey), PState (PState), PStateSupports (record))
+import Test.HAPI.Args (Args, showArgs, Attribute (Get), attributesEq, anyEq)
+import Test.HAPI.PState (PKey (PKey), PState (PState), PStateSupports (record, forget))
 import Test.HAPI.Common (Fuzzable)
 import Control.Effect.State (State, modify)
 import Data.SOP (All, NP)
@@ -51,6 +50,11 @@ data Edge api c where
           -> NodeID            -- To
           -> PKey a            -- Variable
           -> Attribute a       -- Attribute of the value
+          -> Edge api c
+  Forget  :: forall a api c. (Fuzzable a, c a)
+          => NodeID            -- From
+          -> NodeID            -- To
+          -> PKey a            -- Variable
           -> Edge api c
   -- TODO better assertion
   Assert  :: forall a api c. (Fuzzable a, c a, Eq a)
@@ -86,11 +90,13 @@ newAASTG es = AASTG 0 (groupEdgesOn startNode es) (groupEdgesOn endNode es)
 
 startNode :: Edge api c -> NodeID
 startNode (Update s _ _ _) = s
+startNode (Forget s _ _)   = s
 startNode (Assert s _ _ _) = s
 startNode (APICall s _ _ _ _) = s
 
 endNode :: Edge api c -> NodeID
 endNode (Update _ e _ _) = e
+endNode (Forget _ e _)   = e
 endNode (Assert _ e _ _) = e
 endNode (APICall _ e _ _ _) = e
 
@@ -111,6 +117,8 @@ synthStub (AASTG start edges _) = synth start
     synthOneStep (Update s e k a) = do
       v <- send (QVS @c a)
       modify @PState (record k v)
+    synthOneStep (Forget s e k) = do
+      modify @PState (forget k)
     synthOneStep (Assert s e x y) = do
       x' <- send (QVS @c (Get x))
       y' <- send (QVS @c (Get y))
@@ -135,15 +143,16 @@ coalesceAASTG = undefined
 -- | Instances
 instance Show (Edge api c) where
   show = \case
-    (Update  s e k a) -> header s e <> "update " <> show k <> " = " <> show a
-    (Assert  s e x y) -> header s e <> "assert " <> show x <> " = " <> show y
-    (APICall s e mx api args) -> header s e <> apiName api <> "(" <> "..." <> ")" <> maybe "" ((" -> " <>) . show) mx
+    Update  s e k  a        -> header s e <> "update " <> show k <> " = " <> show a
+    Forget  s e k           -> header s e <> "forget " <> show k
+    Assert  s e x  y        -> header s e <> "assert " <> show x <> " = " <> show y
+    APICall s e mx api args -> header s e <> apiName api <> "(" <> "..." <> ")" <> maybe "" ((" -> " <>) . show) mx
     where
       header s e = show s <> " -> " <> show e <> ": "
 
 instance Eq (Edge api c) where
-  Update  s e k a == Update s' e' k' a' =
-    s == s' && e == e' && anyEq k k' && attributeEq a a'
+  Update s e k a == Update s' e' k' a' =
+    s == s' && e == e' && anyEq k k' && anyEq a a'
   Assert s e x y == Assert s' e' x' y' =
     s == s' && e == e' && anyEq x x' && anyEq y y'
   APICall s e mx api args == APICall s' e' mx' api' args' =

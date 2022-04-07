@@ -87,9 +87,6 @@ validate attr a = case attr of
   Range    l r -> l <= a && a <= r
   _            -> True
 
-attributeEq :: forall a b. (Typeable a, Typeable b, Eq b, Eq a) => Attribute a -> Attribute b -> Bool
-attributeEq = anyEq
-
 
 attributesEq :: forall a b. (Typeable a, Typeable b, All (Compose Eq Attribute) a, All (Compose Eq Attribute) b) => Attributes a -> Attributes b -> Bool
 attributesEq a b = case testEquality (typeOf a) (typeOf b) of

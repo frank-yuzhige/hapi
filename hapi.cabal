@@ -25,7 +25,9 @@ source-repository head
 
 library
   exposed-modules:
+      Test.HAPI.AASTG.Analysis.TypeCheck
       Test.HAPI.AASTG.Core
+      Test.HAPI.AASTG.Effect.Trav
       Test.HAPI.Api
       Test.HAPI.Args
       Test.HAPI.Common
@@ -64,6 +66,7 @@ library
     , dlist >=0.5.6.2
     , fused-effects >=1.1.1.1
     , haskell-src-meta >=0.8.7
+    , lens >=5.1
     , megaparsec >=0.9.2.0
     , quickcheck-transformer >=0.3.1.1
     , random >=1.2.0
@@ -101,6 +104,7 @@ executable hapi-exe
     , fused-effects >=1.1.1.1
     , hapi
     , haskell-src-meta >=0.8.7
+    , lens >=5.1
     , megaparsec >=0.9.2.0
     , quickcheck-transformer >=0.3.1.1
     , random >=1.2.0
@@ -136,6 +140,7 @@ test-suite hapi-test
     , fused-effects >=1.1.1.1
     , hapi
     , haskell-src-meta >=0.8.7
+    , lens >=5.1
     , megaparsec >=0.9.2.0
     , quickcheck-transformer >=0.3.1.1
     , random >=1.2.0
