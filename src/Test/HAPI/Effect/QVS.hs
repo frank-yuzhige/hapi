@@ -36,7 +36,7 @@ import Test.HAPI.PState (PKey, PState, PStateSupports (lookUp))
 import Test.HAPI.Common (Fuzzable)
 import Data.Maybe (fromJust)
 import Data.HList (HList (HNil), HMap,type  (:~:) (Refl))
-import Data.SOP
+import Data.SOP ( Proxy(Proxy), NP(..), All, hcmap )
 import Test.HAPI.Args (Args, pattern (::*), Attribute (Value, Anything, IntRange, Range, Get, AnyOf), validate)
 import Data.SOP.Dict (mapAll, Dict (Dict))
 import Data.Serialize (Serialize)
@@ -60,8 +60,6 @@ qvs2m (qvs :* q) = do
   a <- send qvs
   s <- qvs2m q
   return (a ::* s)
-
-
 
 newtype QVSFuzzArbitraryAC s m a = QVSFuzzArbitraryAC { runQVSFuzzArbitraryAC :: m a }
   deriving (Functor, Applicative, Monad, MonadFail, MonadIO)

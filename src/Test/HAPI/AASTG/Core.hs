@@ -23,7 +23,7 @@ import Test.HAPI.Api (ApiDefinition, ApiName (apiName), apiEq)
 import Test.HAPI.Effect.Api(Api, mkCall)
 import Control.Effect.Sum (Member, Members)
 import Control.Algebra (Has, Algebra, type (:+:), send)
-import Test.HAPI.Args (Args, showArgs, Attribute (Get), attributesEq, anyEq)
+import Test.HAPI.Args (Args, showArgs, Attribute (Get), attributesEq, repEq)
 import Test.HAPI.PState (PKey (PKey), PState (PState), PStateSupports (record, forget))
 import Test.HAPI.Common (Fuzzable)
 import Control.Effect.State (State, modify)
@@ -38,6 +38,7 @@ import Data.Maybe (fromMaybe)
 import Data.Serialize (Serialize)
 import Type.Reflection (Typeable)
 import Data.SOP.Constraint (Compose)
+import Data.Containers.ListUtils (nubInt)
 
 -- Abstract API state transition graph
 
@@ -79,8 +80,6 @@ data AASTG sig c = AASTG {
 
 data TaggedEdge t api c = TE { getTag :: t, getEdge :: Edge api c }
 
-newtype AASTGPath sig c = AASTGPath { getPathEdges :: [Edge sig c] }
-
 newAASTG :: [Edge sig c] -> AASTG sig c
 newAASTG es = AASTG 0 (groupEdgesOn startNode es) (groupEdgesOn endNode es)
   where
@@ -105,6 +104,23 @@ edgesFrom i (AASTG _ f _) = fromMaybe [] (f M.!? i)
 
 edgesTo :: NodeID -> AASTG api c -> [Edge api c]
 edgesTo i (AASTG _ _ b) = fromMaybe [] (b M.!? i)
+
+allNodes :: AASTG api c -> [NodeID]
+allNodes (AASTG start fs bs) = nubInt (start : M.keys fs <> M.keys bs)
+
+allEdges :: AASTG api c -> [Edge api c]
+allEdges = concatMap snd . M.toList . getEdgesFrom
+
+groupEdgesOn :: (Edge sig c -> NodeID) -> [Edge sig c] -> Map NodeID [Edge sig c]
+groupEdgesOn f = M.fromList
+               . fmap (\es -> (f (head es), es))
+               . groupBy ((==) `on` f)
+
+edgesFrom2EdgesTo :: Map NodeID [Edge sig c] -> Map NodeID [Edge sig c]
+edgesFrom2EdgesTo = groupEdgesOn startNode . concat . M.elems
+
+edgesTo2EdgesFrom :: Map NodeID [Edge sig c] -> Map NodeID [Edge sig c]
+edgesTo2EdgesFrom = groupEdgesOn endNode . concat . M.elems
 
 -- | Synthesize fuzzer stubs
 synthStub :: forall api sig c m. (Has (Api api :+: QVS c :+: State PState :+: PropertyA) sig m) => AASTG api c -> [m ()]
@@ -133,13 +149,6 @@ synthStub (AASTG start edges _) = synth start
         Nothing -> return ()
         Just k  -> modify @PState (record k r)
 
--- | Coalesce
-
-coalesceAASTG :: AASTG api c -> AASTG api c -> Maybe (AASTG api c)
-coalesceAASTG = undefined
-    -- TODO
-
-
 -- | Instances
 instance Show (Edge api c) where
   show = \case
@@ -152,9 +161,9 @@ instance Show (Edge api c) where
 
 instance Eq (Edge api c) where
   Update s e k a == Update s' e' k' a' =
-    s == s' && e == e' && anyEq k k' && anyEq a a'
+    s == s' && e == e' && repEq k k' && repEq a a'
   Assert s e x y == Assert s' e' x' y' =
-    s == s' && e == e' && anyEq x x' && anyEq y y'
+    s == s' && e == e' && repEq x x' && repEq y y'
   APICall s e mx api args == APICall s' e' mx' api' args' =
-    s == s' && e == e' && anyEq mx mx' && apiEq api api' && attributesEq args args'
+    s == s' && e == e' && repEq mx mx' && apiEq api api' && attributesEq args args'
   _ == _ = False

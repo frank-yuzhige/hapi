@@ -58,21 +58,21 @@ typeCheck aastg@(AASTG start fs ts) = run
       unless checked $ do
         st <- gets (fromMaybe M.empty . (M.!? i) . view states)
         forM_ (edgesFrom i aastg) $ \edge -> do
+          let throwErr = throwError (TypeCheckError i (fromString $ show edge))
           case checkEdgeAndUpdate edge st of
-            Nothing -> throwError (TypeCheckError i (fromString $ show edge))
+            Nothing -> throwErr
             Just nt -> do
               let e = endNode edge
               mnt <- gets ((M.!? e) . view states)
               case mnt of
                 Nothing              -> modify $ over states $ M.insert e nt
-                Just nt' | nt /= nt' -> throwError (TypeCheckError i (fromString $ show edge))
+                Just nt' | nt /= nt' -> throwErr
                 _                    -> return ()
               checking e
 
-
 -- | Given the edge and its outgoing state's type, check if the edge can indeed go from the outgoing state, and generate the next state's type.
 checkEdgeAndUpdate :: Edge sig c -> StateType -> Maybe StateType
-checkEdgeAndUpdate edge = case edge of
+checkEdgeAndUpdate = \case
   Update s e k a ->
     Just . M.insert (getPKeyID k) (typeRep k)   -- Haskell type system guarantees a to be the same in (k :: PKey a) and (a :: Attribute a)
   Forget s e k   ->

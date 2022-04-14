@@ -48,8 +48,9 @@ import Test.HAPI.Effect.FF (FF)
 import Control.Effect.Error (Error, throwError)
 import Data.DList (DList)
 import qualified Data.DList as DL
-import Data.Type.Equality (testEquality, castWith)
+import Data.Type.Equality (testEquality, castWith, type (:~:), inner, outer)
 import Type.Reflection (typeOf)
+import Control.Monad (guard)
 
 
 -- TODO: make a data class
@@ -88,10 +89,19 @@ getPtr v = do
     Nothing -> throwError "Ptr not in there"
     Just ptr -> return ptr
 
-apiEq :: (ApiName api, Typeable p, Typeable a, Typeable q, Typeable b) => api p a -> api q b -> Bool
+apiEq :: (ApiName api, ApiName api2, Typeable p, Typeable a, Typeable q, Typeable b) => api p a -> api2 q b -> Bool
 apiEq a b = case testEquality (typeOf a) (typeOf b) of
   Nothing    -> False
   Just proof -> castWith proof a == b
+
+apiEqProofs :: (ApiName api, ApiName api2, Typeable p, Typeable a, Typeable q, Typeable b) => api p a -> api2 q b -> Maybe (api :~: api2, p :~: q, a :~: b)
+apiEqProofs a b = do
+  proof <- testEquality (typeOf a) (typeOf b)
+  guard $ castWith proof a == b
+  let ab = inner proof
+  let pq = inner (outer proof)
+  let fg = outer (outer proof)
+  return (fg, pq, ab)
 
 -- | [DEBUG] Given API spec can be debugged (using Haskell IO to mock input/output)
 class (ApiName api) => HaskellIOCall (api :: ApiDefinition) where
@@ -115,3 +125,6 @@ instance Show (ApiTraceEntry api) => Show (ApiTrace api) where
 instance {-# OVERLAPPABLE #-}
   (forall p a. Show (api p a), forall p a. Eq (api p a), Typeable api) => ApiName api where
   apiName = show
+
+instance {-# OVERLAPPABLE #-} ApiName api => Show (api p a) where
+  show = apiName

@@ -25,6 +25,11 @@ source-repository head
 
 library
   exposed-modules:
+      Test.HAPI.AASTG.Analysis.Coalesce
+      Test.HAPI.AASTG.Analysis.Dependence
+      Test.HAPI.AASTG.Analysis.Path
+      Test.HAPI.AASTG.Analysis.Rename
+      Test.HAPI.AASTG.Analysis.SubPath
       Test.HAPI.AASTG.Analysis.TypeCheck
       Test.HAPI.AASTG.Core
       Test.HAPI.AASTG.Effect.Trav
@@ -42,6 +47,8 @@ library
       Test.HAPI.Lib
       Test.HAPI.PState
       Test.HAPI.Serialize
+      Test.HAPI.Util.SOP
+      Test.HAPI.Util.TypeRepMap
       Test.HAPI.VPtr
   other-modules:
       Paths_hapi
@@ -63,7 +70,7 @@ library
     , containers >=0.4.0.0
     , cryptohash-md5 >=0.11.101.0
     , data-fix >=0.3.2
-    , dlist >=0.5.6.2
+    , dlist >=1.0
     , fused-effects >=1.1.1.1
     , haskell-src-meta >=0.8.7
     , lens >=5.1
@@ -77,6 +84,7 @@ library
     , tuple-hlist >=0.2.0.1
     , type-level-sets >=0.8.9.0
     , typerep-map >=0.3.3.0
+    , vector >=0.12.3.1
   default-language: Haskell2010
 
 executable hapi-exe
@@ -100,7 +108,7 @@ executable hapi-exe
     , containers >=0.4.0.0
     , cryptohash-md5 >=0.11.101.0
     , data-fix >=0.3.2
-    , dlist >=0.5.6.2
+    , dlist >=1.0
     , fused-effects >=1.1.1.1
     , hapi
     , haskell-src-meta >=0.8.7
@@ -115,6 +123,7 @@ executable hapi-exe
     , tuple-hlist >=0.2.0.1
     , type-level-sets >=0.8.9.0
     , typerep-map >=0.3.3.0
+    , vector >=0.12.3.1
   default-language: Haskell2010
 
 test-suite hapi-test
@@ -136,7 +145,7 @@ test-suite hapi-test
     , containers >=0.4.0.0
     , cryptohash-md5 >=0.11.101.0
     , data-fix >=0.3.2
-    , dlist >=0.5.6.2
+    , dlist >=1.0
     , fused-effects >=1.1.1.1
     , hapi
     , haskell-src-meta >=0.8.7
@@ -151,4 +160,5 @@ test-suite hapi-test
     , tuple-hlist >=0.2.0.1
     , type-level-sets >=0.8.9.0
     , typerep-map >=0.3.3.0
+    , vector >=0.12.3.1
   default-language: Haskell2010

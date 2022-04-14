@@ -35,7 +35,8 @@ foreign import ccall "broken_str"
   str :: CInt -> FFIO CString
 
 data Stack = Stack { top :: Int, array :: Ptr Int }
-  deriving (Generic)
+  deriving (Generic, Eq, Show)
+
 
 instance CStorable Stack where
 instance Storable Stack where

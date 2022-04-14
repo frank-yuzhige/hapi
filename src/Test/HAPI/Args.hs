@@ -87,17 +87,23 @@ validate attr a = case attr of
   Range    l r -> l <= a && a <= r
   _            -> True
 
-
 attributesEq :: forall a b. (Typeable a, Typeable b, All (Compose Eq Attribute) a, All (Compose Eq Attribute) b) => Attributes a -> Attributes b -> Bool
 attributesEq a b = case testEquality (typeOf a) (typeOf b) of
   Nothing    -> False
   Just proof -> castWith proof a == b
 
-anyEq :: forall f a b. (Typeable (f a), Typeable (f b), Eq (f b)) => f a -> f b -> Bool
-anyEq a b = case testEquality (typeOf a) (typeOf b) of
+repEq :: forall f a b. (Typeable (f a), Typeable (f b), Eq (f b)) => f a -> f b -> Bool
+repEq a b = case testEquality (typeOf a) (typeOf b) of
   Nothing    -> False
   Just proof -> castWith proof a == b
 
+showAttributes :: (All Fuzzable p) => Attributes p -> [String]
+showAttributes Nil       = []
+showAttributes (a :* as) = show a : showAttributes as
+
+eqAttributes :: (All Fuzzable p) => Attributes p -> Attributes p -> Bool
+eqAttributes Nil       Nil       = True
+eqAttributes (a :* as) (b :* bs) = a == b && eqAttributes as bs
 
 instance Show a => Show (Attribute a) where
   show (Value a) = show a
