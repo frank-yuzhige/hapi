@@ -11,8 +11,6 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE QuasiQuotes #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-{-# HLINT ignore "Redundant bracket" #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -55,6 +53,7 @@ import Test.HAPI.AASTG.Analysis.PathExtra (getPathMap)
 import Test.HAPI.AASTG.Analysis.Path (outPaths)
 import Test.HAPI.AASTG.Analysis.Coalesce (coalesceAASTGs, directCoalesceState)
 import Test.HAPI.AASTG.Analysis.Rename (normalizeNodes)
+import Test.HAPI.AASTG.Analysis.Nodes (unrelatedNodeMap)
 
 
 data ArithApiA :: ApiDefinition where
@@ -217,10 +216,10 @@ graph1 = newAASTG [
     Update  0 1 "a" (Value @Int 10)
   , Update  1 2 "b" (Anything @Int)
   , Update  2 3 "x" (Anything @Int)
-  , APICall 3 4 (Just "a") AddA (Get "a" :* Get "b"  :* Nil)
-  , APICall 3 5 (Just "a") SubA (Get "a" :* Anything :* Nil)
-  , APICall 4 6 (Just "b") AddA (Get "a" :* Get "a"  :* Nil)
-  , APICall 5 6 (Just "b") AddA (Get "a" :* Get "a"  :* Nil)
+  , APICall 3 4 (Just "c") AddA (Get "a" :* Get "b"  :* Nil)
+  , APICall 3 5 (Just "c") SubA (Get "a" :* Anything :* Nil)
+  , APICall 4 6 (Just "d") AddA (Get "c" :* Get "c"  :* Nil)
+  , APICall 5 6 (Just "d") AddA (Get "c" :* Get "a"  :* Nil)
   ]
 
 graph2 :: forall c. (c Int) => AASTG (ArithApiA) c
@@ -233,7 +232,10 @@ graph2 = newAASTG [
   , APICall @Int 4 5 (Just "b") AddA (Get "a" :* Get "a"  :* Nil)
   ]
 
-x = coalesceAASTGs (graph1 @Arbitrary) (graph2)
+x n = coalesceAASTGs n (graph1 @Arbitrary) (graph2)
+y = unrelatedNodeMap (graph1 @Arbitrary)
+
+n = typeCheck (graph1 @Arbitrary)
 -- y = directCoalesceState 0 7 (graph1 @Arbitrary) (graph2)
 
 runGraph1 :: forall m sig. (MonadIO m, MonadFail m, Algebra sig m) => m ()

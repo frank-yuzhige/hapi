@@ -115,9 +115,8 @@ allEdges :: AASTG api c -> [Edge api c]
 allEdges = concatMap snd . HM.toList . getEdgesFrom
 
 groupEdgesOn :: (Edge sig c -> NodeID) -> [Edge sig c] -> HashMap NodeID [Edge sig c]
-groupEdgesOn f = HM.fromList
-               . fmap (\es -> (f (head es), es))
-               . groupBy ((==) `on` f)
+groupEdgesOn f = HM.fromListWith (<>)
+               . fmap (\e -> (f e, [e]))
 
 edgesFrom2EdgesTo :: HashMap NodeID [Edge sig c] -> HashMap NodeID [Edge sig c]
 edgesFrom2EdgesTo = groupEdgesOn startNode . concat . HM.elems
@@ -158,7 +157,7 @@ instance Show (Edge api c) where
     Update  s e k  a        -> wrap $ header s e <> "update " <> getPKeyID k <> " = " <> show a
     Forget  s e k           -> wrap $ header s e <> "forget " <> getPKeyID k
     Assert  s e x  y        -> wrap $ header s e <> "assert " <> getPKeyID x <> " = " <> show y
-    APICall s e mx api args -> wrap $ header s e <> apiName api <> "(" <> intercalate ", " (showAttributes args) <> ")" <> maybe "" ((" -> " <>) . show) mx
+    APICall s e mx api args -> wrap $ header s e <> "call "   <> maybe "" ((<> " = ") . getPKeyID) mx <> apiName api <> "(" <> intercalate ", " (showAttributes args) <> ")"
     where
       header s e = show s <> " -> " <> show e <> ": "
       wrap n     = "<" <> n <> ">"

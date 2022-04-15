@@ -27,6 +27,7 @@ library
   exposed-modules:
       Test.HAPI.AASTG.Analysis.Coalesce
       Test.HAPI.AASTG.Analysis.Dependence
+      Test.HAPI.AASTG.Analysis.Nodes
       Test.HAPI.AASTG.Analysis.Path
       Test.HAPI.AASTG.Analysis.PathExtra
       Test.HAPI.AASTG.Analysis.Rename
@@ -40,6 +41,7 @@ library
       Test.HAPI.Effect.Api
       Test.HAPI.Effect.FF
       Test.HAPI.Effect.Gen
+      Test.HAPI.Effect.Mixin
       Test.HAPI.Effect.Orchestration
       Test.HAPI.Effect.Property
       Test.HAPI.Effect.QVS

@@ -2,44 +2,63 @@
 
 module Test.HAPI.AASTG.Analysis.Coalesce where
 
-import Test.HAPI.AASTG.Core (AASTG (AASTG, getEdgesFrom, getEdgesTo), NodeID, Edge (Update, Forget, Assert, APICall), allNodes, edgesFrom, edgesTo2EdgesFrom)
+import Test.HAPI.AASTG.Core (AASTG (AASTG, getEdgesFrom, getEdgesTo, getStart), NodeID, Edge (Update, Forget, Assert, APICall), allNodes, edgesFrom, edgesTo2EdgesFrom, startNode)
 import Test.HAPI.AASTG.Analysis.Rename (normalizeNodes, maxNodeID, renameNodesInEdge)
 import Test.HAPI.AASTG.Analysis.PathExtra (NodePathMap, effectiveSubpath, getPathMap)
 import Test.HAPI.AASTG.Analysis.Dependence (pathDeps, pathDegradedDeps, DependenceMap, DegradedDepMap)
 import Test.HAPI.AASTG.Analysis.Path (Path(pathCalls), APath)
-import Data.List (partition)
+import Data.List ( partition, (\\) )
 import Data.IntMap (IntMap)
 import Data.Maybe (fromMaybe, isJust, listToMaybe)
 
 import qualified Data.IntMap as IM
 import qualified Data.HashMap.Strict as HM
+import Data.Containers.ListUtils (nubIntOn)
+import Data.Hashable (Hashable(hash))
+import Test.HAPI.AASTG.Analysis.Nodes (unrelatedNodeMap)
 
 
 -- TODO: Optimize me!!!!
-coalesceAASTGs :: AASTG api c -> AASTG api c -> AASTG api c
-coalesceAASTGs a1 a2 = autoCoalesce lb start
-  where
-    lb  = maxNodeID a1'
-    a1' = normalizeNodes 0        a1
-    a2' = normalizeNodes (lb + 1) a2
-    start = directCoalesceState 0 (lb + 1) $
-      AASTG 0 (getEdgesFrom a1' <> getEdgesFrom a2') (getEdgesTo a1' <> getEdgesTo a2')
+coalesceAASTGs :: Int -> AASTG api c -> AASTG api c -> ([(NodeID, NodeID)], AASTG api c)
+coalesceAASTGs n a1 a2 = autoCoalesce n (coalescePreprocess a1 a2)
 
 directCoalesceState :: NodeID -> NodeID -> AASTG api c -> AASTG api c
 directCoalesceState er ee aastg@(AASTG s fs bs) = AASTG 0 fs' bs'
   where
-    fs' = HM.map (map (renameNodesInEdge (IM.singleton ee er))) . HM.delete ee . HM.adjust (<> edgesFrom ee aastg) er $ fs
-    bs' = edgesTo2EdgesFrom fs
+    fs' = HM.map (nubIntOn hash)
+        . HM.map (map (renameNodesInEdge (IM.singleton ee er)))
+        . HM.delete ee
+        . HM.adjust (<> edgesFrom ee aastg) er
+        $ fs
+    bs' = edgesTo2EdgesFrom fs'
 
-autoCoalesce :: NodeID               -- Largest node id in the black group
-             -> AASTG api c
-             -> AASTG api c
-autoCoalesce lb aastg = case listToMaybe [(b', b, r) | b <- blacks, r <- reds, let b' = b ~<=~ r, let r' = r ~<=~ b, b' || r'] of
-  Nothing                         -> aastg
-  Just (bIsSub, b, r) | bIsSub    -> autoCoalesce lb (directCoalesceState r b aastg)
-                      | otherwise -> autoCoalesce lb (directCoalesceState b r aastg)
+coalescePreprocess :: AASTG api c -> AASTG api c -> AASTG api c
+coalescePreprocess a1 a2 = directCoalesceState 0 (lb + 1) combine
   where
-    (blacks, reds) = partition (<= lb) (allNodes aastg)
+    lb      = maxNodeID a1'
+    a1'     = normalizeNodes 0        a1
+    a2'     = normalizeNodes (lb + 1) a2
+    combine = AASTG 0 (getEdgesFrom a1' <> getEdgesFrom a2') (getEdgesTo a1' <> getEdgesTo a2')
+
+autoCoalesce :: NodeID
+             -> AASTG api c
+             -> ([(NodeID, NodeID)], AASTG api c)
+autoCoalesce 0       aastg = ([], aastg)
+autoCoalesce maxStep aastg = case record of
+  Nothing -> ([]         , aastg')
+  Just p  -> (p : history, ans)
+  where
+    (record, aastg') = coalesceOneStep aastg
+    (history, ans)   = autoCoalesce (maxStep - 1) aastg'
+
+coalesceOneStep :: AASTG api c
+                -> (Maybe (NodeID, NodeID), AASTG api c)
+coalesceOneStep aastg = case listToMaybe [(r', b, r) | b <- allNodes aastg, r <- candidateMap HM.! b, let b' = b ~<=~ r, let r' = r ~<=~ b, b' || r'] of
+  Nothing                         -> (Nothing, aastg)
+  Just (rIsSub, b, r) | rIsSub    -> (Just (b, r), directCoalesceState b r aastg)
+                      | otherwise -> (Just (r, b), directCoalesceState r b aastg)
+  where
+    candidateMap   = unrelatedNodeMap aastg
     pathMap        = getPathMap aastg
     paths          = concat $ HM.elems pathMap
     deps           = HM.fromList [(path, pathDeps         path) | path <- paths]
@@ -47,7 +66,7 @@ autoCoalesce lb aastg = case listToMaybe [(b', b, r) | b <- blacks, r <- reds, l
     calls          = HM.fromList [(path, pathCalls        path) | path <- paths]
     (~<=~)         = upperSubNode pathMap (deps HM.!) (degs HM.!) (calls HM.!)
 
-upperSubNode :: NodePathMap api c
+upperSubNode :: NodePathMap api c                  -- All paths went through each node
              -> (APath api c -> DependenceMap)     -- DependenceMap getter
              -> (APath api c -> DegradedDepMap)    -- DegradedDependenceMap getter
              -> (APath api c -> [Edge api c])      -- api call sequence getter

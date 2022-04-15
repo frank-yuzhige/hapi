@@ -43,7 +43,7 @@ A path p1 is an effective subpath of p2, iff.
 effectiveSubpath :: Path p
                  => (p api c -> DependenceMap)     -- DependenceMap getter
                  -> (p api c -> DegradedDepMap)    -- DegradedDependenceMap getter
-                 -> (p api c -> [Edge api c])      -- api call sequence getter
+                 -> (p api c -> [Edge api c])      -- API call sequence getter
                  -> p api c                        -- p1
                  -> p api c                        -- p2
                  -> Maybe ()
@@ -61,6 +61,7 @@ effectiveSubpath dep deg calls p1 p2 = do
     c2   = calls p2
     nde1 = lookupNode (pathEndNode p1) d1'
     nde2 = lookupNode (pathEndNode p2) d2'
+
     findVarSub :: [Edge api c] -> [Edge api c] -> Maybe VarSubstitution
     findVarSub [] [] = Just TM.empty
     findVarSub (APICall s1 e1 _ api1 args1 : c1) (APICall s2 e2 _ api2 args2 : c2) = do
