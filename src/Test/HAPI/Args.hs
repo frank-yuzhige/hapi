@@ -16,6 +16,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Test.HAPI.Args where
 import Data.HList (HList (HCons, HNil), HBuild', HList2List (hList2List))
@@ -31,10 +32,11 @@ import Data.Functor.Identity (Identity (Identity))
 import Data.List (intercalate)
 import Language.Haskell.Meta (parseExp)
 import Test.HAPI.Common (Fuzzable)
-import Test.HAPI.PState (PKey)
+import Test.HAPI.PState (PKey (getPKeyID))
 import Data.Data (Typeable)
 import Data.Type.Equality (testEquality, castWith)
 import Type.Reflection (typeOf)
+import Data.Hashable (Hashable (hashWithSalt))
 
 type Args       a = NP Identity  a
 type Attributes a = NP Attribute a
@@ -43,6 +45,17 @@ pattern (::*) :: x -> Args xs -> Args (x : xs)
 pattern a ::* b = Identity a :* b
 {-# COMPLETE (::*) :: NP #-}
 infixr 2 ::*
+
+
+data Attribute a where
+  Value    :: (Fuzzable a) => a -> Attribute a
+  Anything :: (Fuzzable a) => Attribute a
+  IntRange :: Int -> Int -> Attribute Int
+  Range    :: (Fuzzable a, Ord a, Enum a)
+           => a -> a -> Attribute a
+  Get      :: (Fuzzable a) => PKey a -> Attribute a
+  AnyOf    :: (Fuzzable a) => [Attribute a] -> Attribute a
+
 
 noArgs :: Args '[]
 noArgs = Nil
@@ -70,15 +83,6 @@ args = QuasiQuoter {
       Left err -> fail err
       Right r  -> [e|Identity $(return r) :* $(exp xs)|]
 
-
-data Attribute a where
-  Value    :: (Fuzzable a) => a -> Attribute a
-  Anything :: (Fuzzable a) => Attribute a
-  IntRange :: Int -> Int -> Attribute Int
-  Range    :: (Fuzzable a, Ord a, Enum a)
-           => a -> a -> Attribute a
-  Get      :: (Fuzzable a) => PKey a -> Attribute a
-  AnyOf    :: (Fuzzable a) => [Attribute a] -> Attribute a
 
 -- | Check if the provided value satisfies the attribute
 validate :: Attribute a -> a -> Bool
@@ -110,7 +114,20 @@ instance Show a => Show (Attribute a) where
   show Anything = "Anything"
   show (IntRange n i) = "[" <> show n <> ".." <> show i <> "]"
   show (Range a a') = "[" <> show a <> ".." <> show a' <> "]"
-  show (Get pk) = show pk
+  show (Get pk) = getPKeyID pk
   show (AnyOf ats) = "Any of " <> show ats
 
 deriving instance Eq a => Eq (Attribute a)
+
+instance Hashable a => Hashable (Attribute a) where
+  hashWithSalt salt = \case
+    Value a      -> salt `hashWithSalt` "value" `hashWithSalt` a
+    Anything     -> salt `hashWithSalt` "any"
+    IntRange n i -> salt `hashWithSalt` "irange" `hashWithSalt` n `hashWithSalt` i
+    Range a a'   -> salt `hashWithSalt` a `hashWithSalt` a
+    Get pk       -> salt `hashWithSalt` "get" `hashWithSalt` pk
+    AnyOf ats    -> salt `hashWithSalt` "anyof" `hashWithSalt` ats
+
+instance (All Fuzzable p) => Hashable (NP Attribute p) where
+  hashWithSalt salt Nil       = salt `hashWithSalt` "Nil"
+  hashWithSalt salt (a :* as) = salt `hashWithSalt` a `hashWithSalt` as

@@ -1,5 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE DeriveGeneric #-}
 module Test.HAPI.AASTG.Analysis.Path where
 
 import Test.HAPI.AASTG.Core (Edge (APICall), NodeID, AASTG (AASTG, getStart), endNode, edgesFrom, startNode, edgesTo)
@@ -19,6 +20,8 @@ import qualified Data.Set    as S
 import qualified Data.IntSet as IS
 import Control.Algebra (Has)
 import Control.Effect.State (State)
+import GHC.Generics (Generic)
+import Data.Hashable (Hashable (hashWithSalt))
 
 
 class Path p where
@@ -72,6 +75,9 @@ instance Path APath where
   pathAsList    (APath p)   = V.toList p
   pathEdgeAt    (APath p) i = p V.! i
 
+-- instance Hashable (APath api c) where
+--   hashWithSalt s (APath p) = s
+--     `hashWithSalt`
 
 instance Path APathView where
   pathStartNode   (APathView p l) = pathStartNode p
@@ -86,8 +92,11 @@ instance Path APathView where
     | otherwise = error $ printf "APathView: Index %d >= length %d" i l
 
 
-deriving instance Show (APath api c)
-deriving instance Eq   (APath api c)
+deriving instance Show    (APath api c)
+deriving instance Eq      (APath api c)
+deriving instance Generic (APath api c)
+instance Hashable (APath api c) where
+  hashWithSalt salt (APath p) = V.foldr (flip hashWithSalt) salt p
 
 deriving instance Show (APathView api c)
 deriving instance Eq   (APathView api c)

@@ -8,6 +8,9 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Test.HAPI.PState where
 import Prelude hiding (lookup)
@@ -25,6 +28,8 @@ import Data.Kind (Type)
 
 import qualified Data.Map.Strict as M
 import qualified Data.TypeRepMap as TM
+import Data.Hashable (Hashable)
+import GHC.Generics (Generic)
 newtype PKey t = PKey { getPKeyID :: String }
   deriving (Eq, Ord)
 
@@ -54,3 +59,6 @@ instance Show (PKey t) where
 
 instance IsString (PKey t) where
   fromString = PKey
+
+deriving instance Generic  (PKey t)
+deriving instance Hashable (PKey t)

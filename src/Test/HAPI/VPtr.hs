@@ -13,6 +13,7 @@ import Data.Functor.Identity (Identity)
 import qualified Data.TypeRepMap as TM
 import qualified Data.Map.Strict as M
 import Control.Algebra (Has)
+import Data.Hashable (Hashable)
 
 data VPtr t = VPtr String | VOffset (VPtr t) Int
   deriving (Eq, Ord, Show, Generic)
@@ -45,3 +46,5 @@ ptr2VPtr ptr (VPtrTable tables) = do
   VPtrTableEntry _ m <- TM.lookup @t tables
   x <- M.lookup ptr m
   return $ VPtr x -- TODO offset
+
+instance Hashable (VPtr a)

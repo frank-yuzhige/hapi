@@ -13,10 +13,11 @@ import Test.HAPI.VPtr (VPtr)
 import Data.Constraint (Constraint)
 import Data.Kind (Type)
 import Data.SOP (All)
+import Data.Hashable (Hashable)
 
-class (Typeable t, Show t, Eq t, Serialize t) => Fuzzable t
+class (Typeable t, Show t, Eq t, Serialize t, Hashable t) => Fuzzable t
 
-instance (Typeable t, Show t, Eq t, Serialize t) => Fuzzable t
+instance (Typeable t, Show t, Eq t, Serialize t, Hashable t) => Fuzzable t
 -- TODO: Fine grain control of Fuzzable instance
 -- instance Fuzzable Int
 -- instance Fuzzable Char

@@ -48,7 +48,8 @@ dependencies:
 - bytestring >= 0.11.3.0
 - megaparsec >= 0.9.2.0
 - text >= 2.0
-- cryptohash-md5 >= 0.11.101.0
+- hashable >= 1.4.0.2
+- unordered-containers >= 0.2.18.0
 - lens >= 5.1
 - vector >= 0.12.3.1
 

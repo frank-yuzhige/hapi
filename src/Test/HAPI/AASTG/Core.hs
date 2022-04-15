@@ -11,7 +11,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
 
 module Test.HAPI.AASTG.Core where
@@ -23,14 +22,14 @@ import Test.HAPI.Api (ApiDefinition, ApiName (apiName), apiEq)
 import Test.HAPI.Effect.Api(Api, mkCall)
 import Control.Effect.Sum (Member, Members)
 import Control.Algebra (Has, Algebra, type (:+:), send)
-import Test.HAPI.Args (Args, showArgs, Attribute (Get), attributesEq, repEq)
-import Test.HAPI.PState (PKey (PKey), PState (PState), PStateSupports (record, forget))
+import Test.HAPI.Args (Args, showArgs, Attribute (Get), attributesEq, repEq, showAttributes)
+import Test.HAPI.PState (PKey (PKey, getPKeyID), PState (PState), PStateSupports (record, forget))
 import Test.HAPI.Common (Fuzzable)
 import Control.Effect.State (State, modify)
 import Data.SOP (All, NP)
 import Data.Map (Map)
 import qualified Data.Map.Strict as M
-import Data.List (groupBy)
+import Data.List (groupBy, intercalate)
 import Data.Function (on)
 import Control.Effect.Error (throwError, Error)
 import Test.HAPI.Effect.Property (shouldBe, PropertyA)
@@ -39,6 +38,7 @@ import Data.Serialize (Serialize)
 import Type.Reflection (Typeable)
 import Data.SOP.Constraint (Compose)
 import Data.Containers.ListUtils (nubInt)
+import Data.Hashable (Hashable (hashWithSalt))
 
 -- Abstract API state transition graph
 
@@ -152,10 +152,10 @@ synthStub (AASTG start edges _) = synth start
 -- | Instances
 instance Show (Edge api c) where
   show = \case
-    Update  s e k  a        -> wrap $ header s e <> "update " <> show k <> " = " <> show a
-    Forget  s e k           -> wrap $ header s e <> "forget " <> show k
-    Assert  s e x  y        -> wrap $ header s e <> "assert " <> show x <> " = " <> show y
-    APICall s e mx api args -> wrap $ header s e <> apiName api <> "(" <> "..." <> ")" <> maybe "" ((" -> " <>) . show) mx
+    Update  s e k  a        -> wrap $ header s e <> "update " <> getPKeyID k <> " = " <> show a
+    Forget  s e k           -> wrap $ header s e <> "forget " <> getPKeyID k
+    Assert  s e x  y        -> wrap $ header s e <> "assert " <> getPKeyID x <> " = " <> show y
+    APICall s e mx api args -> wrap $ header s e <> apiName api <> "(" <> intercalate ", " (showAttributes args) <> ")" <> maybe "" ((" -> " <>) . show) mx
     where
       header s e = show s <> " -> " <> show e <> ": "
       wrap n     = "<" <> n <> ">"
@@ -168,3 +168,29 @@ instance Eq (Edge api c) where
   APICall s e mx api args == APICall s' e' mx' api' args' =
     s == s' && e == e' && repEq mx mx' && apiEq api api' && attributesEq args args'
   _ == _ = False
+
+instance Hashable (Edge api c) where
+  hashWithSalt salt (Update s e k a) = salt
+    `hashWithSalt` "u"
+    `hashWithSalt` s
+    `hashWithSalt` e
+    `hashWithSalt` k
+    `hashWithSalt` a
+  hashWithSalt salt (Forget  s e x) = salt
+    `hashWithSalt` "f"
+    `hashWithSalt` s
+    `hashWithSalt` e
+    `hashWithSalt` x
+  hashWithSalt salt (Assert  s e x y) = salt
+    `hashWithSalt` "a"
+    `hashWithSalt` s
+    `hashWithSalt` e
+    `hashWithSalt` x
+    `hashWithSalt` y
+  hashWithSalt salt (APICall s e mx api args) = salt
+    `hashWithSalt` "c"
+    `hashWithSalt` s
+    `hashWithSalt` e
+    `hashWithSalt` mx
+    `hashWithSalt` apiName api
+    `hashWithSalt` args

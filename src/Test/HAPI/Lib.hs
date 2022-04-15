@@ -232,7 +232,6 @@ graph2 = newAASTG [
   ]
 
 x = getPathMap (graph1 @Arbitrary)
-y = outPaths 0 (graph1 @Arbitrary)
 
 runGraph1 :: forall m sig. (MonadIO m, MonadFail m, Algebra sig m) => m ()
 runGraph1 = do

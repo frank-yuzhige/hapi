@@ -10,8 +10,8 @@
 module Test.HAPI.AASTG.Analysis.Dependence where
 
 import qualified Data.DList as D
-import qualified Data.Set as S
-import qualified Data.Map as M
+import qualified Data.HashSet as S
+import qualified Data.HashMap.Strict as M
 import qualified Data.IntMap as IM
 import qualified Data.TypeRepMap as TM
 import qualified Test.HAPI.Util.TypeRepMap as TM
@@ -63,18 +63,18 @@ data Dep t where
 
 data DegradedDep t = DepAttr' (Attribute t) | DepCall' Int
 
--- newtype Typeable t => DEntry t = DE { unDE :: M.Map (PKey t) (Dep t) }
+-- newtype Typeable t => DEntry t = DE { unDE :: M.HashMap (PKey t) (Dep t) }
 data DEntry' dep t where
-  DE :: Fuzzable t => M.Map (PKey t) (dep t) -> DEntry' dep t
+  DE :: Fuzzable t => M.HashMap (PKey t) (dep t) -> DEntry' dep t
 
-unDE :: DEntry' dep t -> M.Map (PKey t) (dep t)
+unDE :: DEntry' dep t -> M.HashMap (PKey t) (dep t)
 unDE (DE de) = de
 
-newtype SubEntry t = SE { unSE :: M.Map (PKey t) (PKey t) }
+newtype SubEntry t = SE { unSE :: M.HashMap (PKey t) (PKey t) }
 
-newtype SubEntry' t = SE' { unSE' :: M.Map (PKey t) (S.Set (PKey t)) }
+newtype SubEntry' t = SE' { unSE' :: M.HashMap (PKey t) (S.HashSet (PKey t)) }
 
-newtype GroupEntry t = GE { unGE :: M.Map (PKey t) (PKey t) }
+newtype GroupEntry t = GE { unGE :: M.HashMap (PKey t) (PKey t) }
 
 attrs2Deps :: NP Attribute t -> NP Dep t
 attrs2Deps Nil       = Nil
@@ -92,26 +92,26 @@ unaliasVar dep x = case lookupPKey x dep of
   Just other             -> Just (x, other)
   Nothing                -> Nothing
 
-depEq :: (Fuzzable p) => NodeDependence -> Dep p -> Dep p -> Bool
-depEq dep a b = case (a, b) of
-  (DepAttr a', DepAttr b') -> case (a', b') of
-    (Get x, Get y) ->              -- When both are indirects
-      case unaliasVar dep <$> [x, y] of
-        [Just (x', dx), Just (y', dy)] -> x' == y' && depEq dep a b
-        _ -> False
-    (Value m, Value n) -> m == n   -- Special case
-    _                  -> False    -- Any other cases are not equal (e.g. Anything != Anything)
-  (DepCall f fa, DepCall g ga) ->
-    f `apiEq` g && allDepEq dep fa ga
-  _                    -> False
-  where
-    allDepEq :: forall p1 p2. (All Fuzzable p1, All Fuzzable p2)
-            => NodeDependence -> NP Attribute p1 -> NP Attribute p2 -> Bool
-    allDepEq dep Nil Nil = True
-    allDepEq dep (a :* as) (b :* bs) = case testEquality (typeOf a) (typeOf b) of
-      Nothing    -> False
-      Just proof -> depEq dep (DepAttr (castWith proof a)) (DepAttr b) && allDepEq dep as bs
-    allDepEq _ _ _ = False
+-- depEq :: (Fuzzable p) => NodeDependence -> Dep p -> Dep p -> Bool
+-- depEq dep a b = case (a, b) of
+--   (DepAttr a', DepAttr b') -> case (a', b') of
+--     (Get x, Get y) ->              -- When both are indirects
+--       case unaliasVar dep <$> [x, y] of
+--         [Just (x', dx), Just (y', dy)] -> x' == y' && depEq dep a b
+--         _ -> False
+--     (Value m, Value n) -> m == n   -- Special case
+--     _                  -> False    -- Any other cases are not equal (e.g. Anything != Anything)
+--   (DepCall f fa, DepCall g ga) ->
+--     f `apiEq` g && allDepEq dep fa ga
+--   _                    -> False
+--   where
+--     allDepEq :: forall p1 p2. (All Fuzzable p1, All Fuzzable p2)
+--             => NodeDependence -> NP Attribute p1 -> NP Attribute p2 -> Bool
+--     allDepEq dep Nil Nil = True
+--     allDepEq dep (a :* as) (b :* bs) = case testEquality (typeOf a) (typeOf b) of
+--       Nothing    -> False
+--       Just proof -> depEq dep (DepAttr (castWith proof a)) (DepAttr b) && allDepEq dep as bs
+--     allDepEq _ _ _ = False
 
 -- | Given 2 difference NodeDependence and 2 attribute lists, attempt to find a unification (i.e. Variable substitution scheme)
 -- that makes all corresponding attributes in each list `effectively the same`.
@@ -151,14 +151,16 @@ unifyVarSubstitution vs1 vs2 = TM.hoistA unliftSE merge
 
 -- | Check if the a degraded dependencies is a subset of the other.
 -- Relevant variable substitution must be applied first before calling this function.
--- The
+-- Returns the String representation of the
 isSubNodeDependence :: NodeDependence' DegradedDep -> NodeDependence' DegradedDep -> Maybe String
 isSubNodeDependence d1 d2 = D.toList <$> TM.fold collect (<>) (Just D.empty) (TM.hoist (Const . checkEachType) d1)
   where
-    collect :: forall t. Const (Maybe (M.Map String String)) t -> Maybe (D.DList Char)
+    collect :: forall t. Const (Maybe (M.HashMap String String)) t -> Maybe (D.DList Char)
     collect (Const m) = D.fromList . show <$> m
-    checkEachType :: forall t. DEntry' DegradedDep t -> Maybe (M.Map String String)
-    checkEachType (DE de1) = unifyGroup (M.assocs g1) M.empty
+
+    -- | Check each DEntry in @d1@, whether we can find an subset in @d2@ that is isomorphic a la group.
+    checkEachType :: forall t. DEntry' DegradedDep t -> Maybe (M.HashMap String String)
+    checkEachType (DE de1) = unifyGroup (M.toList g1) M.empty
       where
         g1 = groupify (DE de1)
         g2 = groupify $ fromMaybe (DE M.empty) $ TM.lookup @t d2
@@ -220,7 +222,7 @@ unliftSE :: SubEntry' t -> Maybe (SubEntry t)
 unliftSE (SE' se) = SE <$> M.foldrWithKey folder (Just M.empty) se
   where
     folder k s e
-      | S.size s == 1 = M.insert k (S.findMin s) <$> e
+      | S.size s == 1 = M.insert k (head $ S.toList s) <$> e
       | otherwise     = Nothing
 
 applyVarSubstitution :: VarSubstitution -> NodeDependence' dep -> NodeDependence' dep
