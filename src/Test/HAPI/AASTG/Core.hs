@@ -27,8 +27,6 @@ import Test.HAPI.PState (PKey (PKey, getPKeyID), PState (PState), PStateSupports
 import Test.HAPI.Common (Fuzzable)
 import Control.Effect.State (State, modify)
 import Data.SOP (All, NP)
-import Data.Map (Map)
-import qualified Data.Map.Strict as M
 import Data.List (groupBy, intercalate)
 import Data.Function (on)
 import Control.Effect.Error (throwError, Error)
@@ -39,6 +37,10 @@ import Type.Reflection (Typeable)
 import Data.SOP.Constraint (Compose)
 import Data.Containers.ListUtils (nubInt)
 import Data.Hashable (Hashable (hashWithSalt))
+
+import Data.HashMap.Strict (HashMap)
+import qualified Data.HashMap.Strict as HM
+
 
 -- Abstract API state transition graph
 
@@ -74,8 +76,8 @@ data Edge api c where
 
 data AASTG sig c = AASTG {
   getStart     :: !NodeID,
-  getEdgesFrom :: !(Map NodeID [Edge sig c]),
-  getEdgesTo   :: !(Map NodeID [Edge sig c])
+  getEdgesFrom :: !(HashMap NodeID [Edge sig c]),
+  getEdgesTo   :: !(HashMap NodeID [Edge sig c])
 } deriving Eq
 
 data TaggedEdge t api c = TE { getTag :: t, getEdge :: Edge api c }
@@ -83,7 +85,7 @@ data TaggedEdge t api c = TE { getTag :: t, getEdge :: Edge api c }
 newAASTG :: [Edge sig c] -> AASTG sig c
 newAASTG es = AASTG 0 (groupEdgesOn startNode es) (groupEdgesOn endNode es)
   where
-    groupEdgesOn f = M.fromList
+    groupEdgesOn f = HM.fromList
                    . fmap (\es -> (f (head es), es))
                    . groupBy ((==) `on` f)
 
@@ -100,33 +102,33 @@ endNode (Assert _ e _ _) = e
 endNode (APICall _ e _ _ _) = e
 
 edgesFrom :: NodeID -> AASTG api c -> [Edge api c]
-edgesFrom i (AASTG _ f _) = fromMaybe [] (f M.!? i)
+edgesFrom i (AASTG _ f _) = fromMaybe [] (f HM.!? i)
 
 edgesTo :: NodeID -> AASTG api c -> [Edge api c]
-edgesTo i (AASTG _ _ b) = fromMaybe [] (b M.!? i)
+edgesTo i (AASTG _ _ b) = fromMaybe [] (b HM.!? i)
 
 allNodes :: AASTG api c -> [NodeID]
-allNodes (AASTG start fs bs) = nubInt (start : M.keys fs <> M.keys bs)
+allNodes (AASTG start fs bs) = nubInt (start : HM.keys fs <> HM.keys bs)
 
 allEdges :: AASTG api c -> [Edge api c]
-allEdges = concatMap snd . M.toList . getEdgesFrom
+allEdges = concatMap snd . HM.toList . getEdgesFrom
 
-groupEdgesOn :: (Edge sig c -> NodeID) -> [Edge sig c] -> Map NodeID [Edge sig c]
-groupEdgesOn f = M.fromList
+groupEdgesOn :: (Edge sig c -> NodeID) -> [Edge sig c] -> HashMap NodeID [Edge sig c]
+groupEdgesOn f = HM.fromList
                . fmap (\es -> (f (head es), es))
                . groupBy ((==) `on` f)
 
-edgesFrom2EdgesTo :: Map NodeID [Edge sig c] -> Map NodeID [Edge sig c]
-edgesFrom2EdgesTo = groupEdgesOn startNode . concat . M.elems
+edgesFrom2EdgesTo :: HashMap NodeID [Edge sig c] -> HashMap NodeID [Edge sig c]
+edgesFrom2EdgesTo = groupEdgesOn startNode . concat . HM.elems
 
-edgesTo2EdgesFrom :: Map NodeID [Edge sig c] -> Map NodeID [Edge sig c]
-edgesTo2EdgesFrom = groupEdgesOn endNode . concat . M.elems
+edgesTo2EdgesFrom :: HashMap NodeID [Edge sig c] -> HashMap NodeID [Edge sig c]
+edgesTo2EdgesFrom = groupEdgesOn endNode . concat . HM.elems
 
 -- | Synthesize fuzzer stubs
 synthStub :: forall api sig c m. (Has (Api api :+: QVS c :+: State PState :+: PropertyA) sig m) => AASTG api c -> [m ()]
 synthStub (AASTG start edges _) = synth start
   where
-    synth i = case edges M.!? i of
+    synth i = case edges HM.!? i of
       Nothing -> [return ()]
       Just es -> concat [(synthOneStep edge >>) <$> synth (endNode edge) | edge <- es]
     synthOneStep :: Edge api c -> m ()

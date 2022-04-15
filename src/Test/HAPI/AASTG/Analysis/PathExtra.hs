@@ -21,14 +21,16 @@ import Data.Type.Equality (castWith, apply, type (:~:) (Refl))
 import Data.Map (Map)
 
 import qualified Data.Map as M
+import qualified Data.HashMap.Strict as HM
 import qualified Data.HashSet as HS
 import qualified Data.TypeRepMap as TM
 import Control.Carrier.State.Church (runState)
 import Data.HashSet (HashSet)
+import Data.HashMap.Strict (HashMap)
 
 
-type NodePathMap  api c = Map NodeID [APath api c]
-type NodePathMap' api c = Map NodeID (HashSet (APath api c))
+type NodePathMap  api c = HashMap NodeID [APath api c]
+type NodePathMap' api c = HashMap NodeID (HashSet (APath api c))
 
 -- TODO
 {-
@@ -73,12 +75,12 @@ effectiveSubpath dep deg calls p1 p2 = do
 
 
 getPathMap :: forall api c. AASTG api c -> NodePathMap api c
-getPathMap aastg = M.map HS.toList $ M.unionsWith (<>) (map trav paths)
+getPathMap aastg = HM.map HS.toList $ foldr (HM.unionWith (<>) . trav) HM.empty paths
   where
     paths = outPaths (getStart aastg) aastg
     trav p = run
       . runState @Int (\s m -> return m) 0
-      . runState @(NodePathMap' api c) (\s _ -> return s) M.empty
+      . runState @(NodePathMap' api c) (\s _ -> return s) HM.empty
       . runTrav (handler p)
       $ travPath p
 
@@ -87,8 +89,8 @@ getPathMap aastg = M.map HS.toList $ M.unionsWith (<>) (map trav paths)
     handler path = TravHandler $ \case
       OnEdge e -> return ()
       OnNode n -> do
-        missing <- gets @(NodePathMap' api c) (M.notMember n)
-        when missing $ modify @(NodePathMap' api c) (M.insert n HS.empty)
+        missing <- gets @(NodePathMap' api c) (not . HM.member n)
+        when missing $ modify @(NodePathMap' api c) (HM.insert n HS.empty)
         i <- get @Int
-        when (i > 0) $ modify (M.adjust (HS.insert (slice 0 i path)) n)
+        when (i > 0) $ modify (HM.adjust (HS.insert (slice 0 i path)) n)
         modify @Int (+ 1)
