@@ -51,6 +51,8 @@ import Control.Carrier.Fresh.Strict (runFresh)
 import Test.HAPI.AASTG.Core (AASTG (AASTG), Edge (Update, APICall), synthStub, newAASTG)
 import Control.Effect.Sum (Members)
 import Test.HAPI.AASTG.Analysis.TypeCheck (typeCheck)
+import Test.HAPI.AASTG.Analysis.PathExtra (getPathMap)
+import Test.HAPI.AASTG.Analysis.Path (outPaths)
 
 
 data ArithApiA :: ApiDefinition where
@@ -210,7 +212,7 @@ runProg2 = do
 
 graph1 :: forall c. (c Double, c Int) => AASTG (ArithApiA) c
 graph1 = newAASTG [
-    Update  0 1 "a" (Value @Double 10)
+    Update  0 1 "a" (Value @Int 10)
   , Update  1 2 "b" (Anything @Int)
   , Update  2 3 "x" (Anything @Int)
   , APICall 3 4 (Just "a") AddA (Get "a" :* Get "b"  :* Nil)
@@ -229,7 +231,8 @@ graph2 = newAASTG [
   , APICall @Int 4 5 (Just "b") AddA (Get "a" :* Get "a"  :* Nil)
   ]
 
-x = typeCheck (graph1 @Arbitrary)
+x = getPathMap (graph1 @Arbitrary)
+y = outPaths 0 (graph1 @Arbitrary)
 
 runGraph1 :: forall m sig. (MonadIO m, MonadFail m, Algebra sig m) => m ()
 runGraph1 = do

@@ -152,12 +152,13 @@ synthStub (AASTG start edges _) = synth start
 -- | Instances
 instance Show (Edge api c) where
   show = \case
-    Update  s e k  a        -> header s e <> "update " <> show k <> " = " <> show a
-    Forget  s e k           -> header s e <> "forget " <> show k
-    Assert  s e x  y        -> header s e <> "assert " <> show x <> " = " <> show y
-    APICall s e mx api args -> header s e <> apiName api <> "(" <> "..." <> ")" <> maybe "" ((" -> " <>) . show) mx
+    Update  s e k  a        -> wrap $ header s e <> "update " <> show k <> " = " <> show a
+    Forget  s e k           -> wrap $ header s e <> "forget " <> show k
+    Assert  s e x  y        -> wrap $ header s e <> "assert " <> show x <> " = " <> show y
+    APICall s e mx api args -> wrap $ header s e <> apiName api <> "(" <> "..." <> ")" <> maybe "" ((" -> " <>) . show) mx
     where
       header s e = show s <> " -> " <> show e <> ": "
+      wrap n     = "<" <> n <> ">"
 
 instance Eq (Edge api c) where
   Update s e k a == Update s' e' k' a' =

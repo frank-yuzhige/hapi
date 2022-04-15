@@ -7,17 +7,18 @@
 
 module Test.HAPI.AASTG.Analysis.PathExtra where
 
+import Test.HAPI.Api (apiEqProofs)
 import Test.HAPI.AASTG.Analysis.Path (pathCalls, pathEndNode, Path, APathView (APathView), outPaths, APath (APath), slice)
 import Test.HAPI.AASTG.Analysis.Dependence (pathDeps, lookupNode, VarSubstitution, getUnificationFromArgs, unifyVarSubstitution, applyVarSubstitution, pathDegradedDeps, isSubNodeDependence)
 import Test.HAPI.AASTG.Core (Edge (APICall), AASTG (AASTG, getStart), NodeID)
-import Test.HAPI.Api (apiEqProofs)
+import Test.HAPI.AASTG.Effect.Trav (TravHandler(TravHandler), TravEvent (OnEdge, OnNode), runTrav, travPath)
+
 
 import Control.Monad (when)
 import Control.Algebra (Has, type (:+:), run)
 import Control.Effect.State (State, gets, modify, get, put)
 import Data.Type.Equality (castWith, apply, type (:~:) (Refl))
 import Data.Map (Map)
-import Test.HAPI.AASTG.Effect.Trav (TravHandler(TravHandler), TravEvent (OnEdge, OnNode), runTrav, travPath)
 
 import qualified Data.Map as M
 import qualified Data.TypeRepMap as TM
@@ -77,8 +78,8 @@ getPathMap aastg = M.unionsWith (<>) (map trav paths)
     handler path = TravHandler $ \case
       OnEdge e -> return ()
       OnNode n -> do
+        missing <- gets @(NodePathMap api c) (M.notMember n)
+        when missing $ modify @(NodePathMap api c) (M.insert n [])
         i <- get @Int
-        null <- gets @(NodePathMap api c) M.null
-        when null    $ modify @(NodePathMap api c) (M.insert n [])
         when (i > 0) $ modify (M.adjust (slice 0 i path :) n)
-        put (i + 1)
+        modify @Int (+ 1)

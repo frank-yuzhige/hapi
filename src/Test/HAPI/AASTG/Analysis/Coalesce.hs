@@ -24,4 +24,4 @@ directCoalesceState er ee aastg = AASTG 0 fs bs
     bs = edgesTo2EdgesFrom fs
 
 upperSubNode :: NodePathMap api c -> NodeID -> NodeID -> Bool
-upperSubNode ctx n1 n2 = and [or [ isJust $ p1 `effectiveSubpath` p2 | p2 <- ctx M.! n2] | p1 <- ctx M.! n1]
+upperSubNode ctx n1 n2 = and [or [isJust $ p1 `effectiveSubpath` p2 | p2 <- ctx M.! n2] | p1 <- ctx M.! n1]
