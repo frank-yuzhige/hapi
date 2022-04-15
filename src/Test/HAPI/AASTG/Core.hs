@@ -12,6 +12,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 module Test.HAPI.AASTG.Core where
 import Test.HAPI.Effect.QVS (QVS (QVS), attributes2QVSs, qvs2m)
@@ -196,3 +197,5 @@ instance Hashable (Edge api c) where
     `hashWithSalt` mx
     `hashWithSalt` apiName api
     `hashWithSalt` args
+
+deriving instance Show (AASTG api c)

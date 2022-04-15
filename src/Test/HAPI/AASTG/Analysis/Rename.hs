@@ -6,6 +6,7 @@ import Test.HAPI.AASTG.Core (AASTG (AASTG), NodeID, Edge (..), allNodes)
 import Data.IntMap (IntMap)
 import qualified Data.HashMap.Strict as HM
 import qualified Data.IntMap as IM
+import Data.Maybe (fromMaybe)
 
 type NodeRenameMap = IntMap NodeID  -- NodeID -> NodeID
 
@@ -18,8 +19,8 @@ minNodeID (AASTG start fs bs) = minimum (start : HM.keys fs <> HM.keys bs)
 renameNodes :: NodeRenameMap -> AASTG api c -> AASTG api c
 renameNodes nrm aastg@(AASTG start fs bs) = AASTG (nrm IM.! start) fs' bs'
   where
-    fs' = HM.map (renameNodesInEdge nrm <$>) fs
-    bs' = HM.map (renameNodesInEdge nrm <$>) bs
+    fs' = HM.mapKeys (nrm IM.!) $ HM.map (renameNodesInEdge nrm <$>) fs
+    bs' = HM.mapKeys (nrm IM.!) $ HM.map (renameNodesInEdge nrm <$>) bs
 
 renameNodesInEdge :: NodeRenameMap -> Edge api c -> Edge api c
 renameNodesInEdge nrm = \case
@@ -28,7 +29,7 @@ renameNodesInEdge nrm = \case
   Assert s e x y          -> Assert  (look s) (look e) x y
   APICall s e mx api args -> APICall (look s) (look e) mx api args
   where
-    look i = nrm IM.! i
+    look i = fromMaybe i $ nrm IM.!? i
 
 renameNodesViaOffset :: Int -> AASTG api c -> AASTG api c
 renameNodesViaOffset offset aastg = renameNodes (IM.fromList [(n, n + offset) | n <- allNodes aastg]) aastg

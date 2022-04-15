@@ -53,6 +53,8 @@ import Control.Effect.Sum (Members)
 import Test.HAPI.AASTG.Analysis.TypeCheck (typeCheck)
 import Test.HAPI.AASTG.Analysis.PathExtra (getPathMap)
 import Test.HAPI.AASTG.Analysis.Path (outPaths)
+import Test.HAPI.AASTG.Analysis.Coalesce (coalesceAASTGs, directCoalesceState)
+import Test.HAPI.AASTG.Analysis.Rename (normalizeNodes)
 
 
 data ArithApiA :: ApiDefinition where
@@ -231,7 +233,8 @@ graph2 = newAASTG [
   , APICall @Int 4 5 (Just "b") AddA (Get "a" :* Get "a"  :* Nil)
   ]
 
-x = getPathMap (graph1 @Arbitrary)
+x = coalesceAASTGs (graph1 @Arbitrary) (graph2)
+-- y = directCoalesceState 0 7 (graph1 @Arbitrary) (graph2)
 
 runGraph1 :: forall m sig. (MonadIO m, MonadFail m, Algebra sig m) => m ()
 runGraph1 = do

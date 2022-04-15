@@ -53,7 +53,7 @@ travPath :: forall p api c sig m. (Has (Trav api c) sig m, Path p)
          => p api c -> m ()
 travPath p = sequenceA_ [onEvent e | e <- events (pathAsList p)]
   where
-    events []       = error "This is impossible"
+    events []       = []
     events [e]      = [OnNode (startNode e), OnEdge e, OnNode (endNode e)]
     events (e : es) = [OnNode (startNode e), OnEdge e] <> events es
 
