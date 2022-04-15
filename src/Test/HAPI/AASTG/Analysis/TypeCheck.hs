@@ -6,15 +6,18 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Test.HAPI.AASTG.Analysis.TypeCheck (
-  typeCheck
+  typeCheck,
+  typeCheckEither
 ) where
 
 import Test.HAPI.AASTG.Core (AASTG (AASTG), NodeID, Edge (Update, APICall, Assert, Forget), edgesFrom, endNode)
 import Test.HAPI.PState (PKey(getPKeyID, PKey))
 import Test.HAPI.Args (Attributes, Attribute (AnyOf, Get))
 import Test.HAPI.Common (Fuzzable)
+import Test.HAPI.Effect.Eff (Eff, type (:+:), Alg)
 
 import Data.Map (Map)
 import Data.Data
@@ -24,7 +27,6 @@ import Control.Effect.State ( State, modify, gets )
 import Control.Carrier.State.Church (runState)
 import Control.Carrier.Error.Church (runError, throwError)
 import Control.Effect.Error (Error)
-import Control.Algebra (run, Has, type (:+:))
 import Control.Lens ( makeLenses, view, over )
 import Data.SOP (hcmap, NP (Nil, (:*)), All)
 import Data.Maybe (fromMaybe)
@@ -40,36 +42,41 @@ import qualified Data.Set        as S
 type StateType = Map String TypeRep
 type EdgeRep = Text
 
-data Ctx = Ctx { _states :: Map NodeID StateType, _checkedNodes :: Set NodeID } deriving Show
+data TypeCheckCtx = TypeCheckCtx { _states :: Map NodeID StateType, _checkedNodes :: Set NodeID } deriving Show
 
-$(makeLenses ''Ctx)
+$(makeLenses ''TypeCheckCtx)
 
-data TypeCheckError = TypeCheckError NodeID EdgeRep
+data TypeCheckError = TypeCheckError NodeID EdgeRep TypeErrorCause
   deriving (Show)
 
-typeCheck :: forall api c. AASTG api c -> Either TypeCheckError Ctx
-typeCheck aastg@(AASTG start fs ts) = run
-  . runError (return . Left) (return . Right)
-  . runState (\s a -> return s) (Ctx M.empty S.empty)
+data TypeErrorCause = DoubleTypeAssignedToOneNode StateType StateType | CantInferNextStateType
+  deriving (Show)
+
+typeCheck :: Eff (Error TypeCheckError) sig m => AASTG api c -> m TypeCheckCtx
+typeCheck aastg@(AASTG start fs ts) =
+    runState (\s a -> return s) (TypeCheckCtx M.empty S.empty)
   $ checking start
   where
-    checking :: forall sig m. (Has (State Ctx :+: Error TypeCheckError) sig m) => NodeID -> m ()
+    checking :: forall sig m. (Eff (State TypeCheckCtx :+: Error TypeCheckError) sig m) => NodeID -> m ()
     checking i = do
       checked <- gets (S.member i . view checkedNodes)
       unless checked $ do
         st <- gets (fromMaybe M.empty . (M.!? i) . view states)
         forM_ (edgesFrom i aastg) $ \edge -> do
-          let throwErr = throwError (TypeCheckError i (fromString $ show edge))
+          let throwErr x = throwError . TypeCheckError x (fromString $ show edge)
           case checkEdgeAndUpdate edge st of
-            Nothing -> throwErr
+            Nothing -> throwErr i CantInferNextStateType
             Just nt -> do
               let e = endNode edge
               oldNT <- gets ((M.!? e) . view states)
               case oldNT of
                 Nothing              -> modify $ over states $ M.insert e nt
-                Just nt' | nt /= nt' -> throwErr
+                Just nt' | nt /= nt' -> throwErr e (DoubleTypeAssignedToOneNode nt nt')
                 _                    -> return ()
               checking e
+
+typeCheckEither :: Alg sig m => AASTG api c -> m (Either TypeCheckError TypeCheckCtx)
+typeCheckEither = runError (return . Left) (return . Right) . typeCheck
 
 -- | Given the edge and its outgoing state's type, check if the edge can indeed go from the outgoing state, and generate the next state's type.
 checkEdgeAndUpdate :: Edge sig c -> StateType -> Maybe StateType

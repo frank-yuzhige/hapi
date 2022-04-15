@@ -13,15 +13,16 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ConstraintKinds #-}
 
-module Test.HAPI.Effect.Mixin (
+module Test.HAPI.Effect.Eff (
     module Control.Algebra
   , EnvA (..)
   , EnvAC (..)
   , EnvCtx
-  , Has
-  , Env
+  , Alg
+  , Eff
   , envCtx
   , debug
+  , runEnv
 ) where
 import Data.Kind (Type)
 import Control.Monad.IO.Class (MonadIO (liftIO))
@@ -52,14 +53,21 @@ instance (Algebra sig m, MonadIO m) => Algebra (EnvA :+: sig) (EnvAC ctx m) wher
 
 -- Mixin
 
-type Has eff sig m = (A.Has (eff :+: EnvA) sig m)
+-- | Mixin of @Has@ in @Control.Algebra@, adds extra @EnvA@ to allow global operations
+type Eff eff sig m = (A.Has (eff :+: EnvA) sig m)
 
-type Env sig m = A.Has EnvA sig m
+-- | Mixin of @Algebra@ in @Control.Algebra@, adds extra @EnvA@ to allow global operations
+type Alg sig m = A.Has EnvA sig m
 
 -- Sender
 
-envCtx :: Env sig m => m EnvCtx
+envCtx :: Alg sig m => m EnvCtx
 envCtx = send EnvCtx
 
-debug :: Env sig m => String -> m ()
+debug :: Alg sig m => String -> m ()
 debug = send . Debug
+
+-- runner
+
+runEnv :: MonadIO m => EnvAC ctx m a -> m a
+runEnv = runEnvAC

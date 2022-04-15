@@ -16,10 +16,11 @@ import qualified Data.HashMap.Strict as HM
 import Data.Containers.ListUtils (nubIntOn)
 import Data.Hashable (Hashable(hash))
 import Test.HAPI.AASTG.Analysis.Nodes (unrelatedNodeMap)
+import Test.HAPI.Effect.Eff (Alg)
 
 
 -- TODO: Optimize me!!!!
-coalesceAASTGs :: Int -> AASTG api c -> AASTG api c -> ([(NodeID, NodeID)], AASTG api c)
+coalesceAASTGs :: Alg sig m => Int -> AASTG api c -> AASTG api c -> m ([(NodeID, NodeID)], AASTG api c)
 coalesceAASTGs n a1 a2 = autoCoalesce n (coalescePreprocess a1 a2)
 
 directCoalesceState :: NodeID -> NodeID -> AASTG api c -> AASTG api c
@@ -40,23 +41,31 @@ coalescePreprocess a1 a2 = directCoalesceState 0 (lb + 1) combine
     a2'     = normalizeNodes (lb + 1) a2
     combine = AASTG 0 (getEdgesFrom a1' <> getEdgesFrom a2') (getEdgesTo a1' <> getEdgesTo a2')
 
-autoCoalesce :: NodeID
+autoCoalesce :: Alg sig m
+             => NodeID
              -> AASTG api c
-             -> ([(NodeID, NodeID)], AASTG api c)
-autoCoalesce 0       aastg = ([], aastg)
-autoCoalesce maxStep aastg = case record of
-  Nothing -> ([]         , aastg')
-  Just p  -> (p : history, ans)
-  where
-    (record, aastg') = coalesceOneStep aastg
-    (history, ans)   = autoCoalesce (maxStep - 1) aastg'
+             -> m ([(NodeID, NodeID)], AASTG api c)
+autoCoalesce 0       aastg = return ([], aastg)
+autoCoalesce maxStep aastg = do
+  (record, aastg') <- coalesceOneStep aastg
+  case record of
+    Nothing -> return ([], aastg')
+    Just p  -> do
+      (history, ans) <- autoCoalesce (maxStep - 1) aastg'
+      return (p : history, ans)
 
-coalesceOneStep :: AASTG api c
-                -> (Maybe (NodeID, NodeID), AASTG api c)
-coalesceOneStep aastg = case listToMaybe [(r', b, r) | b <- allNodes aastg, r <- candidateMap HM.! b, let b' = b ~<=~ r, let r' = r ~<=~ b, b' || r'] of
-  Nothing                         -> (Nothing, aastg)
-  Just (rIsSub, b, r) | rIsSub    -> (Just (b, r), directCoalesceState b r aastg)
-                      | otherwise -> (Just (r, b), directCoalesceState r b aastg)
+
+coalesceOneStep :: Alg sig m
+                => AASTG api c
+                -> m (Maybe (NodeID, NodeID), AASTG api c)
+coalesceOneStep aastg = case listToMaybe [(r', b, r) | b <- allNodes aastg
+                                                     , r <- candidateMap HM.! b
+                                                     , let b' = b ~<=~ r
+                                                     , let r' = r ~<=~ b
+                                                     , b' || r'] of
+  Nothing                         -> return (Nothing, aastg)
+  Just (rIsSub, b, r) | rIsSub    -> return (Just (b, r), directCoalesceState b r aastg)
+                      | otherwise -> return (Just (r, b), directCoalesceState r b aastg)
   where
     candidateMap   = unrelatedNodeMap aastg
     pathMap        = getPathMap aastg

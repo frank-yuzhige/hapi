@@ -48,12 +48,13 @@ import Control.Monad.Trans.Class (lift)
 import Control.Carrier.Fresh.Strict (runFresh)
 import Test.HAPI.AASTG.Core (AASTG (AASTG), Edge (Update, APICall), synthStub, newAASTG)
 import Control.Effect.Sum (Members)
-import Test.HAPI.AASTG.Analysis.TypeCheck (typeCheck)
+import Test.HAPI.AASTG.Analysis.TypeCheck (typeCheck, typeCheckEither)
 import Test.HAPI.AASTG.Analysis.PathExtra (getPathMap)
 import Test.HAPI.AASTG.Analysis.Path (outPaths)
 import Test.HAPI.AASTG.Analysis.Coalesce (coalesceAASTGs, directCoalesceState)
 import Test.HAPI.AASTG.Analysis.Rename (normalizeNodes)
 import Test.HAPI.AASTG.Analysis.Nodes (unrelatedNodeMap)
+import Test.HAPI.Effect.Eff
 
 
 data ArithApiA :: ApiDefinition where
@@ -232,10 +233,11 @@ graph2 = newAASTG [
   , APICall @Int 4 5 (Just "b") AddA (Get "a" :* Get "a"  :* Nil)
   ]
 
-x n = coalesceAASTGs n (graph1 @Arbitrary) (graph2)
+x n = runEnv @IO $ coalesceAASTGs n (graph1 @Arbitrary) (graph2)
 y = unrelatedNodeMap (graph1 @Arbitrary)
 
-n = typeCheck (graph1 @Arbitrary)
+
+n = runEnv @IO $ typeCheckEither (graph1 @Arbitrary)
 -- y = directCoalesceState 0 7 (graph1 @Arbitrary) (graph2)
 
 runGraph1 :: forall m sig. (MonadIO m, MonadFail m, Algebra sig m) => m ()

@@ -39,9 +39,9 @@ library
       Test.HAPI.Common
       Test.HAPI.DataType
       Test.HAPI.Effect.Api
+      Test.HAPI.Effect.Eff
       Test.HAPI.Effect.FF
       Test.HAPI.Effect.Gen
-      Test.HAPI.Effect.Mixin
       Test.HAPI.Effect.Orchestration
       Test.HAPI.Effect.Property
       Test.HAPI.Effect.QVS
