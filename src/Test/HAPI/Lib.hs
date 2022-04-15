@@ -50,6 +50,7 @@ import Control.Monad.Trans.Class (lift)
 import Control.Carrier.Fresh.Strict (runFresh)
 import Test.HAPI.AASTG.Core (AASTG (AASTG), Edge (Update, APICall), synthStub, newAASTG)
 import Control.Effect.Sum (Members)
+import Test.HAPI.AASTG.Analysis.TypeCheck (typeCheck)
 
 
 data ArithApiA :: ApiDefinition where
@@ -121,13 +122,6 @@ show3Plus5Is8 = do
   x <- mkCall SubA [args|(-10050) x|]
   x <- mkCall StrA [args|x|]
   x `shouldBe` "40"
-
--- prop :: (MonadIO m, MonadFail m, Algebra sig m) => m ()
--- prop = runError @PropertyError (fail . show) pure
---      . runProperty @PropertyA
---      . runApiFFI @ArithApiA
---      . runApiIO @ShowApiA
---      $ show3Plus5Is8
 
 arb :: forall c sig m. (Has (Api ShowApiA :+: PropertyA :+: QVS c) sig m, WFTypeSpec (BasicSpec c))
     => m ()
@@ -214,16 +208,28 @@ runProg2 = do
   return ()
 
 
-graph1 :: forall c. (c Int) => AASTG (ArithApiA) c
+graph1 :: forall c. (c Double, c Int) => AASTG (ArithApiA) c
 graph1 = newAASTG [
+    Update  0 1 "a" (Value @Double 10)
+  , Update  1 2 "b" (Anything @Int)
+  , Update  2 3 "x" (Anything @Int)
+  , APICall 3 4 (Just "a") AddA (Get "a" :* Get "b"  :* Nil)
+  , APICall 3 5 (Just "a") SubA (Get "a" :* Anything :* Nil)
+  , APICall 4 6 (Just "b") AddA (Get "a" :* Get "a"  :* Nil)
+  , APICall 5 6 (Just "b") AddA (Get "a" :* Get "a"  :* Nil)
+  ]
+
+graph2 :: forall c. (c Int) => AASTG (ArithApiA) c
+graph2 = newAASTG [
     Update  @Int 0 1 "a" (Value 10)
   , Update  @Int 1 2 "b" Anything
-  , Update  @Int 2 3 "x" Anything
-  , APICall @Int 3 4 (Just "a") AddA (Get "a" :* Get "b"  :* Nil)
-  , APICall @Int 3 5 (Just "a") SubA (Get "a" :* Anything :* Nil)
-  , APICall @Int 4 6 (Just "b") AddA (Get "a" :* Get "a"  :* Nil)
-  , APICall @Int 5 6 (Just "b") AddA (Get "a" :* Get "a"  :* Nil)
+  , APICall @Int 2 3 (Just "a") AddA (Get "a" :* Get "b"  :* Nil)
+  , APICall @Int 2 4 (Just "a") SubA (Get "a" :* Anything :* Nil)
+  , APICall @Int 3 5 (Just "b") AddA (Get "a" :* Get "a"  :* Nil)
+  , APICall @Int 4 5 (Just "b") AddA (Get "a" :* Get "a"  :* Nil)
   ]
+
+x = typeCheck (graph1 @Arbitrary)
 
 runGraph1 :: forall m sig. (MonadIO m, MonadFail m, Algebra sig m) => m ()
 runGraph1 = do

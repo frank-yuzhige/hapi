@@ -28,8 +28,8 @@ library
       Test.HAPI.AASTG.Analysis.Coalesce
       Test.HAPI.AASTG.Analysis.Dependence
       Test.HAPI.AASTG.Analysis.Path
+      Test.HAPI.AASTG.Analysis.PathExtra
       Test.HAPI.AASTG.Analysis.Rename
-      Test.HAPI.AASTG.Analysis.SubPath
       Test.HAPI.AASTG.Analysis.TypeCheck
       Test.HAPI.AASTG.Core
       Test.HAPI.AASTG.Effect.Trav

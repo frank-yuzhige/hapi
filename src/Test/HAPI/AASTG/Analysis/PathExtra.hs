@@ -1,11 +1,30 @@
 {-# LANGUAGE ExplicitNamespaces #-}
-module Test.HAPI.AASTG.Analysis.SubPath where
-import Test.HAPI.AASTG.Analysis.Path (pathCalls, pathEndNode, Path)
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
+module Test.HAPI.AASTG.Analysis.PathExtra where
+
+import Test.HAPI.AASTG.Analysis.Path (pathCalls, pathEndNode, Path, APathView (APathView), outPaths, APath (APath), slice)
 import Test.HAPI.AASTG.Analysis.Dependence (pathDeps, lookupNode, VarSubstitution, getUnificationFromArgs, unifyVarSubstitution, applyVarSubstitution, pathDegradedDeps, isSubNodeDependence)
-import Test.HAPI.AASTG.Core (Edge (APICall))
-import qualified Data.TypeRepMap as TM
+import Test.HAPI.AASTG.Core (Edge (APICall), AASTG (AASTG, getStart), NodeID)
 import Test.HAPI.Api (apiEqProofs)
+
+import Control.Monad (when)
+import Control.Algebra (Has, type (:+:), run)
+import Control.Effect.State (State, gets, modify, get, put)
 import Data.Type.Equality (castWith, apply, type (:~:) (Refl))
+import Data.Map (Map)
+import Test.HAPI.AASTG.Effect.Trav (TravHandler(TravHandler), TravEvent (OnEdge, OnNode), runTrav, travPath)
+
+import qualified Data.Map as M
+import qualified Data.TypeRepMap as TM
+import Control.Carrier.State.Church (runState)
+
+
+type NodePathMap api c = Map NodeID [APath api c]
 
 -- TODO
 {-
@@ -41,3 +60,25 @@ effectiveSubpath p1 p2 = do
         nd1 = lookupNode s1 d1
         nd2 = lookupNode s2 d2
     findVarSub _ _ = Nothing
+
+
+getPathMap :: forall api c. AASTG api c -> NodePathMap api c
+getPathMap aastg = M.unionsWith (<>) (map trav paths)
+  where
+    paths = outPaths (getStart aastg) aastg
+    trav p = run
+      . runState @Int (\s m -> return m) 0
+      . runState @(NodePathMap api c) (\s _ -> return s) M.empty
+      . runTrav (handler p)
+      $ travPath p
+
+    handler :: forall sig m. Has (State Int :+: State (NodePathMap api c)) sig m
+            => APath api c -> TravHandler api c m
+    handler path = TravHandler $ \case
+      OnEdge e -> return ()
+      OnNode n -> do
+        i <- get @Int
+        null <- gets @(NodePathMap api c) M.null
+        when null    $ modify @(NodePathMap api c) (M.insert n [])
+        when (i > 0) $ modify (M.adjust (slice 0 i path :) n)
+        put (i + 1)

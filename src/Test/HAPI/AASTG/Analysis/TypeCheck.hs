@@ -45,11 +45,12 @@ data Ctx = Ctx { _states :: Map NodeID StateType, _checkedNodes :: Set NodeID } 
 $(makeLenses ''Ctx)
 
 data TypeCheckError = TypeCheckError NodeID EdgeRep
+  deriving (Show)
 
-typeCheck :: forall api c. AASTG api c -> Maybe TypeCheckError
+typeCheck :: forall api c. AASTG api c -> Either TypeCheckError Ctx
 typeCheck aastg@(AASTG start fs ts) = run
-  . runError (return . Just) (const $ return Nothing)
-  . runState (\s a -> return ()) (Ctx M.empty S.empty)
+  . runError (return . Left) (return . Right)
+  . runState (\s a -> return s) (Ctx M.empty S.empty)
   $ checking start
   where
     checking :: forall sig m. (Has (State Ctx :+: Error TypeCheckError) sig m) => NodeID -> m ()
@@ -63,8 +64,8 @@ typeCheck aastg@(AASTG start fs ts) = run
             Nothing -> throwErr
             Just nt -> do
               let e = endNode edge
-              mnt <- gets ((M.!? e) . view states)
-              case mnt of
+              oldNT <- gets ((M.!? e) . view states)
+              case oldNT of
                 Nothing              -> modify $ over states $ M.insert e nt
                 Just nt' | nt /= nt' -> throwErr
                 _                    -> return ()
@@ -89,14 +90,14 @@ checkEdgeAndUpdate = \case
         Just k  -> return (M.insert (getPKeyID k) (typeRep k) st)
     where
       attrsCheck :: (All Fuzzable a) => Attributes a -> StateType -> Bool
-      attrsCheck Nil _ = True
+      attrsCheck Nil       _  = True
       attrsCheck (a :* as) st = attrCheck a st && attrsCheck as st
 
-      attrCheck :: (Fuzzable a) => Attribute a -> StateType -> Bool
+      attrCheck :: forall a. (Fuzzable a) => Attribute a -> StateType -> Bool
       attrCheck = \case
         Get k -> \st -> fromMaybe False $ do
           tk <- st M.!? getPKeyID k
-          return True
+          return (tk == typeRep k)
         AnyOf attrs -> \st -> all (`attrCheck` st) attrs
         _ -> const True
 

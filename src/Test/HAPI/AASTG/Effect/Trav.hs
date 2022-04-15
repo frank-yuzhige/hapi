@@ -8,13 +8,14 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Test.HAPI.AASTG.Effect.Trav where
 import Data.Kind (Type, Constraint)
-import Test.HAPI.AASTG.Core (Edge, NodeID, AASTG (getStart), startNode, endNode)
+import Test.HAPI.AASTG.Core (Edge, NodeID, AASTG (getStart), startNode, endNode, edgesFrom)
 import Control.Algebra (Algebra (alg), type (:+:) (R, L), Has, send)
 import Test.HAPI.Api (ApiDefinition)
-import Control.Monad (join)
+import Control.Monad (join, forM_)
 import Data.Functor (($>))
 import Test.HAPI.AASTG.Analysis.Path (outPaths, pathAsList, Path)
 import Data.Foldable (sequenceA_, traverse_)
@@ -29,16 +30,28 @@ newtype TravHandler api c m = TravHandler { runTravHandler :: TravEvent api c ->
 
 newtype TravCA api c m a = TravCA { runTravCA :: TravHandler api c m -> m a }
 
+onEvent :: Has (Trav api c) sig m => TravEvent api c -> m ()
+onEvent = send . OnEvent
+
 runTrav :: TravHandler api c m -> TravCA api c m a -> m a
 runTrav = flip runTravCA
 
 -- | Traverse Strategy
 
-travDFS :: forall api c sig m. Has (Trav api c) sig m => AASTG api c -> m ()
-travDFS aastg = traverse_ travPath $ outPaths (getStart aastg) aastg
+travDFS :: forall api c sig m. Has (Trav api c) sig m
+        => AASTG api c -> m ()
+travDFS aastg = trav (getStart aastg) -- traverse_ travPath $ outPaths (getStart aastg) aastg
+  where
+    trav :: NodeID -> m ()
+    trav i = do
+      onEvent @api @c $ OnNode i
+      forM_ (edgesFrom i aastg) $ \edge -> do
+        onEvent @api @c $ OnEdge edge
+        trav (endNode edge)
 
-travPath :: forall p api c sig m. (Has (Trav api c) sig m, Path p) => p api c -> m ()
-travPath p = sequenceA_ [send $ OnEvent @api @c $ e | e <- events (pathAsList p)]
+travPath :: forall p api c sig m. (Has (Trav api c) sig m, Path p)
+         => p api c -> m ()
+travPath p = sequenceA_ [onEvent e | e <- events (pathAsList p)]
   where
     events []       = error "This is impossible"
     events [e]      = [OnNode (startNode e), OnEdge e, OnNode (endNode e)]
