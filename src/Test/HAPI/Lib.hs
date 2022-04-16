@@ -55,6 +55,7 @@ import Test.HAPI.AASTG.Analysis.Coalesce (coalesceAASTGs, directCoalesceState)
 import Test.HAPI.AASTG.Analysis.Rename (normalizeNodes)
 import Test.HAPI.AASTG.Analysis.Nodes (unrelatedNodeMap)
 import Test.HAPI.Effect.Eff
+import Test.HAPI.AASTG.Effect.Build (runBuildAASTG, BuildAASTG, var, Building (Building), (%>), fork, vcall, currNode, val)
 
 
 data ArithApiA :: ApiDefinition where
@@ -236,6 +237,22 @@ graph2 = newAASTG [
 x n = runEnv @IO $ coalesceAASTGs n (graph1 @Arbitrary) (graph2)
 y = unrelatedNodeMap (graph1 @Arbitrary)
 
+graph3 :: IO (AASTG ArithApiA Arbitrary)
+graph3 = runEnv @IO
+       $ runBuildAASTG @ArithApiA @Arbitrary
+       $ spec
+
+spec :: Eff (BuildAASTG ArithApiA Arbitrary) sig m => m ()
+spec = do
+  let p = Building @ArithApiA @Arbitrary
+  a <- p %> val 10
+  b <- p %> var Anything
+  p `fork` do
+    c <- p %> vcall AddA (Get a :* Get b :* Nil);
+         p %> vcall SubA (Get c :* Get a :* Nil);
+  c <- p %> vcall SubA (Get a :* Get b :* Nil);
+       p %> vcall AddA (Get c :* Get a :* Nil);
+  return ()
 
 n = runEnv @IO $ typeCheckEither (graph1 @Arbitrary)
 -- y = directCoalesceState 0 7 (graph1 @Arbitrary) (graph2)

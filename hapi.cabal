@@ -33,6 +33,7 @@ library
       Test.HAPI.AASTG.Analysis.Rename
       Test.HAPI.AASTG.Analysis.TypeCheck
       Test.HAPI.AASTG.Core
+      Test.HAPI.AASTG.Effect.Build
       Test.HAPI.AASTG.Effect.Trav
       Test.HAPI.Api
       Test.HAPI.Args

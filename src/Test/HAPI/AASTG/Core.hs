@@ -67,13 +67,15 @@ data Edge api c where
           -> PKey a            -- Variable x
           -> PKey a            -- Variable y
           -> Edge api c
-  APICall :: forall a sig api p c. (Fuzzable a, All c p, All (Compose Eq Attribute) p, ApiName api, All Fuzzable p, Typeable p)
+  APICall :: forall a sig api p c. (Fuzzable a, IsValidCall c api p)
           => NodeID             -- From
           -> NodeID             -- To
           -> Maybe (PKey a)     -- Store result to variable
           -> api p a            -- API call (constructor)
           -> NP Attribute p     -- Argument Attributes List
           -> Edge api c
+
+type IsValidCall c api p = (All c p, All (Compose Eq Attribute) p, ApiName api, All Fuzzable p, Typeable p)
 
 data AASTG sig c = AASTG {
   getStart     :: !NodeID,
@@ -85,10 +87,6 @@ data TaggedEdge t api c = TE { getTag :: t, getEdge :: Edge api c }
 
 newAASTG :: [Edge sig c] -> AASTG sig c
 newAASTG es = AASTG 0 (groupEdgesOn startNode es) (groupEdgesOn endNode es)
-  where
-    groupEdgesOn f = HM.fromList
-                   . fmap (\es -> (f (head es), es))
-                   . groupBy ((==) `on` f)
 
 startNode :: Edge api c -> NodeID
 startNode (Update s _ _ _) = s

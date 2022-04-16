@@ -40,10 +40,10 @@ data EnvA (m :: Type -> Type) a where
   EnvCtx ::           EnvA m EnvCtx
   Debug  :: String -> EnvA m ()
 
-newtype EnvAC ctx m a = EnvAC { runEnvAC :: m a }
+newtype EnvAC m a = EnvAC { runEnvAC :: m a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadFail)
 
-instance (Algebra sig m, MonadIO m) => Algebra (EnvA :+: sig) (EnvAC ctx m) where
+instance (Algebra sig m, MonadIO m) => Algebra (EnvA :+: sig) (EnvAC m) where
   alg hdl sig ctx = EnvAC $ case sig of
     L EnvCtx      -> return $ ctx $> ()
     L (Debug msg) -> do
@@ -54,7 +54,7 @@ instance (Algebra sig m, MonadIO m) => Algebra (EnvA :+: sig) (EnvAC ctx m) wher
 -- Mixin
 
 -- | Mixin of @Has@ in @Control.Algebra@, adds extra @EnvA@ to allow global operations
-type Eff eff sig m = (A.Has (eff :+: EnvA) sig m)
+type Eff eff sig m = (A.Has eff sig m, A.Has EnvA sig m)
 
 -- | Mixin of @Algebra@ in @Control.Algebra@, adds extra @EnvA@ to allow global operations
 type Alg sig m = A.Has EnvA sig m
@@ -69,5 +69,5 @@ debug = send . Debug
 
 -- runner
 
-runEnv :: MonadIO m => EnvAC ctx m a -> m a
+runEnv :: MonadIO m => EnvAC m a -> m a
 runEnv = runEnvAC
