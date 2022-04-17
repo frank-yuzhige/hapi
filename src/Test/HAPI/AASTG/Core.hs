@@ -149,13 +149,16 @@ synthStub (AASTG start edges _) = synth start
         Nothing -> return ()
         Just k  -> modify @PState (record k r)
 
+showEdgeLabel :: Edge api c -> String
+showEdgeLabel = \case
+  Update  s e k  a        -> "update " <> getPKeyID k <> " = " <> show a
+  Forget  s e k           -> "forget " <> getPKeyID k
+  Assert  s e x  y        -> "assert " <> getPKeyID x <> " = " <> show y
+  APICall s e mx api args -> "call "   <> maybe "" ((<> " = ") . getPKeyID) mx <> apiName api <> "(" <> intercalate ", " (showAttributes args) <> ")"
+
 -- | Instances
 instance Show (Edge api c) where
-  show = \case
-    Update  s e k  a        -> wrap $ header s e <> "update " <> getPKeyID k <> " = " <> show a
-    Forget  s e k           -> wrap $ header s e <> "forget " <> getPKeyID k
-    Assert  s e x  y        -> wrap $ header s e <> "assert " <> getPKeyID x <> " = " <> show y
-    APICall s e mx api args -> wrap $ header s e <> "call "   <> maybe "" ((<> " = ") . getPKeyID) mx <> apiName api <> "(" <> intercalate ", " (showAttributes args) <> ")"
+  show e = wrap $ header (startNode e) (endNode e) <> showEdgeLabel e
     where
       header s e = show s <> " -> " <> show e <> ": "
       wrap n     = "<" <> n <> ">"

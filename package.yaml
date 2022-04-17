@@ -51,6 +51,8 @@ dependencies:
 - hashable >= 1.4.0.2
 - unordered-containers >= 0.2.18.0
 - lens >= 5.1
+- fgl >= 5.7.0.3
+- graphviz >= 299.20.1.0
 - vector >= 0.12.3.1
 
 library:

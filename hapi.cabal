@@ -35,6 +35,7 @@ library
       Test.HAPI.AASTG.Core
       Test.HAPI.AASTG.Effect.Build
       Test.HAPI.AASTG.Effect.Trav
+      Test.HAPI.AASTG.GraphViz
       Test.HAPI.Api
       Test.HAPI.Args
       Test.HAPI.Common
@@ -73,7 +74,9 @@ library
     , containers >=0.4.0.0
     , data-fix >=0.3.2
     , dlist >=1.0
+    , fgl >=5.7.0.3
     , fused-effects >=1.1.1.1
+    , graphviz >=299.20.1.0
     , hashable >=1.4.0.2
     , haskell-src-meta >=0.8.7
     , lens >=5.1
@@ -112,7 +115,9 @@ executable hapi-exe
     , containers >=0.4.0.0
     , data-fix >=0.3.2
     , dlist >=1.0
+    , fgl >=5.7.0.3
     , fused-effects >=1.1.1.1
+    , graphviz >=299.20.1.0
     , hapi
     , hashable >=1.4.0.2
     , haskell-src-meta >=0.8.7
@@ -150,7 +155,9 @@ test-suite hapi-test
     , containers >=0.4.0.0
     , data-fix >=0.3.2
     , dlist >=1.0
+    , fgl >=5.7.0.3
     , fused-effects >=1.1.1.1
+    , graphviz >=299.20.1.0
     , hapi
     , hashable >=1.4.0.2
     , haskell-src-meta >=0.8.7

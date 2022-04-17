@@ -56,6 +56,7 @@ import Test.HAPI.AASTG.Analysis.Rename (normalizeNodes)
 import Test.HAPI.AASTG.Analysis.Nodes (unrelatedNodeMap)
 import Test.HAPI.Effect.Eff
 import Test.HAPI.AASTG.Effect.Build (runBuildAASTG, BuildAASTG, var, Building (Building), (%>), fork, vcall, currNode, val)
+import Test.HAPI.AASTG.GraphViz (prettyAASTG, aastg2GraphViz, previewAASTG)
 
 
 data ArithApiA :: ApiDefinition where
@@ -241,6 +242,10 @@ graph3 :: IO (AASTG ArithApiA Arbitrary)
 graph3 = runEnv @IO
        $ runBuildAASTG @ArithApiA @Arbitrary
        $ spec
+
+l = do
+  g <- graph3
+  previewAASTG g
 
 spec :: Eff (BuildAASTG ArithApiA Arbitrary) sig m => m ()
 spec = do
