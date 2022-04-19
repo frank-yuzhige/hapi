@@ -124,7 +124,7 @@ instance Hashable a => Hashable (Attribute a) where
     Value a      -> salt `hashWithSalt` "value" `hashWithSalt` a
     Anything     -> salt `hashWithSalt` "any"
     IntRange n i -> salt `hashWithSalt` "irange" `hashWithSalt` n `hashWithSalt` i
-    Range a a'   -> salt `hashWithSalt` a `hashWithSalt` a
+    Range a a'   -> salt `hashWithSalt` "range" `hashWithSalt` a `hashWithSalt` a
     Get pk       -> salt `hashWithSalt` "get" `hashWithSalt` pk
     AnyOf ats    -> salt `hashWithSalt` "anyof" `hashWithSalt` ats
 
