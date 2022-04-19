@@ -130,4 +130,4 @@ instance Hashable a => Hashable (Attribute a) where
 
 instance (All Fuzzable p) => Hashable (NP Attribute p) where
   hashWithSalt salt Nil       = salt `hashWithSalt` "Nil"
-  hashWithSalt salt (a :* as) = salt `hashWithSalt` a `hashWithSalt` as
+  hashWithSalt salt (a :* as) = salt `hashWithSalt` ":*" `hashWithSalt` a `hashWithSalt` as

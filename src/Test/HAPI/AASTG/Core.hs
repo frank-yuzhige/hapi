@@ -41,7 +41,7 @@ import qualified Data.HashMap.Strict as HM
 type NodeID = Int
 type EdgeID = Int
 
-data Edge api c where
+data Edge apis c where
   Update  :: forall a api c. (Fuzzable a, c a)
           => NodeID            -- From
           -> NodeID            -- To

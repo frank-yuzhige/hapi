@@ -22,7 +22,7 @@ import Test.HAPI.Args (Attribute (Value), Attributes)
 import Test.HAPI.PState (PKey(PKey))
 import Test.HAPI.Effect.Eff (Algebra(alg), type (:+:) (..), Alg, send, runEnv, Eff)
 import Test.HAPI.AASTG.Core (AASTG, Edge (Update, APICall), newAASTG, NodeID, IsValidCall)
-import Test.HAPI.Api (ApiName, ApiDefinition)
+import Test.HAPI.Api (ApiName, ApiDefinition, ApiMember (injApi))
 import Test.HAPI.Common (Fuzzable)
 import Control.Effect.Sum (Members, Member)
 import Control.Effect.State (State, modify)
@@ -103,22 +103,22 @@ var attr _ = do
   setNode @api @c e
   return x
 
-call :: forall api c sig m a p proxy. (Has (BuildAASTG api c) sig m, IsValidCall c api p, Fuzzable a)
-     => api p a -> Attributes p -> proxy api c -> m ()
+call ::  forall api apis c sig m a p proxy. (Has (BuildAASTG apis c) sig m, ApiMember api apis, IsValidCall c api p, Fuzzable a)
+     => api p a -> Attributes p -> proxy apis c -> m ()
 call f args _ = do
-  s <- currNode @api @c
-  e <- newNode @api @c
-  newEdge @api @c (APICall s e Nothing f args)
-  setNode @api @c e
+  s <- currNode @apis @c
+  e <- newNode @apis @c
+  newEdge @apis @c (APICall s e Nothing (injApi f) args)
+  setNode @apis @c e
 
-vcall :: forall api c sig m a p proxy. (Has (BuildAASTG api c) sig m, IsValidCall c api p, Fuzzable a)
-        => api p a -> Attributes p -> proxy api c -> m (PKey a)
+vcall :: forall api apis c sig m a p proxy. (Has (BuildAASTG apis c) sig m, ApiMember api apis, IsValidCall c api p, Fuzzable a)
+        => api p a -> Attributes p -> proxy apis c -> m (PKey a)
 vcall f args _ = do
-  x <- newVar @api @c
-  s <- currNode @api @c
-  e <- newNode @api @c
-  newEdge @api @c (APICall s e (Just x) f args)
-  setNode @api @c e
+  x <- newVar @apis @c
+  s <- currNode @apis @c
+  e <- newNode @apis @c
+  newEdge @apis @c (APICall s e (Just x) (injApi f) args)
+  setNode @apis @c e
   return x
 
 (<+>) :: forall api c sig m a b. (Has (BuildAASTG api c) sig m) => m () -> m () -> m ()

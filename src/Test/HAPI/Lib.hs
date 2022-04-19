@@ -17,7 +17,7 @@
 module Test.HAPI.Lib where
 
 import Control.Algebra ( Has, type (:+:), send, Algebra )
-import Test.HAPI.Api ( HaskellIOCall(..), HasHaskellDef(..), HasForeignDef (evalForeign), ApiDefinition, ApiTrace (ApiTrace), newVPtr, getPtr, ApiError )
+import Test.HAPI.Api ( HaskellIOCall(..), HasHaskellDef(..), HasForeignDef (evalForeign), ApiDefinition, ApiTrace (ApiTrace), newVPtr, getPtr, ApiError, type (:$$:) )
 import Test.HAPI.Effect.Api (runApi, runApiIO, runApiFFI, ApiFFIAC (ApiFFIAC), Api, mkCall)
 import Test.HAPI.Effect.Property (PropertyA, runProperty, shouldBe, PropertyError, PropertyAC (..), failed, shouldReturn)
 import Text.Read (readMaybe)
@@ -239,18 +239,18 @@ graph2 = newAASTG [
 x n = runEnv @IO $ coalesceAASTGs n (graph1 @Arbitrary) (graph2)
 y = unrelatedNodeMap (graph1 @Arbitrary)
 
-graph3 :: IO (AASTG ArithApiA Arbitrary)
+graph3 :: IO (AASTG (ArithApiA :$$: StackApiA) Arbitrary)
 graph3 = runEnv @IO
-       $ runBuildAASTG @ArithApiA @Arbitrary
+       $ runBuildAASTG @(ArithApiA :$$: StackApiA) @Arbitrary
        $ spec
 
 l = do
-  g <- graph3
+  g <- graph3 -- return $ graph2 @Arbitrary
   previewAASTG g
 
-spec :: Eff (BuildAASTG ArithApiA Arbitrary) sig m => m ()
+spec :: Eff (BuildAASTG (ArithApiA :$$: StackApiA) Arbitrary) sig m => m ()
 spec = do
-  let p = Building @ArithApiA @Arbitrary
+  let p = Building @(ArithApiA :$$: StackApiA) @Arbitrary
   a <- p %> val 10
   b <- p %> var Anything
   p `fork` do

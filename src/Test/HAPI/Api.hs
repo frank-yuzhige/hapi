@@ -17,6 +17,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Test.HAPI.Api where
 import Control.Algebra (Has, alg, send, Algebra, (:+:) (L, R), Handler)
@@ -103,7 +104,79 @@ apiEqProofs a b = do
   let fg = outer (outer proof)
   return (fg, pq, ab)
 
--- | [DEBUG] Given API spec can be debugged (using Haskell IO to mock input/output)
+
+data (f :$$: g) (p :: [Type]) a
+  = ApiL (f p a)
+  | ApiR (g p a)
+  deriving (Eq)
+
+infixr 4 :$$:
+
+class (ApiName sup) => ApiMember (sub :: ApiDefinition) sup where
+  injApi :: sub p a -> sup p a
+
+instance (ApiName t) => ApiMember t t where
+  injApi = id
+  {-# INLINE injApi #-}
+
+-- | Left-recursion: if @t@ is a ApiMember of @l1 ':$$:' l2 ':$$:' r@, then we can inject it into @(l1 ':$$:' l2) ':$$:' r@ by injection into a right-recursive signature, followed by left-association.
+instance {-# OVERLAPPABLE #-}
+         ( ApiMember t (l1 :$$: l2 :$$: r)
+         , ApiName t
+         , ApiName l1
+         , ApiName l2
+         , ApiName r
+         )
+      => ApiMember t ((l1 :$$: l2) :$$: r) where
+  injApi = reassociateSumL . injApi
+  {-# INLINE injApi #-}
+
+
+-- | Left-occurrence: if @t@ is at the head of a signature, we can inject it in O(1).
+instance {-# OVERLAPPABLE #-}
+         ( ApiName l
+         , ApiName r)
+        => ApiMember l (l :$$: r) where
+  injApi = ApiL
+  {-# INLINE injApi #-}
+
+
+-- | Right-recursion: if @t@ is a ApiMember of @r@, we can inject it into @r@ in O(n), followed by lifting that into @l ':$$:' r@ in O(1).
+instance {-# OVERLAPPABLE #-}
+         ( ApiMember l r
+         , ApiName l
+         , ApiName l'
+         , ApiName r)
+      => ApiMember l (l' :$$: r) where
+  injApi = ApiR . injApi
+  {-# INLINE injApi #-}
+
+
+-- | Reassociate a right-nested sum leftwards.
+reassociateSumL :: (l1 :$$: l2 :$$: r) m a -> ((l1 :$$: l2) :$$: r) m a
+reassociateSumL = \case
+  ApiL l        -> ApiL (ApiL l)
+  ApiR (ApiL l) -> ApiL (ApiR l)
+  ApiR (ApiR r) -> ApiR r
+{-# INLINE reassociateSumL #-}
+
+instance (ApiName f, ApiName g) => ApiName (f :$$: g) where
+  apiName (ApiL f) = apiName f
+  apiName (ApiR g) = apiName g
+
+instance (HasHaskellDef f, HasHaskellDef g) => HasHaskellDef (f :$$: g) where
+  evalHaskell (ApiL f) args = evalHaskell f args
+  evalHaskell (ApiR g) args = evalHaskell g args
+
+instance (HasForeignDef f, HasForeignDef g) => HasForeignDef (f :$$: g) where
+  evalForeign (ApiL f) args = evalForeign f args
+  evalForeign (ApiR g) args = evalForeign g args
+
+type family ApiMembers sub sup :: Constraint where
+  ApiMembers (f :$$: g) u = (ApiMembers f u, ApiMembers g u)
+  ApiMembers t          u = ApiMember t u
+
+
 class (ApiName api) => HaskellIOCall (api :: ApiDefinition) where
   readOut  :: api p a -> String -> Maybe a
 
