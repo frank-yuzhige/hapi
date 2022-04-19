@@ -19,6 +19,7 @@ import Data.Functor (($>))
 import Control.Carrier.Error.Church( Catch, ErrorC, throwError )
 import Control.Effect.Error (Error)
 import Test.QuickCheck (Arbitrary)
+import Test.HAPI.Common (Fuzzable)
 
 type PropertyType = (* -> *) -> * -> *
 
@@ -31,13 +32,13 @@ instance Show PropertyError where
   show FailedError         = "Error: Expect the property not to reach this point"
 
 data PropertyA (m :: * -> *) a where
-  ShouldBeA :: (Eq a, Show a) => a -> a -> PropertyA m ()
+  ShouldBeA :: (Fuzzable a) => a -> a -> PropertyA m ()
   FailedA   :: PropertyA m ()
 
-shouldBe :: (Eq a, Show a, Has PropertyA sig m) => a -> a -> m ()
+shouldBe :: (Fuzzable a, Has PropertyA sig m) => a -> a -> m ()
 shouldBe a b = send $ ShouldBeA a b
 
-shouldReturn :: (Eq a, Show a, Has PropertyA sig m) => m a -> a -> m ()
+shouldReturn :: (Fuzzable a, Has PropertyA sig m) => m a -> a -> m ()
 shouldReturn m a = m >>= (`shouldBe` a)
 
 failed :: (Has PropertyA sig m) => m ()

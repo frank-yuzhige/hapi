@@ -46,7 +46,7 @@ import Test.HAPI.VPtr (VPtr, VPtrTable, storePtr, ptr2VPtr, vPtr2Ptr)
 import Test.HAPI.Effect.FF (ff, runFFAC)
 import Control.Monad.Trans.Class (lift)
 import Control.Carrier.Fresh.Strict (runFresh)
-import Test.HAPI.AASTG.Core (AASTG (AASTG), Edge (Update, APICall), synthStub, newAASTG)
+import Test.HAPI.AASTG.Core (AASTG (AASTG), Edge (Update, APICall), newAASTG)
 import Control.Effect.Sum (Members)
 import Test.HAPI.AASTG.Analysis.TypeCheck (typeCheck, typeCheckEither)
 import Test.HAPI.AASTG.Analysis.PathExtra (getPathMap)
@@ -57,6 +57,7 @@ import Test.HAPI.AASTG.Analysis.Nodes (unrelatedNodeMap)
 import Test.HAPI.Effect.Eff
 import Test.HAPI.AASTG.Effect.Build (runBuildAASTG, BuildAASTG, var, Building (Building), (%>), fork, vcall, currNode, val)
 import Test.HAPI.AASTG.GraphViz (prettyAASTG, aastg2GraphViz, previewAASTG)
+import Test.HAPI.AASTG.Synth (synthStub)
 
 
 data ArithApiA :: ApiDefinition where

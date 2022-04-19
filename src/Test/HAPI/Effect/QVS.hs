@@ -40,7 +40,8 @@ import Data.SOP ( Proxy(Proxy), NP(..), All, hcmap )
 import Test.HAPI.Args (Args, pattern (::*), Attribute (Value, Anything, IntRange, Range, Get, AnyOf), validate)
 import Data.SOP.Dict (mapAll, Dict (Dict))
 import Data.Serialize (Serialize)
-import Test.HAPI.Effect.Orchestration (Orchestration, readFromOrchestration)
+import Test.HAPI.Effect.Orchestration (Orchestration, nextInstruction)
+import Test.HAPI.Effect.Orchestration.Labels (QVSSupply)
 import Data.Type.Equality (castWith, TestEquality (testEquality), apply)
 import Type.Reflection ( TypeRep, typeOf, Typeable )
 
@@ -108,9 +109,9 @@ instance (Algebra sig m, MonadIO m) => Algebra (QVS Read :+: sig) (QVSFromStdinA
 newtype QVSFromOrchestrationAC m a = QVSFromOrchestrationAC { runQVSFromOrchestrationAC :: m a }
   deriving (Functor, Applicative, Monad, MonadFail)
 
-instance (Algebra sig m, Member Orchestration sig) => Algebra (QVS Fuzzable :+: sig) (QVSFromOrchestrationAC m) where
+instance (Has (Orchestration QVSSupply) sig m) => Algebra (QVS Fuzzable :+: sig) (QVSFromOrchestrationAC m) where
   alg hdl sig ctx = QVSFromOrchestrationAC $ case sig of
     L (QVS (attr :: Attribute a)) -> do
-      x <- readFromOrchestration @a
+      x <- nextInstruction @QVSSupply @a
       return (ctx $> x)
     R other -> alg (runQVSFromOrchestrationAC . hdl) other ctx

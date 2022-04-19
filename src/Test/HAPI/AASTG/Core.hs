@@ -16,22 +16,15 @@
 
 module Test.HAPI.AASTG.Core where
 import Test.HAPI.Effect.QVS (QVS (QVS), attributes2QVSs, qvs2m)
-import GHC.TypeNats (Nat)
-import Data.Kind (Type)
-import Data.HList (HList (HCons, HNil), hMap, typeRep)
 import Test.HAPI.Api (ApiDefinition, ApiName (apiName), apiEq)
-import Test.HAPI.Effect.Api(Api, mkCall)
-import Control.Effect.Sum (Member, Members)
-import Control.Algebra (Has, Algebra, type (:+:), send)
 import Test.HAPI.Args (Args, showArgs, Attribute (Get), attributesEq, repEq, showAttributes)
 import Test.HAPI.PState (PKey (PKey, getPKeyID), PState (PState), PStateSupports (record, forget))
 import Test.HAPI.Common (Fuzzable)
-import Control.Effect.State (State, modify)
 import Data.SOP (All, NP)
+import Data.Kind (Type)
+import Data.HList (HList (HCons, HNil), hMap, typeRep)
 import Data.List (groupBy, intercalate)
 import Data.Function (on)
-import Control.Effect.Error (throwError, Error)
-import Test.HAPI.Effect.Property (shouldBe, PropertyA)
 import Data.Maybe (fromMaybe)
 import Data.Serialize (Serialize)
 import Type.Reflection (Typeable)
@@ -121,33 +114,6 @@ edgesFrom2EdgesTo = groupEdgesOn startNode . concat . HM.elems
 
 edgesTo2EdgesFrom :: HashMap NodeID [Edge sig c] -> HashMap NodeID [Edge sig c]
 edgesTo2EdgesFrom = groupEdgesOn endNode . concat . HM.elems
-
--- | Synthesize fuzzer stubs
-synthStub :: forall api sig c m. (Has (Api api :+: QVS c :+: State PState :+: PropertyA) sig m) => AASTG api c -> [m ()]
-synthStub (AASTG start edges _) = synth start
-  where
-    synth i = case edges HM.!? i of
-      Nothing -> [return ()]
-      Just es -> concat [(synthOneStep edge >>) <$> synth (endNode edge) | edge <- es]
-    synthOneStep :: Edge api c -> m ()
-    synthOneStep (Update s e k a) = do
-      v <- send (QVS @c a)
-      modify @PState (record k v)
-    synthOneStep (Forget s e k) = do
-      modify @PState (forget k)
-    synthOneStep (Assert s e x y) = do
-      x' <- send (QVS @c (Get x))
-      y' <- send (QVS @c (Get y))
-      x' `shouldBe` y'
-    synthOneStep (APICall s e mx api args) = do
-      -- 1. Resolve Attributes (Into QVS)
-      args <- qvs2m @c (attributes2QVSs args)
-      -- 2. Make APICall using qvs
-      r <- mkCall api args
-      -- 3. Store return value in state
-      case mx of
-        Nothing -> return ()
-        Just k  -> modify @PState (record k r)
 
 showEdgeLabel :: Edge api c -> String
 showEdgeLabel = \case

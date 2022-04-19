@@ -12,41 +12,59 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Test.HAPI.Effect.Orchestration where
-import Data.Kind (Type)
+import Data.Kind (Type, Constraint)
 import Test.HAPI.Common (Fuzzable)
 import Control.Algebra
   ( Algebra(alg), type (:+:)(L, R), send, Has )
 import Data.ByteString (ByteString)
-import Control.Carrier.State.Strict (StateC, get, put)
 import qualified Data.Serialize as S
 import Data.Functor (($>))
 import Control.Effect.Error (Error, throwError)
 import Control.Effect.Sum (Members)
+import Control.Effect.Labelled (HasLabelled, sendLabelled, runLabelled)
+import Control.Effect.State (State (Get, Put))
+import Data.Serialize (Serialize)
+import Control.Carrier.Error.Church (runError)
+import Control.Carrier.State.Church (runState)
 
-data Orchestration (m :: Type -> Type) a where
-  ReadFromOrchestration :: (Fuzzable a) => Orchestration m a
+data Orchestration label (m :: Type -> Type) a where
+  NextInstruction :: (Serialize a) => Orchestration label m a
 
-readFromOrchestration :: forall a sig m. (Has Orchestration sig m, Fuzzable a) => m a
-readFromOrchestration = send ReadFromOrchestration
+nextInstruction :: forall label a c sig m. (Has (Orchestration label) sig m, Serialize a) => m a
+nextInstruction = send (NextInstruction @a @label)
 
 newtype OrchestrationError = CerealError String
 
 instance Show OrchestrationError where
   show (CerealError err) = "Cereal Error: " <> err
 
-newtype OrchestrationViaBytesAC m a = OrchestrationViaBytesAC { runOrchestrationViaBytesAC :: StateC ByteString m a }
+newtype OrchestrationViaBytesAC label m a = OrchestrationViaBytesAC { runOrchestrationViaBytesAC :: m a }
   deriving (Functor, Applicative, Monad)
 
-instance (Algebra sig m, Members (Error OrchestrationError) sig) => Algebra (Orchestration :+: sig) (OrchestrationViaBytesAC m) where
+runOrchestrationViaBytes :: forall label a sig m. Algebra sig m
+                         => (OrchestrationError -> m a)
+                         -> ByteString
+                         -> (forall sig m. Has (Orchestration label) sig m => m a)
+                         -> m a
+runOrchestrationViaBytes err bs =
+    runError @OrchestrationError err return
+  . runState @ByteString (\_ a -> return a) bs
+  . runLabelled @label
+  . runOrchestrationViaBytesAC @label
+
+instance ( Has (Error OrchestrationError) sig m
+         , HasLabelled label (State ByteString) sig m)
+         => Algebra (Orchestration label :+: sig) (OrchestrationViaBytesAC label m) where
   alg hdl sig ctx = OrchestrationViaBytesAC $ case sig of
-    L (ReadFromOrchestration :: Orchestration n a) -> do
-      bs <- get @ByteString
+    L (NextInstruction :: Orchestration label n a) -> do
+      bs <- sendLabelled @label $ Get @ByteString
       case S.runGetState (S.get @a) bs 0 of
         Left err -> throwError @OrchestrationError $ CerealError err
         Right (a, bs') -> do
-          put @ByteString bs'
+          sendLabelled @label $ Put @ByteString bs'
           return (ctx $> a)
-    R other    -> alg (runOrchestrationViaBytesAC . hdl) (R other) ctx
+    R other    -> alg (runOrchestrationViaBytesAC . hdl) other ctx

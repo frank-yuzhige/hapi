@@ -25,4 +25,3 @@ instance (Typeable t, Show t, Eq t, Serialize t, Hashable t) => Fuzzable t
 -- instance (Fuzzable a) => Fuzzable (VPtr a)
 
 -- type AllFuzzable p = (All Fuzzable p, All Compos)
-
