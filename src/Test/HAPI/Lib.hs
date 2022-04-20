@@ -32,7 +32,7 @@ import Control.Effect.Labelled (Labelled(Labelled))
 import Foreign.C (peekCString)
 import Test.HAPI.Effect.QVS (QVS (QVS), QVSFuzzArbitraryAC (runQVSFuzzArbitraryAC), QVSFromStdinAC (runQVSFromStdinAC))
 import Test.QuickCheck.Random (QCGen(QCGen))
-import Data.Data (Proxy (Proxy))
+import Data.Data (Proxy (Proxy), Data)
 import Foreign (Ptr)
 import Data.SOP (NP (Nil, (:*)), All)
 import Test.HAPI.DataType (BasicSpec, WFTypeSpec, type (:&:))
@@ -51,7 +51,7 @@ import Control.Effect.Sum (Members)
 import Test.HAPI.AASTG.Analysis.TypeCheck (typeCheck, typeCheckEither)
 import Test.HAPI.AASTG.Analysis.PathExtra (getPathMap)
 import Test.HAPI.AASTG.Analysis.Path (outPaths)
-import Test.HAPI.AASTG.Analysis.Coalesce (coalesceAASTGs, directCoalesceState)
+import Test.HAPI.AASTG.Analysis.Coalesce (coalesceAASTGs, directCoalesceState, coalesceAASTG)
 import Test.HAPI.AASTG.Analysis.Rename (normalizeNodes)
 import Test.HAPI.AASTG.Analysis.Nodes (unrelatedNodeMap)
 import Test.HAPI.Effect.Eff
@@ -236,16 +236,25 @@ graph2 = newAASTG [
   , APICall @Int 4 5 (Just "b") AddA (Get "a" :* Get "a"  :* Nil)
   ]
 
-x n = runEnv @IO $ coalesceAASTGs n (graph1 @Arbitrary) (graph2)
+x n = runEnv $ coalesceAASTG n (graph1 @Arbitrary) (graph2)
 y = unrelatedNodeMap (graph1 @Arbitrary)
 
-graph3 :: IO (AASTG (ArithApiA :$$: StackApiA) Arbitrary)
-graph3 = runEnv @IO
-       $ runBuildAASTG @(ArithApiA :$$: StackApiA) @Arbitrary
-       $ spec
+graph3 :: (AASTG (ArithApiA :$$: StackApiA) Arbitrary)
+graph3 = runEnv
+       $ runBuildAASTG
+       $ do
+          let p = Building @(ArithApiA :$$: StackApiA) @Arbitrary
+          a <- p %> val 10
+          b <- p %> var Anything
+          fork p $ do
+            c <- p %> vcall AddA (Get a :* Get b :* Nil);
+                p %> vcall SubA (Get c :* Get a :* Nil);
+          c <- p %> vcall SubA (Get a :* Get b :* Nil);
+              p %> vcall AddA (Get c :* Get a :* Nil);
+          return ()
 
 l = do
-  g <- graph3 -- return $ graph2 @Arbitrary
+  g <- return graph3 -- return $ graph2 @Arbitrary
   previewAASTG g
 
 spec :: Eff (BuildAASTG (ArithApiA :$$: StackApiA) Arbitrary) sig m => m ()
@@ -260,7 +269,7 @@ spec = do
        p %> vcall AddA (Get c :* Get a :* Nil);
   return ()
 
-n = runEnv @IO $ typeCheckEither (graph1 @Arbitrary)
+n = runEnv $ typeCheckEither (graph1 @Arbitrary)
 -- y = directCoalesceState 0 7 (graph1 @Arbitrary) (graph2)
 
 runGraph1 :: forall m sig. (MonadIO m, MonadFail m, Algebra sig m) => m ()

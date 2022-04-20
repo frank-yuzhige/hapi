@@ -35,5 +35,5 @@ renameNodesViaOffset :: Int -> AASTG api c -> AASTG api c
 renameNodesViaOffset offset aastg = renameNodes (IM.fromList [(n, n + offset) | n <- allNodes aastg]) aastg
 
 normalizeNodes :: Int -> AASTG api c -> AASTG api c
-normalizeNodes offset aastg = renameNodes (IM.fromAscList (allNodes aastg `zip` [offset..])) aastg
+normalizeNodes offset aastg = renameNodes (IM.fromList (allNodes aastg `zip` [offset..])) aastg
 

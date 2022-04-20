@@ -25,6 +25,7 @@ source-repository head
 
 library
   exposed-modules:
+      HAPIExample.SimpleArith
       Test.HAPI.AASTG.Analysis.Coalesce
       Test.HAPI.AASTG.Analysis.Dependence
       Test.HAPI.AASTG.Analysis.Nodes
@@ -54,6 +55,7 @@ library
       Test.HAPI.Lib
       Test.HAPI.PState
       Test.HAPI.Serialize
+      Test.HAPI.Util.Empty
       Test.HAPI.Util.SOP
       Test.HAPI.Util.TypeRepMap
       Test.HAPI.VPtr

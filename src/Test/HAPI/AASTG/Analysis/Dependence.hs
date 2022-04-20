@@ -36,10 +36,15 @@ import Test.HAPI.Common (Fuzzable)
 import Data.Maybe (fromJust, isJust, fromMaybe)
 import Data.Function (on)
 import Data.List (intercalate)
-import Control.Applicative (Const(getConst, Const))
+import Control.Applicative (Const(getConst, Const), Applicative (liftA2))
 import Control.Effect.Labelled (Labelled, runLabelled, sendLabelled, HasLabelled)
 import Control.Effect.Fresh (Fresh (Fresh), fresh)
 import Control.Carrier.Fresh.Church (runFresh)
+import Data.Hashable (Hashable (hashWithSalt, hash))
+import Test.HAPI.Effect.Eff (Eff, debug)
+import Control.Effect.Empty (Empty, empty)
+import Test.HAPI.Util.Empty (liftMaybe)
+import Text.Printf (printf)
 
 type DependenceMap' dep = IntMap (NodeDependence' dep)
 
@@ -92,27 +97,6 @@ unaliasVar dep x = case lookupPKey x dep of
   Just other             -> Just (x, other)
   Nothing                -> Nothing
 
--- depEq :: (Fuzzable p) => NodeDependence -> Dep p -> Dep p -> Bool
--- depEq dep a b = case (a, b) of
---   (DepAttr a', DepAttr b') -> case (a', b') of
---     (Get x, Get y) ->              -- When both are indirects
---       case unaliasVar dep <$> [x, y] of
---         [Just (x', dx), Just (y', dy)] -> x' == y' && depEq dep a b
---         _ -> False
---     (Value m, Value n) -> m == n   -- Special case
---     _                  -> False    -- Any other cases are not equal (e.g. Anything != Anything)
---   (DepCall f fa, DepCall g ga) ->
---     f `apiEq` g && allDepEq dep fa ga
---   _                    -> False
---   where
---     allDepEq :: forall p1 p2. (All Fuzzable p1, All Fuzzable p2)
---             => NodeDependence -> NP Attribute p1 -> NP Attribute p2 -> Bool
---     allDepEq dep Nil Nil = True
---     allDepEq dep (a :* as) (b :* bs) = case testEquality (typeOf a) (typeOf b) of
---       Nothing    -> False
---       Just proof -> depEq dep (DepAttr (castWith proof a)) (DepAttr b) && allDepEq dep as bs
---     allDepEq _ _ _ = False
-
 -- | Given 2 difference NodeDependence and 2 attribute lists, attempt to find a unification (i.e. Variable substitution scheme)
 -- that makes all corresponding attributes in each list `effectively the same`.
 getUnificationFromArgs :: forall p. (All Fuzzable p)
@@ -152,28 +136,32 @@ unifyVarSubstitution vs1 vs2 = TM.hoistA unliftSE merge
 -- | Check if the a degraded dependencies is a subset of the other.
 -- Relevant variable substitution must be applied first before calling this function.
 -- Returns the String representation of the
-isSubNodeDependence :: NodeDependence' DegradedDep -> NodeDependence' DegradedDep -> Maybe String
-isSubNodeDependence d1 d2 = D.toList <$> TM.fold collect (<>) (Just D.empty) (TM.hoist (Const . checkEachType) d1)
+isSubNodeDependence :: forall sig m. (Eff Empty sig m) => NodeDependence' DegradedDep -> NodeDependence' DegradedDep -> m String
+isSubNodeDependence d1 d2 = D.toList <$> TM.fold collect (liftA2 (<>)) (return D.empty) (TM.hoist (Const . checkEachDEntry) d1)
   where
-    collect :: forall t. Const (Maybe (M.HashMap String String)) t -> Maybe (D.DList Char)
+    collect :: forall t. Const (m (M.HashMap String String)) t -> m (D.DList Char)
     collect (Const m) = D.fromList . show <$> m
 
     -- | Check each DEntry in @d1@, whether we can find an subset in @d2@ that is isomorphic a la group.
-    checkEachType :: forall t. DEntry' DegradedDep t -> Maybe (M.HashMap String String)
-    checkEachType (DE de1) = unifyGroup (M.toList g1) M.empty
+    -- de1: DEntry in d1, de2: DEntry in d2
+    checkEachDEntry :: forall t. DEntry' DegradedDep t -> m (M.HashMap String String)
+    checkEachDEntry (DE de1) = M.map show . M.mapKeys show <$> unifyGroup (M.toList g1) M.empty
       where
         g1 = groupify (DE de1)
         g2 = groupify $ fromMaybe (DE M.empty) $ TM.lookup @t d2
-        groupify (DE de) = M.mapWithKey (\k _ -> show $ unaliasVar' de k) de  -- @show@ is needed since we need the pair to be Ord (to serve as key)
+        groupify (DE de) = M.mapWithKey (\k _ -> unaliasVar' de k) de
 
         -- | Given all keys and its relevant group ID in @g1@, find the possible group unification between @g1@ and @g2@
-        unifyGroup []              ctx = Just ctx
+        unifyGroup []              ctx = return ctx
         unifyGroup ((k, dk1) : ks) ctx = do
-          dk2 <- g2 M.!? k
-          case ctx M.!? dk1 of
-            Nothing                 -> unifyGroup ks (M.insert dk1 dk2 ctx)
-            Just dk2' | dk2 == dk2' -> unifyGroup ks ctx
-                      | otherwise   -> Nothing
+          dk2 <- liftMaybe $ g2 M.!? k
+          debug $ printf "Test.HAPI.AASTG.Analysis.Dependence.isSubNodeDependence.checkEachDEntry: Checking %s" (show (k, dk1, dk2))
+          if dk1 /= dk2 then empty
+                        else
+            case ctx M.!? dk1 of
+              Nothing                 -> unifyGroup ks (M.insert dk1 dk2 ctx)
+              Just dk2' | dk2 == dk2' -> unifyGroup ks ctx
+                        | otherwise   -> empty
 
         -- | Unalias variable, but in degraded map
         unaliasVar' de x = case de M.!? x of
@@ -289,6 +277,10 @@ pathDegradedDeps p = run
   . runTrav @api @c pathDegradedDepCollector
   $ travPath p
 
+
+showDegDep :: NodeDependence' DegradedDep -> String
+showDegDep = intercalate ", " . TM.degrade (\(DE de) -> show de)
+
 -- Instances
 instance (Show t) => Show (Dep t) where
   show (DepAttr at)     = "DepAttr(" <> show at  <> ")"
@@ -302,6 +294,15 @@ instance (Eq t, Typeable t) => Eq (Dep t) where
   _ == _ = False
 
 deriving instance Eq t => Eq (DegradedDep t)
+
+instance Hashable t => Hashable (DegradedDep t) where
+  -- DegradedDep will be used as a key, make it hashable.
+  hashWithSalt salt (DepAttr' at) = salt
+    `hashWithSalt` "a"
+    `hashWithSalt` at
+  hashWithSalt salt (DepCall' n) = salt
+    `hashWithSalt` "c"
+    `hashWithSalt` n
 
 deriving instance Show t => Show (DegradedDep t)
 

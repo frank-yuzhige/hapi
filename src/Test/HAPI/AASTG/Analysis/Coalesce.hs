@@ -1,4 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Test.HAPI.AASTG.Analysis.Coalesce where
 
@@ -16,12 +18,28 @@ import qualified Data.HashMap.Strict as HM
 import Data.Containers.ListUtils (nubIntOn)
 import Data.Hashable (Hashable(hash))
 import Test.HAPI.AASTG.Analysis.Nodes (unrelatedNodeMap)
-import Test.HAPI.Effect.Eff (Alg)
-
+import Test.HAPI.Effect.Eff (Alg, debug, run)
+import Text.Printf (printf)
+import Test.HAPI.AASTG.GraphViz (prettyAASTG)
+import Control.Carrier.Empty.Church (runEmpty)
+import Control.Monad (foldM)
 
 -- TODO: Optimize me!!!!
-coalesceAASTGs :: Alg sig m => Int -> AASTG api c -> AASTG api c -> m ([(NodeID, NodeID)], AASTG api c)
-coalesceAASTGs n a1 a2 = autoCoalesce n (coalescePreprocess a1 a2)
+-- | Coalesce 2 AASTGs
+coalesceAASTG :: Alg sig m => Int -> AASTG api c -> AASTG api c -> m ([(NodeID, NodeID)], AASTG api c)
+coalesceAASTG n a1 a2 = do
+  let p = coalescePreprocess a1 a2
+  debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceAASTG: After preprocess: \n%s" (prettyAASTG p)
+  autoCoalesce n p
+
+coalesceAASTGs ::  Alg sig m => Int -> [AASTG api c] -> m (AASTG api c)
+coalesceAASTGs n = \case
+  []     -> error "Empty list of AASTGs to coalesce"
+  [a]    -> return a
+  a : as -> do
+    x <- coalesceAASTGs n as
+    (_, r) <- coalesceAASTG n a x
+    return r
 
 directCoalesceState :: NodeID -> NodeID -> AASTG api c -> AASTG api c
 directCoalesceState er ee aastg@(AASTG s fs bs) = AASTG 0 fs' bs'
@@ -36,8 +54,8 @@ directCoalesceState er ee aastg@(AASTG s fs bs) = AASTG 0 fs' bs'
 coalescePreprocess :: AASTG api c -> AASTG api c -> AASTG api c
 coalescePreprocess a1 a2 = directCoalesceState 0 (lb + 1) combine
   where
-    lb      = maxNodeID a1'
     a1'     = normalizeNodes 0        a1
+    lb      = maxNodeID a1'
     a2'     = normalizeNodes (lb + 1) a2
     combine = AASTG 0 (getEdgesFrom a1' <> getEdgesFrom a2') (getEdgesTo a1' <> getEdgesTo a2')
 
@@ -48,6 +66,7 @@ autoCoalesce :: Alg sig m
 autoCoalesce 0       aastg = return ([], aastg)
 autoCoalesce maxStep aastg = do
   (record, aastg') <- coalesceOneStep aastg
+  debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.autoCoalesce: coalesce %s" (show record)
   case record of
     Nothing -> return ([], aastg')
     Just p  -> do
@@ -58,15 +77,17 @@ autoCoalesce maxStep aastg = do
 coalesceOneStep :: Alg sig m
                 => AASTG api c
                 -> m (Maybe (NodeID, NodeID), AASTG api c)
-coalesceOneStep aastg = case listToMaybe [(r', b, r) | b <- allNodes aastg
-                                                     , r <- candidateMap HM.! b
-                                                     , let b' = b ~<=~ r
-                                                     , let r' = r ~<=~ b
-                                                     , b' || r'] of
-  Nothing                         -> return (Nothing, aastg)
-  Just (rIsSub, b, r) | rIsSub    -> return (Just (b, r), directCoalesceState b r aastg)
-                      | otherwise -> return (Just (r, b), directCoalesceState r b aastg)
+coalesceOneStep aastg = go [(b, r) | b <- allNodes aastg, r <- candidateMap HM.! b]
   where
+    go []           = return (Nothing, aastg)
+    go ((b, r): xs) = do
+      r' <- r ~<=~ b
+      if r' then return (Just (b, r), directCoalesceState b r aastg)
+            else do
+        b' <- b ~<=~ r
+        if b' then return (Just (r, b), directCoalesceState r b aastg)
+              else go xs
+
     candidateMap   = unrelatedNodeMap aastg
     pathMap        = getPathMap aastg
     paths          = concat $ HM.elems pathMap
@@ -75,16 +96,18 @@ coalesceOneStep aastg = case listToMaybe [(r', b, r) | b <- allNodes aastg
     calls          = HM.fromList [(path, pathCalls        path) | path <- paths]
     (~<=~)         = upperSubNode pathMap (deps HM.!) (degs HM.!) (calls HM.!)
 
-upperSubNode :: NodePathMap api c                  -- All paths went through each node
+upperSubNode :: Alg sig m
+             => NodePathMap api c                  -- All paths went through each node
              -> (APath api c -> DependenceMap)     -- DependenceMap getter
              -> (APath api c -> DegradedDepMap)    -- DegradedDependenceMap getter
              -> (APath api c -> [Edge api c])      -- api call sequence getter
              -> NodeID
              -> NodeID
-             -> Bool
-upperSubNode ctx deps degs calls n1 n2 = and [or [isJust $ p1 ~<=~ p2 | p2 <- getPaths n2] | p1 <- getPaths n1]
+             -> m Bool
+upperSubNode ctx deps degs calls n1 n2
+  = and <$> sequence [or <$> sequence [p1 ~<=~ p2 | p2 <- getPaths n2] | p1 <- getPaths n1]
   where
-    (~<=~) = effectiveSubpath deps degs calls
+    a ~<=~ b = runEmpty (return False) (\_ -> return True) (effectiveSubpath deps degs calls a b)
     getPaths n = HM.lookupDefault [] n ctx
 
 

@@ -16,39 +16,50 @@
 module Test.HAPI.Effect.Eff (
     module Control.Algebra
   , EnvA (..)
-  , EnvAC (..)
+  , EnvIOAC (..)
   , EnvCtx
   , Alg
   , Eff
   , envCtx
   , debug
   , runEnv
+  , runEnvIO
 ) where
 import Data.Kind (Type)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Functor (($>))
 import System.IO (hPutStrLn, stderr)
 import Text.Printf (printf)
-
 import Control.Algebra hiding (Has)
 import qualified Control.Algebra as A
+import Data.Functor.Identity (Identity (runIdentity, Identity))
 
 
 type EnvCtx = ()
 
 data EnvA (m :: Type -> Type) a where
-  EnvCtx ::           EnvA m EnvCtx
-  Debug  :: String -> EnvA m ()
+  EnvCtx     ::           EnvA m EnvCtx
+  Debug      :: String -> EnvA m ()
 
-newtype EnvAC m a = EnvAC { runEnvAC :: m a }
+newtype EnvIOAC m a = EnvIOAC { runEnvIOAC :: m a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadFail)
 
-instance (Algebra sig m, MonadIO m) => Algebra (EnvA :+: sig) (EnvAC m) where
-  alg hdl sig ctx = EnvAC $ case sig of
+instance (Algebra sig m, MonadIO m) => Algebra (EnvA :+: sig) (EnvIOAC m) where
+  alg hdl sig ctx = EnvIOAC $ case sig of
     L EnvCtx      -> return $ ctx $> ()
     L (Debug msg) -> do
       liftIO $ hPutStrLn stderr (printf "[DEBUG]: %s" msg)
       return $ ctx $> ()
+    R other       -> alg (runEnvIOAC . hdl) other ctx
+
+
+newtype EnvAC (m :: Type -> Type) a = EnvAC { runEnvAC :: m a }
+  deriving (Functor, Applicative, Monad)
+
+instance (Algebra sig m) => Algebra (EnvA :+: sig) (EnvAC m) where
+  alg hdl sig ctx = EnvAC $ case sig of
+    L EnvCtx      -> return $ ctx $> ()
+    L (Debug msg) -> return $ ctx $> ()
     R other       -> alg (runEnvAC . hdl) other ctx
 
 -- Mixin
@@ -69,5 +80,8 @@ debug = send . Debug
 
 -- runner
 
-runEnv :: MonadIO m => EnvAC m a -> m a
-runEnv = runEnvAC
+runEnvIO :: MonadIO m => EnvIOAC m a -> m a
+runEnvIO = runEnvIOAC
+
+runEnv :: EnvAC Identity a -> a
+runEnv = run . runEnvAC

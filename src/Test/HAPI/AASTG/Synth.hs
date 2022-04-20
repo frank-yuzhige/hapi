@@ -61,6 +61,10 @@ encodeEntropy e = runPut $ mapM_ put e
 lookupEdgeFromEntropy :: NodeID -> AASTG api c -> EntropyWord -> Maybe (Edge api c)
 lookupEdgeFromEntropy n aastg e = edgesFrom n aastg ^? element e
 
+data EntropyStubResult = EntropyStubResult {
+
+}
+
 synthEntropyStub :: forall api sig c m.
                   ( Has (Fuzzer api c) sig m
                   , Has (Orchestration EntropySupply) sig m)

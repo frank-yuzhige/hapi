@@ -4,12 +4,13 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Test.HAPI.AASTG.Analysis.PathExtra where
 
 import Test.HAPI.Api (apiEqProofs)
 import Test.HAPI.AASTG.Analysis.Path (pathCalls, pathEndNode, Path, APathView (APathView), outPaths, APath (APath), slice)
-import Test.HAPI.AASTG.Analysis.Dependence (pathDeps, lookupNode, VarSubstitution, getUnificationFromArgs, unifyVarSubstitution, applyVarSubstitution, pathDegradedDeps, isSubNodeDependence, DependenceMap, DegradedDepMap)
+import Test.HAPI.AASTG.Analysis.Dependence (pathDeps, lookupNode, VarSubstitution, getUnificationFromArgs, unifyVarSubstitution, applyVarSubstitution, pathDegradedDeps, isSubNodeDependence, DependenceMap, DegradedDepMap, showDegDep)
 import Test.HAPI.AASTG.Core (Edge (APICall), AASTG (AASTG, getStart), NodeID)
 import Test.HAPI.AASTG.Effect.Trav (TravHandler(TravHandler), TravEvent (OnEdge, OnNode), runTrav, travPath)
 
@@ -27,6 +28,13 @@ import qualified Data.TypeRepMap as TM
 import Control.Carrier.State.Church (runState)
 import Data.HashSet (HashSet)
 import Data.HashMap.Strict (HashMap)
+import Test.HAPI.Effect.Eff
+import Control.Carrier.Fail.Either (Fail)
+import Control.Effect.Error (Error)
+import Control.Effect.Empty (Empty)
+import Control.Effect.Empty (empty)
+import Text.Printf (printf)
+import Test.HAPI.Util.Empty (liftMaybe)
 
 
 type NodePathMap  api c = HashMap NodeID [APath api c]
@@ -40,17 +48,21 @@ A path p1 is an effective subpath of p2, iff.
   3. Under the said variable substitution in 2, the dependence at the end nodes in p1 is a subset of p2.
 -}
 -- |
-effectiveSubpath :: Path p
+effectiveSubpath :: forall p sig m api c.
+                    (Path p, Eff Empty sig m)
                  => (p api c -> DependenceMap)     -- DependenceMap getter
                  -> (p api c -> DegradedDepMap)    -- DegradedDependenceMap getter
                  -> (p api c -> [Edge api c])      -- API call sequence getter
                  -> p api c                        -- p1
                  -> p api c                        -- p2
-                 -> Maybe ()
+                 -> m ()
 effectiveSubpath dep deg calls p1 p2 = do
   sub <- findVarSub c1 c2
+  debug $ printf "Test.HAPI.AASTG.Analysis.PathExtra.effectiveSubpath: Found var substitution: %s" (show sub)
   let nde2' = applyVarSubstitution sub nde2
+  debug $ printf "Test.HAPI.AASTG.Analysis.PathExtra.effectiveSubpath: Degraded deps: %s, %s" (showDegDep nde1) (showDegDep nde2')
   g <- isSubNodeDependence nde1 nde2'
+  debug $ printf "Test.HAPI.AASTG.Analysis.PathExtra.effectiveSubpath: Found final unification: %s" g
   return ()
   where
     d1   = dep   p1
@@ -62,17 +74,18 @@ effectiveSubpath dep deg calls p1 p2 = do
     nde1 = lookupNode (pathEndNode p1) d1'
     nde2 = lookupNode (pathEndNode p2) d2'
 
-    findVarSub :: [Edge api c] -> [Edge api c] -> Maybe VarSubstitution
-    findVarSub [] [] = Just TM.empty
+    -- | Find the relevant variable substitution that unifies 2 API call sequence.
+    findVarSub :: [Edge api c] -> [Edge api c] -> m VarSubstitution
+    findVarSub [] [] = return TM.empty
     findVarSub (APICall s1 e1 _ api1 args1 : c1) (APICall s2 e2 _ api2 args2 : c2) = do
-      (_, proof, _) <- api1 `apiEqProofs` api2
-      u             <- getUnificationFromArgs nd1 nd2 (castWith (apply Refl proof) args1) args2
+      (_, proof, _) <- liftMaybe $ api1 `apiEqProofs` api2
+      u             <- liftMaybe $ getUnificationFromArgs nd1 nd2 (castWith (apply Refl proof) args1) args2
       u'            <- findVarSub c1 c2
-      unifyVarSubstitution u u'
+      liftMaybe $ unifyVarSubstitution u u'
       where
         nd1 = lookupNode s1 d1
         nd2 = lookupNode s2 d2
-    findVarSub _ _ = Nothing
+    findVarSub _ _ = empty @sig
 
 
 getPathMap :: forall api c. AASTG api c -> NodePathMap api c
