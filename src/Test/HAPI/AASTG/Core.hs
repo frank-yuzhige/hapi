@@ -1,8 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE GADTs #-}
@@ -42,31 +40,39 @@ type NodeID = Int
 type EdgeID = Int
 
 data Edge apis c where
-  Update  :: forall a api c. (Fuzzable a, c a)
-          => NodeID            -- From
-          -> NodeID            -- To
-          -> PKey a            -- Variable
-          -> Attribute a       -- Attribute of the value
-          -> Edge api c
-  Forget  :: forall a api c. (Fuzzable a, c a)
-          => NodeID            -- From
-          -> NodeID            -- To
-          -> PKey a            -- Variable
-          -> Edge api c
+  -- | Updates the value of a variable by the given attribute
+  Update   :: forall a api c. (Fuzzable a, c a)
+           => NodeID            -- From
+           -> NodeID            -- To
+           -> PKey a            -- Variable
+           -> Attribute a       -- Attribute of the value
+           -> Edge api c
+  -- | TODO can you forget?
+  Forget   :: forall a api c. (Fuzzable a, c a)
+           => NodeID            -- From
+           -> NodeID            -- To
+           -> PKey a            -- Variable
+           -> Edge api c
   -- TODO better assertion
-  Assert  :: forall a api c. (Fuzzable a, c a, Eq a)
-          => NodeID            -- From
-          -> NodeID            -- To
-          -> PKey a            -- Variable x
-          -> PKey a            -- Variable y
-          -> Edge api c
-  APICall :: forall a sig api p c. (Fuzzable a, IsValidCall c api p)
-          => NodeID             -- From
-          -> NodeID             -- To
-          -> Maybe (PKey a)     -- Store result to variable
-          -> api p a            -- API call (constructor)
-          -> NP Attribute p     -- Argument Attributes List
-          -> Edge api c
+  Assert   :: forall a api c. (Fuzzable a, c a, Eq a)
+           => NodeID            -- From
+           -> NodeID            -- To
+           -> PKey a            -- Variable x
+           -> PKey a            -- Variable y
+           -> Edge api c
+  APICall  :: forall a sig api p c. (Fuzzable a, IsValidCall c api p)
+           => NodeID             -- From
+           -> NodeID             -- To
+           -> Maybe (PKey a)     -- Store result to variable
+           -> api p a            -- API call (constructor)
+           -> NP Attribute p     -- Argument Attributes List
+           -> Edge api c
+
+  -- | For internal use only
+  Redirect :: ()
+           => NodeID             -- From
+           -> NodeID             -- To
+           -> Edge api c
 
 type IsValidCall c api p = (All c p, All (Compose Eq Attribute) p, ApiName api, All Fuzzable p, Typeable p)
 
@@ -86,12 +92,14 @@ startNode (Update s _ _ _) = s
 startNode (Forget s _ _)   = s
 startNode (Assert s _ _ _) = s
 startNode (APICall s _ _ _ _) = s
+startNode (Redirect s _ ) = s
 
 endNode :: Edge api c -> NodeID
 endNode (Update _ e _ _) = e
 endNode (Forget _ e _)   = e
 endNode (Assert _ e _ _) = e
 endNode (APICall _ e _ _ _) = e
+endNode (Redirect _ e) = e
 
 edgesFrom :: NodeID -> AASTG api c -> [Edge api c]
 edgesFrom i (AASTG _ f _) = fromMaybe [] (f HM.!? i)
@@ -121,6 +129,7 @@ showEdgeLabel = \case
   Forget  s e k           -> "forget " <> getPKeyID k
   Assert  s e x  y        -> "assert " <> getPKeyID x <> " = " <> show y
   APICall s e mx api args -> "call "   <> maybe "" ((<> " = ") . getPKeyID) mx <> apiName api <> "(" <> intercalate ", " (showAttributes args) <> ")"
+  Redirect s e            -> "redir "
 
 -- | Instances
 instance Show (Edge api c) where
@@ -163,5 +172,9 @@ instance Hashable (Edge api c) where
     `hashWithSalt` mx
     `hashWithSalt` apiName api
     `hashWithSalt` args
+  hashWithSalt salt (Redirect s e) = salt
+    `hashWithSalt` "r"
+    `hashWithSalt` s
+    `hashWithSalt` e
 
 deriving instance Show (AASTG api c)

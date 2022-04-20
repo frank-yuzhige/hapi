@@ -2,7 +2,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ExplicitNamespaces #-}
-{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE FlexibleContexts #-}
 
 module Test.HAPI.AASTG.Synth where
@@ -12,7 +11,7 @@ import Test.HAPI.Effect.QVS (QVS(QVS), attributes2QVSs, qvs2m)
 import Control.Effect.State (State, modify)
 import Test.HAPI.PState (PState, PStateSupports (record, forget))
 import Test.HAPI.Effect.Property (PropertyA, shouldBe)
-import Test.HAPI.AASTG.Core (AASTG (AASTG, getStart), Edge (Update, Forget, Assert, APICall), endNode, NodeID, edgesFrom)
+import Test.HAPI.AASTG.Core (AASTG (AASTG, getStart), Edge (Update, Forget, Assert, APICall, Redirect), endNode, NodeID, edgesFrom)
 import Test.HAPI.Args (Attribute(Get))
 
 import qualified Data.HashMap.Strict as HM
@@ -50,6 +49,7 @@ synthOneStep (APICall s e mx api args) = do
   case mx of
     Nothing -> return ()
     Just k  -> modify @PState (record k r)
+synthOneStep (Redirect s e) = return ()
 
 -- | Entropy
 type EntropyWord = Int

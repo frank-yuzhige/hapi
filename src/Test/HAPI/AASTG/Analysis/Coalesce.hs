@@ -9,7 +9,7 @@ import Test.HAPI.AASTG.Analysis.Rename (normalizeNodes, maxNodeID, renameNodesIn
 import Test.HAPI.AASTG.Analysis.PathExtra (NodePathMap, effectiveSubpath, getPathMap)
 import Test.HAPI.AASTG.Analysis.Dependence (pathDeps, pathDegradedDeps, DependenceMap, DegradedDepMap)
 import Test.HAPI.AASTG.Analysis.Path (Path(pathCalls), APath)
-import Data.List ( partition, (\\) )
+import Data.List ( partition, (\\), sortBy )
 import Data.IntMap (IntMap)
 import Data.Maybe (fromMaybe, isJust, listToMaybe)
 
@@ -17,12 +17,13 @@ import qualified Data.IntMap as IM
 import qualified Data.HashMap.Strict as HM
 import Data.Containers.ListUtils (nubIntOn)
 import Data.Hashable (Hashable(hash))
-import Test.HAPI.AASTG.Analysis.Nodes (unrelatedNodeMap)
+import Test.HAPI.AASTG.Analysis.Nodes (unrelatedNodeMap, nodeDepthMap)
 import Test.HAPI.Effect.Eff (Alg, debug, run)
 import Text.Printf (printf)
 import Test.HAPI.AASTG.GraphViz (prettyAASTG)
 import Control.Carrier.Empty.Church (runEmpty)
 import Control.Monad (foldM)
+import Data.Function (on)
 
 -- TODO: Optimize me!!!!
 -- | Coalesce 2 AASTGs
@@ -41,6 +42,7 @@ coalesceAASTGs n = \case
     (_, r) <- coalesceAASTG n a x
     return r
 
+-- | TODO: Children will fight, fix me! (fork children on var substitution)
 directCoalesceState :: NodeID -> NodeID -> AASTG api c -> AASTG api c
 directCoalesceState er ee aastg@(AASTG s fs bs) = AASTG 0 fs' bs'
   where
@@ -77,7 +79,7 @@ autoCoalesce maxStep aastg = do
 coalesceOneStep :: Alg sig m
                 => AASTG api c
                 -> m (Maybe (NodeID, NodeID), AASTG api c)
-coalesceOneStep aastg = go [(b, r) | b <- allNodes aastg, r <- candidateMap HM.! b]
+coalesceOneStep aastg = go [(b, r) | b <- sortBy (flip compare `on` (nodeDepths IM.!)) (allNodes aastg), r <- candidateMap IM.! b]
   where
     go []           = return (Nothing, aastg)
     go ((b, r): xs) = do
@@ -88,6 +90,7 @@ coalesceOneStep aastg = go [(b, r) | b <- allNodes aastg, r <- candidateMap HM.!
         if b' then return (Just (r, b), directCoalesceState r b aastg)
               else go xs
 
+    nodeDepths     = nodeDepthMap aastg
     candidateMap   = unrelatedNodeMap aastg
     pathMap        = getPathMap aastg
     paths          = concat $ HM.elems pathMap

@@ -1,4 +1,3 @@
-{-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeApplications #-}
@@ -31,8 +30,7 @@ import Data.HashMap.Strict (HashMap)
 import Test.HAPI.Effect.Eff
 import Control.Carrier.Fail.Either (Fail)
 import Control.Effect.Error (Error)
-import Control.Effect.Empty (Empty)
-import Control.Effect.Empty (empty)
+import Control.Effect.Empty ( Empty, empty )
 import Text.Printf (printf)
 import Test.HAPI.Util.Empty (liftMaybe)
 

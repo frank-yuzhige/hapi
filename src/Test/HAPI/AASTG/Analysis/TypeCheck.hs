@@ -13,7 +13,7 @@ module Test.HAPI.AASTG.Analysis.TypeCheck (
   typeCheckEither
 ) where
 
-import Test.HAPI.AASTG.Core (AASTG (AASTG), NodeID, Edge (Update, APICall, Assert, Forget), edgesFrom, endNode)
+import Test.HAPI.AASTG.Core (AASTG (AASTG), NodeID, Edge (Update, APICall, Assert, Forget, Redirect), edgesFrom, endNode)
 import Test.HAPI.PState (PKey(getPKeyID, PKey))
 import Test.HAPI.Args (Attributes, Attribute (AnyOf, Get))
 import Test.HAPI.Common (Fuzzable)
@@ -111,4 +111,4 @@ checkEdgeAndUpdate = \case
       args2TR :: (All Fuzzable a) => Attributes a -> [TypeRep]
       args2TR Nil = []
       args2TR (a :* as) = typeRep a : args2TR as
-
+  Redirect s e -> return

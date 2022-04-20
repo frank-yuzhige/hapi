@@ -24,10 +24,11 @@ renameNodes nrm aastg@(AASTG start fs bs) = AASTG (nrm IM.! start) fs' bs'
 
 renameNodesInEdge :: NodeRenameMap -> Edge api c -> Edge api c
 renameNodesInEdge nrm = \case
-  Update s e k a          -> Update  (look s) (look e) k a
-  Forget s e k            -> Forget  (look s) (look e) k
-  Assert s e x y          -> Assert  (look s) (look e) x y
-  APICall s e mx api args -> APICall (look s) (look e) mx api args
+  Update   s e k a          -> Update   (look s) (look e) k a
+  Forget   s e k            -> Forget   (look s) (look e) k
+  Assert   s e x y          -> Assert   (look s) (look e) x y
+  APICall  s e mx api args  -> APICall  (look s) (look e) mx api args
+  Redirect s e              -> Redirect (look s) (look e)
   where
     look i = fromMaybe i $ nrm IM.!? i
 

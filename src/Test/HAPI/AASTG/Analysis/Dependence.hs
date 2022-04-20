@@ -238,12 +238,11 @@ pathDepCollector = TravHandler $ \case
     prev <- gets @DependenceMap $ lookupNode $ startNode edge
     let e = endNode edge
     new <- case edge of
-      Update s e k a          -> return $ updatePKey k (DepAttr a) prev
-      Forget s e x            -> return $ deletePKey x prev
-      Assert s e x y          -> return prev
-      APICall s e mx api args -> case mx of
-        Nothing -> return prev
-        Just x  -> return $ updatePKey x (DepCall api args) prev
+      Update s e k a -> return $ updatePKey k (DepAttr a) prev
+      Forget s e x   -> return $ deletePKey x prev
+      APICall s e (Just x) api args
+                     -> return $ updatePKey x (DepCall api args) prev
+      _              -> return prev
     modify $ updateDependence @Dep e new
 
 pathDeps :: forall api c p. (Path p) => p api c -> DependenceMap
@@ -261,12 +260,12 @@ pathDegradedDepCollector = TravHandler $ \case
     new <- case edge of
       Update s e k a          -> return $ updatePKey k (DepAttr' a) prev
       Forget s e x            -> return $ deletePKey x prev
-      Assert s e x y          -> return prev
       APICall s e mx api args -> case mx of
         Nothing -> return prev
         Just x  -> do
           i <- sendLabelled @DegradedDep Fresh
           return $ updatePKey x (DepCall' i) prev
+      _                       -> return prev
     modify $ updateDependence @DegradedDep e new
 
 pathDegradedDeps :: forall p api c. (Path p) => p api c -> DegradedDepMap

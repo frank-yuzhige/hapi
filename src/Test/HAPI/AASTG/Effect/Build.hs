@@ -1,7 +1,5 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -25,14 +23,13 @@ import Test.HAPI.AASTG.Core (AASTG, Edge (Update, APICall), newAASTG, NodeID, Is
 import Test.HAPI.Api (ApiName, ApiDefinition, ApiMember (injApi))
 import Test.HAPI.Common (Fuzzable)
 import Control.Effect.Sum (Members, Member)
-import Control.Effect.State (State, modify)
+import Control.Effect.State ( State, modify, get, put )
 import Control.Carrier.Fresh.Church (Fresh (Fresh), runFresh, fresh)
 import Control.Algebra (Has)
 import Control.Effect.Labelled (HasLabelled, sendLabelled, runLabelled, Labelled)
 import Data.SOP (All)
 import Data.Functor (($>))
 import Control.Carrier.State.Church (runState)
-import Control.Effect.State (get, put)
 
 {-
 do
