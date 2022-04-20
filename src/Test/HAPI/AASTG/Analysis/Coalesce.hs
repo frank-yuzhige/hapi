@@ -46,10 +46,10 @@ coalesceAASTGs n = \case
 directCoalesceState :: NodeID -> NodeID -> AASTG api c -> AASTG api c
 directCoalesceState er ee aastg@(AASTG s fs bs) = AASTG 0 fs' bs'
   where
-    fs' = HM.map (nubIntOn hash)
-        . HM.map (map (renameNodesInEdge (IM.singleton ee er)))
-        . HM.delete ee
-        . HM.adjust (<> edgesFrom ee aastg) er
+    fs' = IM.map (nubIntOn hash)
+        . IM.map (map (renameNodesInEdge (IM.singleton ee er)))
+        . IM.delete ee
+        . IM.adjust (<> edgesFrom ee aastg) er
         $ fs
     bs' = edgesTo2EdgesFrom fs'
 

@@ -14,7 +14,7 @@ import Test.HAPI.Effect.Property (PropertyA, shouldBe)
 import Test.HAPI.AASTG.Core (AASTG (AASTG, getStart), Edge (Update, Forget, Assert, APICall, Redirect), endNode, NodeID, edgesFrom)
 import Test.HAPI.Args (Attribute(Get))
 
-import qualified Data.HashMap.Strict as HM
+import qualified Data.IntMap as IM
 import Test.HAPI.Effect.Fuzzer (Fuzzer)
 import Test.HAPI.Effect.Orchestration (Orchestration, nextInstruction)
 import Test.HAPI.Effect.Orchestration.Labels (EntropySupply)
@@ -26,7 +26,7 @@ import Data.Serialize (Serialize(put), runPut)
 synthStub :: forall api sig c m. (Has (Fuzzer api c) sig m) => AASTG api c -> [m ()]
 synthStub (AASTG start edges _) = synth start
   where
-    synth i = case edges HM.!? i of
+    synth i = case edges IM.!? i of
       Nothing -> [return ()]
       Just es -> concat [(synthOneStep edge >>) <$> synth (endNode edge) | edge <- es]
 

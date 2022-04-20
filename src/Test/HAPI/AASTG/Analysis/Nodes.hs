@@ -16,9 +16,21 @@ import Control.Carrier.State.Church (runState)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
 
+type NodeRelationMap = IntMap (HashSet NodeID)
+
+childrenNodes :: AASTG api c -> NodeRelationMap
+childrenNodes aastg = run $ runState (\s a -> return s) IM.empty $ calcChildren (getStart aastg)
+  where
+    calcChildren :: Has (State NodeRelationMap) sig m => NodeID -> m (HashSet NodeID)
+    calcChildren n = do
+      computed <- gets @NodeRelationMap (IM.member n)
+      if computed then gets (IM.! n) else do
+        allChildren <- mapM (calcChildren . endNode) (edgesFrom n aastg)
+        let ans = HS.insert n $ HS.unions allChildren
+        modify $ IM.insert n ans
+        return ans
 
 type UnrelatedNodeMap  = IntMap [NodeID]
-type UnrelatedNodeMap' = IntMap (HashSet NodeID)
 
 -- | 2 nodes are unrelated, iff there exists no path that passes n1 and n2.
 -- Return a HashMap that maps each node to a list of unrelated nodes.
@@ -26,24 +38,12 @@ unrelatedNodeMap :: AASTG api c -> UnrelatedNodeMap
 unrelatedNodeMap aastg = IM.map (HS.toList . HS.difference nodes) relatives
   where
     nodes = HS.fromList $ allNodes aastg
-    children = run
-             . runState (\s a -> return s) IM.empty
-             $ calcChildren (getStart aastg)
+    children = childrenNodes aastg
     relatives = run
-              . runState @UnrelatedNodeMap' (\s a -> return s) children
+              . runState @NodeRelationMap (\s a -> return s) children
               $ addParents [] (getStart aastg)
 
-    calcChildren :: Has (State UnrelatedNodeMap') sig m => NodeID -> m (HashSet NodeID)
-    calcChildren n = do
-      computed <- gets @UnrelatedNodeMap' (IM.member n)
-      if computed then gets (IM.! n) else do
-        allChildren <- forM (edgesFrom n aastg) $ \edge -> do
-          calcChildren $ endNode edge
-        let ans = HS.insert n $ HS.unions allChildren
-        modify $ IM.insert n ans
-        return ans
-
-    addParents :: Has (State UnrelatedNodeMap') sig m => [NodeID] -> NodeID -> m ()
+    addParents :: Has (State NodeRelationMap) sig m => [NodeID] -> NodeID -> m ()
     addParents trace n = do
       let trace' = n : trace
       modify $ IM.update (\s -> Just $ foldr HS.insert s trace') n

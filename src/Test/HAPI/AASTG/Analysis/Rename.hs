@@ -4,23 +4,22 @@ module Test.HAPI.AASTG.Analysis.Rename where
 
 import Test.HAPI.AASTG.Core (AASTG (AASTG), NodeID, Edge (..), allNodes)
 import Data.IntMap (IntMap)
-import qualified Data.HashMap.Strict as HM
-import qualified Data.IntMap as IM
+import qualified Data.IntMap.Strict as IM
 import Data.Maybe (fromMaybe)
 
 type NodeRenameMap = IntMap NodeID  -- NodeID -> NodeID
 
 maxNodeID :: AASTG api c -> NodeID
-maxNodeID (AASTG start fs bs) = maximum (start : HM.keys fs <> HM.keys bs)
+maxNodeID (AASTG start fs bs) = maximum (start : IM.keys fs <> IM.keys bs)
 
 minNodeID :: AASTG api c -> NodeID
-minNodeID (AASTG start fs bs) = minimum (start : HM.keys fs <> HM.keys bs)
+minNodeID (AASTG start fs bs) = minimum (start : IM.keys fs <> IM.keys bs)
 
 renameNodes :: NodeRenameMap -> AASTG api c -> AASTG api c
 renameNodes nrm aastg@(AASTG start fs bs) = AASTG (nrm IM.! start) fs' bs'
   where
-    fs' = HM.mapKeys (nrm IM.!) $ HM.map (renameNodesInEdge nrm <$>) fs
-    bs' = HM.mapKeys (nrm IM.!) $ HM.map (renameNodesInEdge nrm <$>) bs
+    fs' = IM.mapKeys (nrm IM.!) $ IM.map (renameNodesInEdge nrm <$>) fs
+    bs' = IM.mapKeys (nrm IM.!) $ IM.map (renameNodesInEdge nrm <$>) bs
 
 renameNodesInEdge :: NodeRenameMap -> Edge api c -> Edge api c
 renameNodesInEdge nrm = \case

@@ -31,7 +31,8 @@ import Data.Containers.ListUtils (nubInt)
 import Data.Hashable (Hashable (hashWithSalt))
 
 import Data.HashMap.Strict (HashMap)
-import qualified Data.HashMap.Strict as HM
+import Data.IntMap (IntMap)
+import qualified Data.IntMap.Strict as IM
 
 
 -- Abstract API state transition graph
@@ -78,8 +79,8 @@ type IsValidCall c api p = (All c p, All (Compose Eq Attribute) p, ApiName api, 
 
 data AASTG sig c = AASTG {
   getStart     :: !NodeID,
-  getEdgesFrom :: !(HashMap NodeID [Edge sig c]),
-  getEdgesTo   :: !(HashMap NodeID [Edge sig c])
+  getEdgesFrom :: !(IntMap [Edge sig c]),
+  getEdgesTo   :: !(IntMap [Edge sig c])
 } deriving Eq
 
 data TaggedEdge t api c = TE { getTag :: t, getEdge :: Edge api c }
@@ -102,26 +103,26 @@ endNode (APICall _ e _ _ _) = e
 endNode (Redirect _ e) = e
 
 edgesFrom :: NodeID -> AASTG api c -> [Edge api c]
-edgesFrom i (AASTG _ f _) = fromMaybe [] (f HM.!? i)
+edgesFrom i (AASTG _ f _) = fromMaybe [] (f IM.!? i)
 
 edgesTo :: NodeID -> AASTG api c -> [Edge api c]
-edgesTo i (AASTG _ _ b) = fromMaybe [] (b HM.!? i)
+edgesTo i (AASTG _ _ b) = fromMaybe [] (b IM.!? i)
 
 allNodes :: AASTG api c -> [NodeID]
-allNodes (AASTG start fs bs) = nubInt (start : HM.keys fs <> HM.keys bs)
+allNodes (AASTG start fs bs) = nubInt (start : IM.keys fs <> IM.keys bs)
 
 allEdges :: AASTG api c -> [Edge api c]
-allEdges = concatMap snd . HM.toList . getEdgesFrom
+allEdges = concatMap snd . IM.toList . getEdgesFrom
 
-groupEdgesOn :: (Edge sig c -> NodeID) -> [Edge sig c] -> HashMap NodeID [Edge sig c]
-groupEdgesOn f = HM.fromListWith (<>)
+groupEdgesOn :: (Edge sig c -> NodeID) -> [Edge sig c] -> IntMap [Edge sig c]
+groupEdgesOn f = IM.fromListWith (<>)
                . fmap (\e -> (f e, [e]))
 
-edgesFrom2EdgesTo :: HashMap NodeID [Edge sig c] -> HashMap NodeID [Edge sig c]
-edgesFrom2EdgesTo = groupEdgesOn startNode . concat . HM.elems
+edgesFrom2EdgesTo :: IntMap [Edge sig c] -> IntMap [Edge sig c]
+edgesFrom2EdgesTo = groupEdgesOn startNode . concat . IM.elems
 
-edgesTo2EdgesFrom :: HashMap NodeID [Edge sig c] -> HashMap NodeID [Edge sig c]
-edgesTo2EdgesFrom = groupEdgesOn endNode . concat . HM.elems
+edgesTo2EdgesFrom :: IntMap [Edge sig c] -> IntMap [Edge sig c]
+edgesTo2EdgesFrom = groupEdgesOn endNode . concat . IM.elems
 
 showEdgeLabel :: Edge api c -> String
 showEdgeLabel = \case
