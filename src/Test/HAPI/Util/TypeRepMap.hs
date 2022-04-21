@@ -1,14 +1,47 @@
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE AllowAmbiguousTypes   #-}
+{-# LANGUAGE BangPatterns          #-}
+{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE InstanceSigs          #-}
+{-# LANGUAGE MagicHash             #-}
+{-# LANGUAGE PolyKinds             #-}
+{-# LANGUAGE Rank2Types            #-}
+{-# LANGUAGE RoleAnnotations       #-}
+{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE TypeInType            #-}
+{-# LANGUAGE ViewPatterns          #-}
+{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 -- | Extended internal API for 'TypeRepMap' and operations on it.
-module Test.HAPI.Util.TypeRepMap where
+-- Unfortunately, stack is too dinosaur to adopt new packages, so some important functionality provided in later versions of
+-- Data.TypeRepMap is not available. I have to "re-create" them...
+module Test.HAPI.Util.TypeRepMap (
+  module TM,
+  intersection,
+  intersectionWith,
+  mfold,
+  fold,
+  keysWith,
+  toListWith,
+) where
 
 import qualified Data.TypeRepMap as TM
 import qualified Data.TypeRepMap.Internal as TM
 import Data.TypeRepMap (TypeRepMap)
 import qualified Data.Map.Strict as Map
-import GHC.Exts (Any)
+import GHC.Exts (Any, IsList (toList))
 import Data.Functor.Identity (Identity(Identity))
+import Type.Reflection (TypeRep, Typeable, withTypeable)
+import Unsafe.Coerce
+
+-- Extract the kind of a type. We use it to work around lack of syntax for
+-- inferred type variables (which are not subject to type applications).
+type KindOf (a :: k) = k
+
+type ArgKindOf (f :: k -> l) = k
 
 -- | The intersection of two 'TypeRepMap's using a combining function.
 intersectionWith :: (forall x. f x -> f x -> f x) -> TypeRepMap f -> TypeRepMap f -> TypeRepMap f
@@ -44,10 +77,18 @@ fold :: (forall x. f x -> a) -> (a -> a -> a) -> a -> TypeRepMap f -> a
 fold f g a m = foldr (g . (\(_, v, _) -> f (TM.fromAny v))) a (TM.toTriples m)
 {-# INLINE fold #-}
 
--- | Degrade all values by the given degradation function
-degrade :: (forall x. f x -> a) -> TypeRepMap f -> [a]
-degrade f m = map (\(_, v, _) -> f (TM.fromAny v)) (TM.toTriples m)
-{-# INLINE degrade #-}
+-- | Return the list of keys by wrapping them with a user-provided function.
+keysWith :: (forall (a :: ArgKindOf f). TypeRep a -> r) -> TypeRepMap f -> [r]
+keysWith f TM.TypeRepMap{..} = f . TM.anyToTypeRep <$> toList trKeys
+{-# INLINE keysWith #-}
+
+-- | Return the list of key-value pairs by wrapping them with a user-provided function.
+toListWith :: forall f r . (forall (a :: ArgKindOf f) . Typeable a => f a -> r) -> TypeRepMap f -> [r]
+toListWith f = map toF . TM.toTriples
+  where
+    withTypeRep :: forall a. TypeRep a -> f a -> r
+    withTypeRep tr an = withTypeable tr $ f an
+    toF (_, an, k) = withTypeRep (unsafeCoerce k) (TM.fromAny an)
 
 -- tm1 :: TypeRepMap (Map.Map Int)
 -- tm1 = TM.one (Map.singleton (1 :: Int) (10 :: Int))
