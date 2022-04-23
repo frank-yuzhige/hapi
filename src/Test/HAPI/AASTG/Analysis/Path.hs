@@ -60,6 +60,8 @@ inPaths i aastg = map constrAPath (gen i)
       [] -> [D.empty]
       es -> concat [D.cons e <$> gen (startNode e) | e <- es]
 
+
+
 -- | APath Incremental Constructor
 type APathConstr api c = DList (Edge api c)
 

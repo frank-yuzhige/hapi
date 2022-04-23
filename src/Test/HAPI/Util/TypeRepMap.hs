@@ -12,8 +12,9 @@
 {-# LANGUAGE TypeInType            #-}
 {-# LANGUAGE ViewPatterns          #-}
 {-# LANGUAGE RecordWildCards       #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications      #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE QuantifiedConstraints #-}
 
 -- | Extended internal API for 'TypeRepMap' and operations on it.
 -- Unfortunately, stack is too dinosaur to adopt new packages, so some important functionality provided in later versions of
@@ -23,7 +24,7 @@ module Test.HAPI.Util.TypeRepMap (
   intersection,
   intersectionWith,
   mfold,
-  fold,
+  foldMap,
   keysWith,
   toListWith,
 ) where
@@ -34,8 +35,10 @@ import Data.TypeRepMap (TypeRepMap)
 import qualified Data.Map.Strict as Map
 import GHC.Exts (Any, IsList (toList))
 import Data.Functor.Identity (Identity(Identity))
-import Type.Reflection (TypeRep, Typeable, withTypeable)
+import Type.Reflection (TypeRep, Typeable, withTypeable, typeOf, typeRep)
 import Unsafe.Coerce
+import Data.Hashable (Hashable (hashWithSalt))
+import Prelude hiding (foldMap)
 
 -- Extract the kind of a type. We use it to work around lack of syntax for
 -- inferred type variables (which are not subject to type applications).
@@ -69,13 +72,13 @@ intersection = intersectionWith const
 
 -- | Fold all values a la monoid
 mfold :: Monoid a => (forall x. f x -> a) -> TypeRepMap f -> a
-mfold f = fold f (<>) mempty
+mfold f = foldMap f (<>) mempty
 {-# INLINE mfold #-}
 
 -- | Fold all values by the given aggregation specification
-fold :: (forall x. f x -> a) -> (a -> a -> a) -> a -> TypeRepMap f -> a
-fold f g a m = foldr (g . (\(_, v, _) -> f (TM.fromAny v))) a (TM.toTriples m)
-{-# INLINE fold #-}
+foldMap :: (forall x. f x -> a) -> (a -> a -> a) -> a -> TypeRepMap f -> a
+foldMap f g a m = foldr (g . (\(_, v, _) -> f (TM.fromAny v))) a (TM.toTriples m)
+{-# INLINE foldMap #-}
 
 -- | Return the list of keys by wrapping them with a user-provided function.
 keysWith :: (forall (a :: ArgKindOf f). TypeRep a -> r) -> TypeRepMap f -> [r]
@@ -89,6 +92,13 @@ toListWith f = map toF . TM.toTriples
     withTypeRep :: forall a. TypeRep a -> f a -> r
     withTypeRep tr an = withTypeable tr $ f an
     toF (_, an, k) = withTypeRep (unsafeCoerce k) (TM.fromAny an)
+
+instance (forall (a :: k). Typeable a => Hashable (f a)) => Hashable (TypeRepMap f) where
+  hashWithSalt salt m = hashes salt
+    where
+      hashes = foldr (.) (`hashWithSalt` "TypeRepMap") (toListWith entryHash m)
+      entryHash :: forall (a :: ArgKindOf f) . (Typeable a, Hashable (f a)) => f a -> (Int -> Int)
+      entryHash k = \salt -> salt `hashWithSalt` (show (typeRep @a), k)
 
 -- tm1 :: TypeRepMap (Map.Map Int)
 -- tm1 = TM.one (Map.singleton (1 :: Int) (10 :: Int))

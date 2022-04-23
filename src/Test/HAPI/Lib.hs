@@ -49,7 +49,6 @@ import Control.Carrier.Fresh.Strict (runFresh)
 import Test.HAPI.AASTG.Core (AASTG (AASTG), Edge (Update, APICall), newAASTG)
 import Control.Effect.Sum (Members)
 import Test.HAPI.AASTG.Analysis.TypeCheck (typeCheck, typeCheckEither)
-import Test.HAPI.AASTG.Analysis.PathExtra (getPathMap)
 import Test.HAPI.AASTG.Analysis.Path (outPaths)
 import Test.HAPI.AASTG.Analysis.Coalesce (coalesceAASTGs, directCoalesceState, coalesceAASTG)
 import Test.HAPI.AASTG.Analysis.Rename (normalizeNodes)
@@ -254,7 +253,7 @@ graph3 = runEnv
           return ()
 
 l = do
-  g <- return graph3 -- return $ graph2 @Arbitrary
+  let g = graph3 -- return $ graph2 @Arbitrary
   previewAASTG g
 
 spec :: Eff (BuildAASTG (ArithApiA :$$: StackApiA) Arbitrary) sig m => m ()

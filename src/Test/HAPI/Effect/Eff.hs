@@ -21,6 +21,7 @@ module Test.HAPI.Effect.Eff (
   , Eff
   , envCtx
   , debug
+  , debugIO
   , runEnv
   , runEnvIO
 ) where
@@ -39,6 +40,7 @@ type EnvCtx = ()
 data EnvA (m :: Type -> Type) a where
   EnvCtx     ::           EnvA m EnvCtx
   Debug      :: String -> EnvA m ()
+  DebugIO    :: IO a   -> EnvA m ()
 
 newtype EnvIOAC m a = EnvIOAC { runEnvIOAC :: m a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadFail)
@@ -49,6 +51,9 @@ instance (Algebra sig m, MonadIO m) => Algebra (EnvA :+: sig) (EnvIOAC m) where
     L (Debug msg) -> do
       liftIO $ hPutStrLn stderr (printf "[DEBUG]: %s" msg)
       return $ ctx $> ()
+    L (DebugIO a) -> do
+      liftIO a
+      return $ ctx $> ()
     R other       -> alg (runEnvIOAC . hdl) other ctx
 
 
@@ -58,7 +63,8 @@ newtype EnvAC (m :: Type -> Type) a = EnvAC { runEnvAC :: m a }
 instance (Algebra sig m) => Algebra (EnvA :+: sig) (EnvAC m) where
   alg hdl sig ctx = EnvAC $ case sig of
     L EnvCtx      -> return $ ctx $> ()
-    L (Debug msg) -> return $ ctx $> ()
+    L (Debug   _) -> return $ ctx $> ()
+    L (DebugIO _) -> return $ ctx $> ()
     R other       -> alg (runEnvAC . hdl) other ctx
 
 -- Mixin
@@ -76,6 +82,9 @@ envCtx = send EnvCtx
 
 debug :: Alg sig m => String -> m ()
 debug = send . Debug
+
+debugIO :: Alg sig m => IO a -> m ()
+debugIO = send . DebugIO
 
 -- runner
 

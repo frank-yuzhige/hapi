@@ -8,9 +8,9 @@
 module Test.HAPI.AASTG.Analysis.PathExtra where
 
 import Test.HAPI.Api (apiEqProofs)
-import Test.HAPI.AASTG.Analysis.Path (pathCalls, pathEndNode, Path, APathView (APathView), outPaths, APath (APath), slice)
-import Test.HAPI.AASTG.Analysis.Dependence (pathDeps, lookupNode, VarSubstitution, getUnificationFromArgs, unifyVarSubstitution, applyVarSubstitution, pathDegradedDeps, isSubNodeDependence, DependenceMap, DegradedDepMap, showDegDep)
-import Test.HAPI.AASTG.Core (Edge (APICall), AASTG (AASTG, getStart), NodeID)
+import Test.HAPI.AASTG.Analysis.Path (pathCalls, pathEndNode, Path (pathAsList), APathView (APathView), outPaths, APath (APath), slice)
+import Test.HAPI.AASTG.Analysis.Dependence (pathDeps, lookupNode, getUnificationFromArgs, unifyVarSubstitution, applyVarSubstitution, pathDegradedDeps, isSubNodeDependence, DependenceMap, DegradedDepMap, showDegDep)
+import Test.HAPI.AASTG.Core (Edge (APICall), AASTG (AASTG, getStart), NodeID, endNode, edgesFrom, startNode)
 import Test.HAPI.AASTG.Effect.Trav (TravHandler(TravHandler), TravEvent (OnEdge, OnNode), runTrav, travPath)
 
 
@@ -33,6 +33,7 @@ import Control.Effect.Error (Error)
 import Control.Effect.Empty ( Empty, empty )
 import Text.Printf (printf)
 import Test.HAPI.Util.Empty (liftMaybe)
+import Test.HAPI.AASTG.Analysis.Rename (VarSubstitution)
 
 
 type NodePathMap  api c = HashMap NodeID [APath api c]
@@ -53,15 +54,15 @@ effectiveSubpath :: forall p sig m api c.
                  -> (p api c -> [Edge api c])      -- API call sequence getter
                  -> p api c                        -- p1
                  -> p api c                        -- p2
-                 -> m ()
+                 -> m VarSubstitution
 effectiveSubpath dep deg calls p1 p2 = do
-  sub <- findVarSub c1 c2
-  debug $ printf "Test.HAPI.AASTG.Analysis.PathExtra.effectiveSubpath: Found var substitution: %s" (show sub)
-  let nde2' = applyVarSubstitution sub nde2
+  vsb <- findVarSub c1 c2
+  debug $ printf "Test.HAPI.AASTG.Analysis.PathExtra.effectiveSubpath: Found var substitution: %s" (show vsb)
+  let nde2' = applyVarSubstitution vsb nde2
   debug $ printf "Test.HAPI.AASTG.Analysis.PathExtra.effectiveSubpath: Degraded deps: %s, %s" (showDegDep nde1) (showDegDep nde2')
   g <- isSubNodeDependence nde1 nde2'
   debug $ printf "Test.HAPI.AASTG.Analysis.PathExtra.effectiveSubpath: Found final unification: %s" g
-  return ()
+  return vsb
   where
     d1   = dep   p1
     d2   = dep   p2
@@ -85,9 +86,26 @@ effectiveSubpath dep deg calls p1 p2 = do
         nd2 = lookupNode s2 d2
     findVarSub _ _ = empty @sig
 
+checkEffectiveSubpath :: forall p sig m api c.
+                         (Path p, Eff Empty sig m)
+                      => (p api c -> DegradedDepMap)    -- DegradedDependenceMap getter
+                      -> VarSubstitution                -- Global variable substitution
+                      -> p api c                        -- p1
+                      -> p api c                        -- p2
+                      -> m ()
+checkEffectiveSubpath deg vsb p1 p2 = do
+  let nde2' = applyVarSubstitution vsb nde2
+  debug $ printf "Test.HAPI.AASTG.Analysis.PathExtra.checkEffectiveSubpath: Degraded deps: %s, %s" (showDegDep nde1) (showDegDep nde2')
+  g <- isSubNodeDependence nde1 nde2'
+  debug $ printf "Test.HAPI.AASTG.Analysis.PathExtra.checkEffectiveSubpath: Found final unification: %s" g
+  where
+    nde1 = lookupNode (pathEndNode p1) (deg p1)
+    nde2 = lookupNode (pathEndNode p2) (deg p2)
 
-getPathMap :: forall api c. AASTG api c -> NodePathMap api c
-getPathMap aastg = HM.map HS.toList $ foldr (HM.unionWith (<>) . trav) HM.empty paths
+
+
+getIncomingPathsMap :: forall api c. AASTG api c -> NodePathMap api c
+getIncomingPathsMap aastg = HM.map HS.toList $ foldr (HM.unionWith (<>) . trav) HM.empty paths
   where
     paths = outPaths (getStart aastg) aastg
     trav p = run
@@ -106,3 +124,12 @@ getPathMap aastg = HM.map HS.toList $ foldr (HM.unionWith (<>) . trav) HM.empty 
         i <- get @Int
         when (i > 0) $ modify (HM.adjust (HS.insert (slice 0 i path)) n)
         modify @Int (+ 1)
+
+
+findForkParent :: Path p => p api c -> AASTG api c -> Maybe (Edge api c)
+findForkParent p aastg = visit $ reverse $ pathAsList p
+  where
+    visit []       = Nothing
+    visit (e : es) = case edgesFrom (startNode e) aastg of
+      [_] -> visit es
+      _   -> Just  e

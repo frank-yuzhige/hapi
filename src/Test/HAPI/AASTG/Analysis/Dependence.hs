@@ -23,9 +23,9 @@ import Test.HAPI.AASTG.Core (AASTG (getStart), startNode, NodeID, Edge (Update, 
 import Test.HAPI.AASTG.Effect.Trav (TravHandler (TravHandler), TravEvent (OnEdge, OnNode), TravCA (runTravCA), travPath, runTrav)
 import Control.Algebra (Has, run, type (:+:))
 import Control.Carrier.State.Church (State, runState)
-import Test.HAPI.Args (Attribute (Get, Value), showAttributes, eqAttributes)
+import Test.HAPI.Args (Attribute (Get, Value), showAttributes, eqAttributes, Attributes)
 import Control.Effect.State (gets, modify)
-import Test.HAPI.AASTG.Analysis.Rename (maxNodeID, minNodeID)
+import Test.HAPI.AASTG.Analysis.Rename (maxNodeID, minNodeID, SubEntry (SE, unSE), VarSubstitution)
 import Data.Data (Typeable,type  (:~:) (Refl))
 import Data.SOP (NP (Nil, (:*)), All)
 import Test.HAPI.AASTG.Analysis.Path (pathNodesInSeq, Path)
@@ -56,8 +56,6 @@ type NodeDependence' dep = TypeRepMap (DEntry' dep)
 
 type NodeDependence = NodeDependence' Dep
 
-type VarSubstitution = TypeRepMap SubEntry
-
 type GroupCtx = TypeRepMap GroupEntry
 
 type DEntry = DEntry' Dep
@@ -74,8 +72,6 @@ data DEntry' dep t where
 
 unDE :: DEntry' dep t -> M.HashMap (PKey t) (dep t)
 unDE (DE de) = de
-
-newtype SubEntry t = SE { unSE :: M.HashMap (PKey t) (PKey t) }
 
 newtype SubEntry' t = SE' { unSE' :: M.HashMap (PKey t) (S.HashSet (PKey t)) }
 
@@ -97,10 +93,10 @@ unaliasVar dep x = case lookupPKey x dep of
   Just other             -> Just (x, other)
   Nothing                -> Nothing
 
--- | Given 2 difference NodeDependence and 2 attribute lists, attempt to find a unification (i.e. Variable substitution scheme)
+-- | Given 2 different NodeDependence and 2 attribute lists, attempt to find a unification (i.e. Variable substitution scheme)
 -- that makes all corresponding attributes in each list `effectively the same`.
 getUnificationFromArgs :: forall p. (All Fuzzable p)
-                       => NodeDependence -> NodeDependence -> NP Attribute p -> NP Attribute p -> Maybe VarSubstitution
+                       => NodeDependence -> NodeDependence -> Attributes p -> Attributes p -> Maybe VarSubstitution
 getUnificationFromArgs d1 d2 Nil       Nil       = Just TM.empty
 getUnificationFromArgs d1 d2 (a :* as) (b :* bs) = do
   u  <- unify (DepAttr a) (DepAttr b)
@@ -117,9 +113,9 @@ getUnificationFromArgs d1 d2 (a :* as) (b :* bs) = do
       | a == b    = Just TM.empty
       | otherwise = Nothing
     -- Api calls are the same, iff the function they calls are the same, and all arguments are pairwise-effectively the same.
-    unify (DepCall f fa) (DepCall g ga) = case f `apiEqProofs` g of
-      Nothing            -> Nothing
-      Just (_, proof, _) -> getUnificationFromArgs d1 d2 (castWith (apply Refl proof) fa) ga
+    unify (DepCall f fa) (DepCall g ga) = do
+      (_, proof, _) <- f `apiEqProofs` g
+      getUnificationFromArgs d1 d2 (castWith (apply Refl proof) fa) ga
     -- Otherwise, not unifiable (e.g. x <-> some attr, not unifiable since x could be used in later context)
     unify _ _ = Nothing
 
@@ -137,7 +133,7 @@ unifyVarSubstitution vs1 vs2 = TM.hoistA unliftSE merge
 -- Relevant variable substitution must be applied first before calling this function.
 -- Returns the String representation of the
 isSubNodeDependence :: forall sig m. (Eff Empty sig m) => NodeDependence' DegradedDep -> NodeDependence' DegradedDep -> m String
-isSubNodeDependence d1 d2 = D.toList <$> TM.fold collect (liftA2 (<>)) (return D.empty) (TM.hoist (Const . checkEachDEntry) d1)
+isSubNodeDependence d1 d2 = D.toList <$> TM.foldMap collect (liftA2 (<>)) (return D.empty) (TM.hoist (Const . checkEachDEntry) d1)
   where
     collect :: forall t. Const (m (M.HashMap String String)) t -> m (D.DList Char)
     collect (Const m) = D.fromList . show <$> m
@@ -214,11 +210,14 @@ unliftSE (SE' se) = SE <$> M.foldrWithKey folder (Just M.empty) se
       | otherwise     = Nothing
 
 applyVarSubstitution :: VarSubstitution -> NodeDependence' dep -> NodeDependence' dep
-applyVarSubstitution sub = TM.hoistWithKey $ \(de :: DEntry' dep t) -> case TM.lookup @t sub of
+applyVarSubstitution vsb = TM.hoistWithKey $ \(de :: DEntry' dep t) -> case TM.lookup @t vsb of
   Nothing -> de
   Just se -> applySE se de
   where
-    applySE (SE se) (DE de) = DE $ M.union vs $ foldr M.delete de ks
+    applySE (SE se) (DE de)
+      = DE
+      $ M.union vs
+      $ foldr M.delete de ks
       where
         ks = S.toList $ M.keysSet se `S.intersection` M.keysSet de
         vs = M.fromList [(se M.! k, de M.! k) | k <- ks]
@@ -278,7 +277,7 @@ pathDegradedDeps p = run
 
 
 showDegDep :: NodeDependence' DegradedDep -> String
-showDegDep = intercalate ", " . TM.degrade (\(DE de) -> show de)
+showDegDep = intercalate ", " . TM.toListWith (\(DE de) -> show de)
 
 -- Instances
 instance (Show t) => Show (Dep t) where

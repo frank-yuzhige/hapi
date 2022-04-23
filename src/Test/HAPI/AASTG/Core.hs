@@ -80,7 +80,7 @@ type IsValidCall c api p = (All c p, All (Compose Eq Attribute) p, ApiName api, 
 data AASTG sig c = AASTG {
   getStart     :: !NodeID,
   getEdgesFrom :: !(IntMap [Edge sig c]),
-  getEdgesTo   :: !(IntMap [Edge sig c])
+  getEdgesTo   ::   IntMap [Edge sig c]
 } deriving Eq
 
 data TaggedEdge t api c = TE { getTag :: t, getEdge :: Edge api c }
@@ -147,7 +147,6 @@ instance Eq (Edge api c) where
   APICall s e mx api args == APICall s' e' mx' api' args' =
     s == s' && e == e' && repEq mx mx' && apiEq api api' && attributesEq args args'
   _ == _ = False
-
 instance Hashable (Edge api c) where
   hashWithSalt salt (Update s e k a) = salt
     `hashWithSalt` "u"

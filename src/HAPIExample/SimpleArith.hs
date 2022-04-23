@@ -16,12 +16,13 @@ import Data.Data (Typeable)
 import Test.HAPI.Args (args, Attribute (Anything, Get))
 import Control.Monad.IO.Class ( MonadIO(liftIO) )
 import Test.HAPI.AASTG.Core (AASTG)
-import Test.HAPI.Effect.Eff (runEnv, runEnvIO)
+import Test.HAPI.Effect.Eff (runEnv, runEnvIO, debug, debugIO)
 import Test.HAPI.AASTG.Effect.Build (runBuildAASTG, Building (Building), (%>), val, var, call, vcall, fork)
 import Test.HAPI.Common (Fuzzable)
 import Data.SOP (NP(Nil, (:*)))
 import Test.HAPI.AASTG.Analysis.Coalesce (coalesceAASTG, coalesceAASTGs)
 import Test.HAPI.AASTG.GraphViz (previewAASTG)
+import Test.HAPI.AASTG.Analysis.Rename (normalizeNodes)
 
 foreign import ccall "broken_add"
   add :: CInt -> CInt -> IO CInt
@@ -99,9 +100,22 @@ graph6 = runEnv $ runBuildAASTG $ do
   fork p $ call Add (Get c :* Get d :* Nil) $ p
   call Mul (Get a :* Get d :* Nil) $ p
 
-c1 = runEnv $ coalesceAASTG 500 graph1 graph2
-c2 = runEnv $ coalesceAASTG 500 (snd c1) graph3
-c3 = snd $ runEnv $ coalesceAASTG 500 (snd c2) graph4
+op :: AASTG api c -> AASTG api c -> IO (AASTG api c)
+op g1 g2 = runEnvIO @IO $ do
+  (h, c2) <- coalesceAASTG 5 g1 g2
+  debug   $ show h
+  let c2' = normalizeNodes 0 c2
+  debugIO $ previewAASTG c2'
+  debug   $ "Renaming"
+  return c2'
+
+c1 = op graph1 graph2
+c2 = c1 >>= \g -> op g graph3
+c3 = c2 >>= \g -> op g graph4
+c4 = c3 >>= \g -> op g graph5
+
+-- c2 = runEnv $ coalesceAASTG 500 (snd c1) graph3
+-- c3 = snd $ runEnv $ coalesceAASTG 500 (snd c2) graph4
 
 cograph :: AASTG ArithApi Fuzzable
 cograph = runEnv $ coalesceAASTGs 500 [graph1, graph2, graph3, graph4, graph5, graph6]
