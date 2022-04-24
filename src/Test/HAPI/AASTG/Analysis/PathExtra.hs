@@ -125,7 +125,7 @@ getIncomingPathsMap aastg = HM.map HS.toList $ foldr (HM.unionWith (<>) . trav) 
         when (i > 0) $ modify (HM.adjust (HS.insert (slice 0 i path)) n)
         modify @Int (+ 1)
 
-
+-- | Find the first edge in the given path that start from a node with another edge.
 findForkParent :: Path p => p api c -> AASTG api c -> Maybe (Edge api c)
 findForkParent p aastg = visit $ reverse $ pathAsList p
   where

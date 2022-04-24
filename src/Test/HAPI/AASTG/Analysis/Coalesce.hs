@@ -97,10 +97,11 @@ directCoalesceNode er p vsb aastg@(AASTG s fs bs) = do
     where
       ee  = pathEndNode p
       ee' = maxNodeID aastg + 1
+      -- | Delete from the original graph, the subgraph from the last parent node with only 1 outgoing edge.
       fs' = case findForkParent p aastg of
         Nothing -> foldr IM.delete fs (childrenOf ee)
         Just ed -> IM.adjust (filter (/= ed)) (startNode ed)
-                $ foldr IM.delete fs (childrenOf (endNode ed))
+                 $ foldr IM.delete fs (childrenOf (endNode ed))
       subgraph = let f = childGraph ee aastg
                  in  renameVars vsb
                   .  normalizeNodes ee'
@@ -108,7 +109,6 @@ directCoalesceNode er p vsb aastg@(AASTG s fs bs) = do
       childrenOf = IS.toList . (childrenNodes aastg IM.!)
       froms      = fs' <> getEdgesFrom subgraph
       combine    = AASTG s froms (edgesFrom2EdgesTo froms)
-      -- TODO delete parent edges until any fork
 
 coalesceOneStep :: Alg sig m
                 => AASTG api c

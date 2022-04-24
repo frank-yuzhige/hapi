@@ -92,6 +92,7 @@ toListWith f = map toF . TM.toTriples
     withTypeRep :: forall a. TypeRep a -> f a -> r
     withTypeRep tr an = withTypeable tr $ f an
     toF (_, an, k) = withTypeRep (unsafeCoerce k) (TM.fromAny an)
+{-# INLINE toListWith #-}
 
 instance (forall (a :: k). Typeable a => Hashable (f a)) => Hashable (TypeRepMap f) where
   hashWithSalt salt m = hashes salt

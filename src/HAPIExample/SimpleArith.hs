@@ -56,22 +56,20 @@ graph1 :: AASTG ArithApi Fuzzable
 graph1 = runEnv $ runBuildAASTG $ do
   a <- val @Int 10  $ p
   b <- var @Int Anything $ p
-  return ()
-  -- call Add (Get a :* Get b :* Nil) $ p
+  call Add (Get a :* Get b :* Nil) $ p
 
 graph2 :: AASTG ArithApi Fuzzable
 graph2 = runEnv $ runBuildAASTG $ do
   a <- var (Anything @Int) $ p
   b <- var (Anything @Int) $ p
-  return ()
-  -- call Add (Get a :* Get b :* Nil) $ p
+  call Add (Get a :* Get b :* Nil) $ p
   where p = Building @ArithApi @Fuzzable
 
 graph3 :: AASTG ArithApi Fuzzable
 graph3 = runEnv $ runBuildAASTG $ do
   a <- var (Anything @Int) $ p
   b <- var (Anything @Int) $ p
-  c <- vcall Add (Get a :* Get b :* Nil) $ p
+  c <- vcall Add (Get b :* Get a :* Nil) $ p
   call Add (Get a :* Get c :* Nil) $ p
 
 graph4 :: AASTG ArithApi Fuzzable
@@ -97,28 +95,34 @@ graph6 = runEnv $ runBuildAASTG $ do
   b <- var (Anything @Int) $ p
   c <- vcall Add (Get a :* Get b :* Nil) $ p
   d <- vcall Add (Get a :* Get c :* Nil) $ p
-  fork p $ call Add (Get c :* Get d :* Nil) $ p
+  -- fork p $ call Add (Get c :* Get d :* Nil) $ p
   call Mul (Get a :* Get d :* Nil) $ p
 
 op :: AASTG api c -> AASTG api c -> IO (AASTG api c)
-op g1 g2 = runEnvIO @IO $ do
-  (h, c2) <- coalesceAASTG 5 g1 g2
+op = op' 5
+
+op' :: Int -> AASTG api c -> AASTG api c -> IO (AASTG api c)
+op' n g1 g2 = runEnvIO @IO $ do
+  (h, c2) <- coalesceAASTG n g1 g2
   debug   $ show h
-  let c2' = normalizeNodes 0 c2
-  debugIO $ previewAASTG c2'
-  debug   $ "Renaming"
-  return c2'
+  return c2
+
 
 c1 = op graph1 graph2
 c2 = c1 >>= \g -> op g graph3
 c3 = c2 >>= \g -> op g graph4
 c4 = c3 >>= \g -> op g graph5
-
--- c2 = runEnv $ coalesceAASTG 500 (snd c1) graph3
--- c3 = snd $ runEnv $ coalesceAASTG 500 (snd c2) graph4
+c5 = c4 >>= \g -> op' 5 g graph6
 
 cograph :: AASTG ArithApi Fuzzable
 cograph = runEnv $ coalesceAASTGs 500 [graph1, graph2, graph3, graph4, graph5, graph6]
 
 previewCo :: IO ()
 previewCo = previewAASTG cograph
+
+
+test = do
+  previewAASTG graph6
+  c4 >>= previewAASTG
+  c5 >>= previewAASTG
+  -- previewCo
