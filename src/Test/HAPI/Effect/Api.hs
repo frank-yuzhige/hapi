@@ -80,7 +80,11 @@ newtype ApiFFIAC (api :: ApiDefinition) m a = ApiFFIAC { runApiFFIAC :: StateC V
 runApiFFI :: forall api m a . Monad m => ApiFFIAC api m a -> m a
 runApiFFI = evalState VP.empty . runApiFFIAC
 
-instance (Algebra sig m, HasForeignDef api, Members (Fresh :+: Error ApiError :+: Writer (ApiTrace api) :+: Trace) sig, MonadIO m) => Algebra (Api api :+: sig) (ApiFFIAC api m) where
+instance ( Algebra sig m
+         , HasForeignDef api
+         , Members (Fresh :+: Error ApiError :+: Writer (ApiTrace api) :+: Trace) sig
+         , MonadIO m)
+         => Algebra (Api api :+: sig) (ApiFFIAC api m) where
   alg hdl sig ctx = ApiFFIAC $ case sig of
     L (MkCall call args) -> do
       tell $ apiTrace $ CallOf call args

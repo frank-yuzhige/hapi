@@ -26,6 +26,7 @@ source-repository head
 library
   exposed-modules:
       HAPIExample.SimpleArith
+      Test.HAPI
       Test.HAPI.AASTG.Analysis.Coalesce
       Test.HAPI.AASTG.Analysis.Dependence
       Test.HAPI.AASTG.Analysis.Nodes
@@ -106,9 +107,6 @@ executable hapi-exe
   hs-source-dirs:
       app
   ghc-options: -threaded -rtsopts -with-rtsopts=-N -dynamic
-  extra-libraries:
-      asan
-      ubsan
   build-depends:
       HList >=0.5.0.0
     , QuickCheck >=2.14.2

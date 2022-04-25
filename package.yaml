@@ -10,6 +10,13 @@ extra-source-files:
 - README.md
 - ChangeLog.md
 
+# extra-lib-dirs:
+# - ${pkgroot}/test/test-api/lib
+
+# extra-libraries:
+# - arith
+
+
 # extra-include-dirs:
 #   - ./test/test-api/broken-arith
 # extra-lib-dirs:
@@ -55,6 +62,26 @@ dependencies:
 - graphviz >= 299.20.1.0
 - vector >= 0.12.3.1
 
+# ghc-options:
+  # - -dynamic
+  # - -fforce-recomp
+  # - -fllvm
+  # - -pgmP=clang   # CPP
+  # - -pgmc=clang   # CC
+  # - -pgma=clang   # Assembler
+  # - -pgml=clang++ # Linker
+
+#   # - -fllvm
+  # - -optc="-g"
+  # - -optc=-fsanitize=address
+  # - -optc=-fsanitize=undefined
+
+#   # - -optc="-fsanitize-coverage=edge,indirect-calls,8bit-counters,trace-cmp"
+  # - -optl="-g"
+  # - -optl=-fsanitize=address
+  # - -optl=-fsanitize=undefined
+#   # - -optl="-fsanitize-coverage=edge,indirect-calls,8bit-counters,trace-cmp"
+
 library:
   source-dirs: src
   cc-options:
@@ -62,17 +89,20 @@ library:
     # - -fsanitize=undefined
     - -O0
   c-sources:
-    - ./test/test-api/broken-arith/broken-arith.c
-    - ./test/test-api/broken-show/broken-show.c
-    - ./test/test-api/broken-stack/broken-stack.c
+  - ./test/test-api/broken-arith/broken-arith.c
+  - ./test/test-api/broken-show/broken-show.c
+  - ./test/test-api/broken-stack/broken-stack.c
+
+
+
 
 executables:
   hapi-exe:
     main:                Main.hs
     source-dirs:         app
-    extra-libraries:
-      - asan
-      - ubsan
+    # extra-libraries:
+      # - asan
+      # - ubsan
     ghc-options:
     - -threaded
     - -rtsopts

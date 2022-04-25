@@ -21,18 +21,18 @@ ffi = liftIO . unFFIO
 
 
 -- Need to use CInt instead of Int to prevent negative number underflow error
-foreign import ccall "broken_add"
-  add :: CInt -> CInt -> FFIO CInt
-foreign import ccall "segfault_minus"
-  sub :: CInt -> CInt -> FFIO CInt
-foreign import ccall "stateful_multiply"
-  mul :: CInt -> CInt -> FFIO CInt
-foreign import ccall "limited_input_range_negate"
-  neg :: CInt -> FFIO CInt
+-- foreign import ccall "broken_add"
+--   add :: CInt -> CInt -> FFIO CInt
+-- foreign import ccall "segfault_minus"
+--   sub :: CInt -> CInt -> FFIO CInt
+-- foreign import ccall "stateful_multiply"
+--   mul :: CInt -> CInt -> FFIO CInt
+-- foreign import ccall "limited_input_range_negate"
+--   neg :: CInt -> FFIO CInt
 
 
-foreign import ccall "broken_str"
-  str :: CInt -> FFIO CString
+-- foreign import ccall "broken_str"
+--   str :: CInt -> FFIO CString
 
 data Stack = Stack { top :: Int, array :: Ptr Int }
   deriving (Generic, Eq, Show)
@@ -47,13 +47,13 @@ instance Storable Stack where
 
 -- TODO: pointer translation (Ptr <-> Pointer)
 
-foreign import ccall "create_stack"
-  createStack  :: FFIO (Ptr Stack)
-foreign import ccall "push_stack"
-  pushStack    :: Ptr Stack -> CInt -> FFIO ()
-foreign import ccall "pop_stack"
-  popStack     :: Ptr Stack -> FFIO ()
-foreign import ccall "peek_stack"
-  peekStack    :: Ptr Stack -> FFIO CInt
-foreign import ccall "get_stack_size"
-  getStackSize :: Ptr Stack -> FFIO CInt
+-- foreign import ccall "create_stack"
+--   createStack  :: FFIO (Ptr Stack)
+-- foreign import ccall "push_stack"
+--   pushStack    :: Ptr Stack -> CInt -> FFIO ()
+-- foreign import ccall "pop_stack"
+--   popStack     :: Ptr Stack -> FFIO ()
+-- foreign import ccall "peek_stack"
+--   peekStack    :: Ptr Stack -> FFIO CInt
+-- foreign import ccall "get_stack_size"
+--   getStackSize :: Ptr Stack -> FFIO CInt

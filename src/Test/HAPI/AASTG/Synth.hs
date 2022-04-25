@@ -15,12 +15,13 @@ import Test.HAPI.AASTG.Core (AASTG (AASTG, getStart), Edge (Update, Forget, Asse
 import Test.HAPI.Args (Attribute(Get))
 
 import qualified Data.IntMap as IM
-import Test.HAPI.Effect.Fuzzer (Fuzzer)
+import Test.HAPI.Effect.Fuzzer (Fuzzer, EntropyFuzzer)
 import Test.HAPI.Effect.Orchestration (Orchestration, nextInstruction)
 import Test.HAPI.Effect.Orchestration.Labels (EntropySupply)
 import Data.ByteString (ByteString)
 import Control.Lens (element, (^?))
 import Data.Serialize (Serialize(put), runPut)
+import Test.HAPI.Effect.Eff ( send, debug, Alg )
 
 -- | Synthesize fuzzer stubs
 synthStub :: forall api sig c m. (Has (Fuzzer api c) sig m) => AASTG api c -> [m ()]
@@ -28,6 +29,7 @@ synthStub (AASTG start edges _) = synth start
   where
     synth i = case edges IM.!? i of
       Nothing -> [return ()]
+      Just [] -> [return ()]
       Just es -> concat [(synthOneStep edge >>) <$> synth (endNode edge) | edge <- es]
 
 synthOneStep :: forall api sig c m. (Has (Fuzzer api c) sig m) => Edge api c -> m ()
@@ -66,15 +68,17 @@ data EntropyStubResult = EntropyStubResult {
 }
 
 synthEntropyStub :: forall api sig c m.
-                  ( Has (Fuzzer api c) sig m
-                  , Has (Orchestration EntropySupply) sig m)
+                  ( Has (EntropyFuzzer api c) sig m
+                  , Alg sig m )
                  => AASTG api c -> m ()
 synthEntropyStub aastg = go (getStart aastg)
   where
     go i = do
       w <- nextInstruction @EntropySupply @EntropyWord
       case lookupEdgeFromEntropy i aastg w of
-        Nothing -> return ()
+        Nothing -> do
+          debug "[HAPI]: Entropy hits an invalid path."
+          return ()
         Just e  -> do
           synthOneStep e
           go (endNode e)

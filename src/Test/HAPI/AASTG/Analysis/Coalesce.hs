@@ -107,7 +107,7 @@ directCoalesceNode er p vsb aastg@(AASTG s fs bs) = do
                   .  normalizeNodes ee'
                   $  AASTG ee f (edgesFrom2EdgesTo f)
       childrenOf = IS.toList . (childrenNodes aastg IM.!)
-      froms      = fs' <> getEdgesFrom subgraph
+      froms      = IM.filter (not . null) (fs' <> getEdgesFrom subgraph)
       combine    = AASTG s froms (edgesFrom2EdgesTo froms)
 
 coalesceOneStep :: Alg sig m

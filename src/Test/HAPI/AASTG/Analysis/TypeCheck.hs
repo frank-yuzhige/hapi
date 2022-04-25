@@ -32,17 +32,19 @@ import Data.SOP (hcmap, NP (Nil, (:*)), All)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Set (Set)
+import Data.IntMap (IntMap)
 import Control.Monad (unless, forM_)
 import Data.String (IsString(fromString))
 
 import qualified Data.Map.Strict as M
 import qualified Data.TypeRepMap as TM
+import qualified Data.IntMap     as IM
 import qualified Data.Set        as S
 
 type StateType = Map String TypeRep
 type EdgeRep = Text
 
-data TypeCheckCtx = TypeCheckCtx { _states :: Map NodeID StateType, _checkedNodes :: Set NodeID } deriving Show
+data TypeCheckCtx = TypeCheckCtx { _states :: IntMap StateType, _checkedNodes :: Set NodeID } deriving Show
 
 $(makeLenses ''TypeCheckCtx)
 
@@ -54,23 +56,23 @@ data TypeErrorCause = DoubleTypeAssignedToOneNode StateType StateType | CantInfe
 
 typeCheck :: Eff (Error TypeCheckError) sig m => AASTG api c -> m TypeCheckCtx
 typeCheck aastg@(AASTG start fs ts) =
-    runState (\s a -> return s) (TypeCheckCtx M.empty S.empty)
+    runState (\s a -> return s) (TypeCheckCtx IM.empty S.empty)
   $ checking start
   where
     checking :: forall sig m. (Eff (State TypeCheckCtx :+: Error TypeCheckError) sig m) => NodeID -> m ()
     checking i = do
       checked <- gets (S.member i . view checkedNodes)
       unless checked $ do
-        st <- gets (fromMaybe M.empty . (M.!? i) . view states)
+        st <- gets (fromMaybe M.empty . (IM.!? i) . view states)
         forM_ (edgesFrom i aastg) $ \edge -> do
           let throwErr x = throwError . TypeCheckError x (fromString $ show edge)
           case checkEdgeAndUpdate edge st of
             Nothing -> throwErr i CantInferNextStateType
             Just nt -> do
               let e = endNode edge
-              oldNT <- gets ((M.!? e) . view states)
+              oldNT <- gets ((IM.!? e) . view states)
               case oldNT of
-                Nothing              -> modify $ over states $ M.insert e nt
+                Nothing              -> modify $ over states $ IM.insert e nt
                 Just nt' | nt /= nt' -> throwErr e (DoubleTypeAssignedToOneNode nt nt')
                 _                    -> return ()
               checking e
