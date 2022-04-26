@@ -12,8 +12,9 @@ import Test.HAPI.PState (PState)
 import Test.HAPI.Effect.Property (PropertyA)
 import Test.HAPI.Effect.Orchestration (Orchestration)
 import Test.HAPI.Effect.Orchestration.Labels (EntropySupply)
+import Test.HAPI.Effect.Entropy (EntropySupplier)
 
 -- | Type Synonym of a fuzzer for an API set.
 type Fuzzer api c = (Api api :+: QVS c :+: State PState :+: PropertyA)
 
-type EntropyFuzzer api c = (Fuzzer api c :+: Orchestration EntropySupply)
+type EntropyFuzzer api c = (Fuzzer api c :+: EntropySupplier)

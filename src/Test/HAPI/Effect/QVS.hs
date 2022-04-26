@@ -13,7 +13,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE StandaloneDeriving #-}
 
 {-
 Quantified Value Generation Effect
@@ -29,7 +28,6 @@ import Data.Functor (($>))
 import Control.Carrier.State.Church (StateC, get)
 import Control.Effect.State ( State, gets )
 import Control.Effect.Sum (Member, Members)
-import Test.HAPI.DataType (TypeSpec, GetSpecCons, TyMember, WFTypeSpec, GetSpecTypes, WFTypeSpec_, TyIn)
 import Test.QuickCheck.Gen (Gen)
 import Test.QuickCheck.GenT (MonadGen (liftGen))
 import Test.HAPI.PState (PKey, PState, PStateSupports (lookUp))
@@ -62,10 +60,10 @@ qvs2m (qvs :* q) = do
   s <- qvs2m q
   return (a ::* s)
 
-newtype QVSFuzzArbitraryAC s m a = QVSFuzzArbitraryAC { runQVSFuzzArbitraryAC :: m a }
+newtype QVSFuzzArbitraryAC m a = QVSFuzzArbitraryAC { runQVSFuzzArbitraryAC :: m a }
   deriving (Functor, Applicative, Monad, MonadFail, MonadIO)
 
-instance (Algebra sig m, Members (State PState :+: GenA) sig) => Algebra (QVS Arbitrary :+: sig) (QVSFuzzArbitraryAC spec m) where
+instance (Algebra sig m, Members (State PState :+: GenA) sig) => Algebra (QVS Arbitrary :+: sig) (QVSFuzzArbitraryAC m) where
   alg hdl sig ctx = QVSFuzzArbitraryAC $ case sig of
     L qvs   -> resolveQVS qvs
     R other -> alg (runQVSFuzzArbitraryAC . hdl) other ctx
@@ -109,9 +107,27 @@ instance (Algebra sig m, MonadIO m) => Algebra (QVS Read :+: sig) (QVSFromStdinA
 newtype QVSFromOrchestrationAC m a = QVSFromOrchestrationAC { runQVSFromOrchestrationAC :: m a }
   deriving (Functor, Applicative, Monad, MonadFail)
 
-instance (Has (Orchestration QVSSupply) sig m) => Algebra (QVS Fuzzable :+: sig) (QVSFromOrchestrationAC m) where
+instance (Has (Orchestration QVSSupply :+: State PState) sig m) => Algebra (QVS Fuzzable :+: sig) (QVSFromOrchestrationAC m) where
   alg hdl sig ctx = QVSFromOrchestrationAC $ case sig of
-    L (QVS (attr :: Attribute a)) -> do
-      x <- nextInstruction @QVSSupply @a
-      return (ctx $> x)
+    L qvs   -> resolveQVS qvs
     R other -> alg (runQVSFromOrchestrationAC . hdl) other ctx
+    where
+      resolveQVS (QVS attr) = case attr of
+        Value v      -> do
+          return (ctx $> v)
+        Anything     -> do
+          v <- nextInstruction @QVSSupply
+          return (ctx $> v)
+        IntRange l r -> do
+          v <- nextInstruction @QVSSupply
+          return (ctx $> (l + v `mod` (r - l + 1)))
+        Range    l r -> do
+          v <- nextInstruction @QVSSupply   -- FIXME
+          return (ctx $> v)
+        Get k        -> do
+          v <- gets @PState (lookUp k)
+          return (ctx $> fromJust v)   -- TODO Exception
+        AnyOf xs     -> do
+          v <- nextInstruction @QVSSupply
+          let a = xs !! (v `mod` length xs)
+          resolveQVS (QVS a)

@@ -26,7 +26,6 @@ source-repository head
 library
   exposed-modules:
       HAPIExample.SimpleArith
-      Test.HAPI
       Test.HAPI.AASTG.Analysis.Coalesce
       Test.HAPI.AASTG.Analysis.Dependence
       Test.HAPI.AASTG.Analysis.Nodes
@@ -45,6 +44,7 @@ library
       Test.HAPI.DataType
       Test.HAPI.Effect.Api
       Test.HAPI.Effect.Eff
+      Test.HAPI.Effect.Entropy
       Test.HAPI.Effect.FF
       Test.HAPI.Effect.Fuzzer
       Test.HAPI.Effect.Gen
@@ -55,6 +55,7 @@ library
       Test.HAPI.FFI
       Test.HAPI.Lib
       Test.HAPI.PState
+      Test.HAPI.Run
       Test.HAPI.Serialize
       Test.HAPI.Util.Empty
       Test.HAPI.Util.SOP

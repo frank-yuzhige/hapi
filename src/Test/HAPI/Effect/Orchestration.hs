@@ -4,7 +4,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RankNTypes #-}
@@ -25,11 +24,11 @@ import qualified Data.Serialize as S
 import Data.Functor (($>))
 import Control.Effect.Error (Error, throwError)
 import Control.Effect.Sum (Members)
-import Control.Effect.Labelled (HasLabelled, sendLabelled, runLabelled)
+import Control.Effect.Labelled (HasLabelled, sendLabelled, runLabelled, Labelled)
 import Control.Effect.State (State (Get, Put))
 import Data.Serialize (Serialize)
-import Control.Carrier.Error.Church (runError)
-import Control.Carrier.State.Church (runState)
+import Control.Carrier.Error.Church (runError, ErrorC)
+import Control.Carrier.State.Church (runState, StateC)
 
 data Orchestration label (m :: Type -> Type) a where
   NextInstruction :: (Serialize a) => Orchestration label m a
@@ -43,20 +42,27 @@ instance Show OrchestrationError where
   show (CerealError err) = "Cereal Error: " <> err
 
 newtype OrchestrationViaBytesAC label m a = OrchestrationViaBytesAC { runOrchestrationViaBytesAC :: m a }
-  deriving (Functor, Applicative, Monad)
+  deriving (Functor, Applicative, Monad, MonadFail)
+
+type OrchestrationViaBytesFC label m a
+  = OrchestrationViaBytesAC label
+    (Labelled label
+      (StateC ByteString)
+      (ErrorC OrchestrationError m))
+    a
 
 runOrchestrationViaBytes :: forall label a sig m. Algebra sig m
                          => (OrchestrationError -> m a)
                          -> ByteString
-                         -> (forall sig m. Has (Orchestration label) sig m => m a)
+                         -> OrchestrationViaBytesFC label m a
                          -> m a
-runOrchestrationViaBytes err bs =
-    runError @OrchestrationError err return
-  . runState @ByteString (\_ a -> return a) bs
-  . runLabelled @label
-  . runOrchestrationViaBytesAC @label
-
-instance ( Has (Error OrchestrationError) sig m
+runOrchestrationViaBytes err bs n
+  = runError err return
+  $ runState (\_ a -> return a) bs
+  $ runLabelled @label
+  $ runOrchestrationViaBytesAC @label
+  $ n
+instance ( Has       (Error OrchestrationError) sig m
          , HasLabelled label (State ByteString) sig m)
          => Algebra (Orchestration label :+: sig) (OrchestrationViaBytesAC label m) where
   alg hdl sig ctx = OrchestrationViaBytesAC $ case sig of

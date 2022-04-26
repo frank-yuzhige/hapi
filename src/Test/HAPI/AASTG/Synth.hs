@@ -22,6 +22,7 @@ import Data.ByteString (ByteString)
 import Control.Lens (element, (^?))
 import Data.Serialize (Serialize(put), runPut)
 import Test.HAPI.Effect.Eff ( send, debug, Alg )
+import Test.HAPI.Effect.Entropy (getEntropy)
 
 -- | Synthesize fuzzer stubs
 synthStub :: forall api sig c m. (Has (Fuzzer api c) sig m) => AASTG api c -> [m ()]
@@ -67,14 +68,14 @@ data EntropyStubResult = EntropyStubResult {
 
 }
 
-synthEntropyStub :: forall api sig c m.
+synthEntropyStub :: forall api c sig m.
                   ( Has (EntropyFuzzer api c) sig m
                   , Alg sig m )
                  => AASTG api c -> m ()
 synthEntropyStub aastg = go (getStart aastg)
   where
     go i = do
-      w <- nextInstruction @EntropySupply @EntropyWord
+      w <- getEntropy (length $ edgesFrom i aastg)
       case lookupEdgeFromEntropy i aastg w of
         Nothing -> do
           debug "[HAPI]: Entropy hits an invalid path."

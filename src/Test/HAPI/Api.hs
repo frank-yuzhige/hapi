@@ -18,11 +18,12 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE DefaultSignatures #-}
 
 module Test.HAPI.Api where
 import Control.Algebra (Has, alg, send, Algebra, (:+:) (L, R), Handler)
 import Control.Monad.IO.Class (MonadIO (liftIO))
-import Control.Carrier.State.Church (StateC(..), put, execState)
+import Control.Carrier.State.Church (StateC(..), put, execState, runState)
 import Control.Carrier.Cull.Church (MonadPlus)
 import Control.Carrier.Reader (ReaderC, runReader)
 import Control.Carrier.Writer.Strict (WriterC, tell, runWriter)
@@ -30,7 +31,7 @@ import Data.Functor (($>))
 import Data.Void (Void)
 import Data.Kind (Constraint, Type)
 import Text.Read (readMaybe)
-import Control.Effect.Labelled (Labelled (Labelled), runLabelled)
+import Control.Effect.Labelled (Labelled (Labelled), runLabelled, HasLabelled, sendLabelled)
 import Test.HAPI.FFI (FFIO(FFIO, unFFIO))
 import Control.Monad.Trans.Identity (IdentityT (runIdentityT))
 import Control.Monad.Trans.Class (MonadTrans (lift))
@@ -43,7 +44,7 @@ import Test.HAPI.VPtr (VPtr (VPtr), VPtrTable (VPtrTable), ptr2VPtr, storePtr, v
 import Foreign (Ptr)
 import Control.Effect.State (State, modify, gets)
 import Control.Effect.Fail (Fail)
-import Control.Carrier.Fresh.Church (Fresh, fresh)
+import Control.Carrier.Fresh.Church (Fresh (Fresh), fresh, runFresh, FreshC)
 import Data.Data (Typeable)
 import Test.HAPI.Effect.FF (FF)
 import Control.Effect.Error (Error, throwError)
@@ -52,6 +53,8 @@ import qualified Data.DList as DL
 import Data.Type.Equality (testEquality, castWith, type (:~:), inner, outer)
 import Type.Reflection (typeOf)
 import Control.Monad (guard)
+import Control.Carrier.Error.Church (runError, ErrorC)
+import qualified Test.HAPI.VPtr as VP
 
 
 -- TODO: make a data class
@@ -59,23 +62,46 @@ type ApiError = String
 
 type ApiDefinition = [Type] -> Type -> Type
 
+type ValidApiDef api = (HasForeignDef api, ApiName api)
+
+
+-- | Local Foreign Label
+data F
+
 -- | Given API spec has a FFI
-type ForeignA = (State VPtrTable :+: Fresh :+: Error ApiError)
+type HasForeign sig m = (Has (State VPtrTable :+: Error ApiError) sig m, HasLabelled F Fresh sig m)
+
+runForeign' :: (ApiError -> m b)
+            -> (a1 -> m b)
+            -> (VPtrTable -> a2 -> ErrorC ApiError m a1)
+            -> (Int -> a3 -> StateC VPtrTable (ErrorC ApiError m) a2)
+            -> VPtrTable
+            -> Int
+            -> Labelled F FreshC (StateC VPtrTable (ErrorC ApiError m)) a3
+            -> m b
+runForeign' fe fa fs ff s i x = runError fe fa $ runState fs s $ runFresh ff i $ runLabelled @F $ x
+
+runForeign :: Monad m => (ApiError -> m b) -> Labelled F FreshC (StateC VPtrTable (ErrorC ApiError m)) b -> m b
+runForeign fe = runForeign' fe return (\s a -> return a) (\s a -> return a) VP.empty 0
+
 
 -- | Name of an API call
 class (forall p a. Eq (api p a), Typeable api) => ApiName (api :: ApiDefinition) where
   apiName :: api p a -> String
+
+  default apiName :: (forall p a. Show (api p a)) => api p a -> String
+  apiName = show
 
 -- | Given API spec has a direct mapping to its haskell pure implementation
 class HasHaskellDef (api :: ApiDefinition) where
   evalHaskell :: api p a -> Args p -> a
 
 class HasForeignDef (api :: ApiDefinition) where
-  evalForeign :: (Has ForeignA sig m, MonadIO m) => api p a -> Args p -> m a
+  evalForeign :: (HasForeign sig m, MonadIO m) => api p a -> Args p -> m a
 
-newVPtr :: forall t m sig. (Typeable t, Has ForeignA sig m, MonadIO m) => Ptr t -> m (VPtr t)
+newVPtr :: forall t m sig. (Typeable t, HasForeign sig m, MonadIO m) => Ptr t -> m (VPtr t)
 newVPtr p = do
-  i <- fresh
+  i <- sendLabelled @F Fresh
   let name = "p" <> show i
   modify @VPtrTable (storePtr name p)
   a <- gets @VPtrTable (ptr2VPtr p)
@@ -83,7 +109,7 @@ newVPtr p = do
     Nothing -> throwError "Should not be here"
     Just vp -> return vp
 
-getPtr :: forall t m sig. (Typeable t, Has ForeignA sig m, MonadIO m) => VPtr t -> m (Ptr t)
+getPtr :: forall t m sig. (Typeable t, HasForeign sig m, MonadIO m) => VPtr t -> m (Ptr t)
 getPtr v = do
   p <- gets @VPtrTable (vPtr2Ptr v)
   case p of
@@ -194,10 +220,3 @@ apiTrace = ApiTrace . DL.singleton
 
 instance Show (ApiTraceEntry api) => Show (ApiTrace api) where
   show (ApiTrace xs) = "ApiTrace " <> show xs
-
-instance {-# OVERLAPPABLE #-}
-  (forall p a. Show (api p a), forall p a. Eq (api p a), Typeable api) => ApiName api where
-  apiName = show
-
-instance {-# OVERLAPPABLE #-} ApiName api => Show (api p a) where
-  show = apiName

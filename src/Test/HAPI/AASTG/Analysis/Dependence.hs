@@ -29,7 +29,7 @@ import Test.HAPI.AASTG.Analysis.Rename (maxNodeID, minNodeID, SubEntry (SE, unSE
 import Data.Data (Typeable,type  (:~:) (Refl))
 import Data.SOP (NP (Nil, (:*)), All)
 import Test.HAPI.AASTG.Analysis.Path (pathNodesInSeq, Path)
-import Test.HAPI.Api (apiEq, ApiName, apiEqProofs)
+import Test.HAPI.Api (apiEq, ApiName (apiName), apiEqProofs)
 import Data.Type.Equality (testEquality, castWith, apply)
 import Type.Reflection (typeOf)
 import Test.HAPI.Common (Fuzzable)
@@ -282,7 +282,7 @@ showDegDep = intercalate ", " . TM.toListWith (\(DE de) -> show de)
 -- Instances
 instance (Show t) => Show (Dep t) where
   show (DepAttr at)     = "DepAttr(" <> show at  <> ")"
-  show (DepCall api np) = "DepCall(" <> show api <> "(" <> intercalate "," (showAttributes np) <> ")"
+  show (DepCall api np) = "DepCall(" <> apiName api <> "(" <> intercalate "," (showAttributes np) <> ")"
 
 instance (Eq t, Typeable t) => Eq (Dep t) where
   (DepAttr a)   == (DepAttr b)   = a == b

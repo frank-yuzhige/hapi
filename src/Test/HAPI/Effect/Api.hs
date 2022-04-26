@@ -13,7 +13,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 module Test.HAPI.Effect.Api where
-import Test.HAPI.Api (ApiDefinition, HasHaskellDef (evalHaskell), HaskellIOCall (readOut), HasForeignDef (evalForeign), ApiName (apiName), ApiTrace (ApiTrace), ApiTraceEntry (CallOf), ApiError, apiTrace)
+import Test.HAPI.Api (ApiDefinition, HasHaskellDef (evalHaskell), HaskellIOCall (readOut), HasForeignDef (evalForeign), ApiName (apiName), ApiTrace (ApiTrace), ApiTraceEntry (CallOf), ApiError, apiTrace, HasForeign)
 import Data.Kind (Type)
 import Test.HAPI.Args (Args, showArgs)
 import Test.HAPI.Common (Fuzzable)
@@ -74,31 +74,27 @@ instance (Algebra sig m, MonadIO m, MonadFail m, HaskellIOCall api) => Algebra (
 
 -- | Foreign
 
-newtype ApiFFIAC (api :: ApiDefinition) m a = ApiFFIAC { runApiFFIAC :: StateC VPtrTable m a }
+newtype ApiFFIAC (api :: ApiDefinition) m a = ApiFFIAC { runApiFFIAC :: m a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadFail)
 
 runApiFFI :: forall api m a . Monad m => ApiFFIAC api m a -> m a
-runApiFFI = evalState VP.empty . runApiFFIAC
+runApiFFI = runApiFFIAC
 
 instance ( Algebra sig m
          , HasForeignDef api
-         , Members (Fresh :+: Error ApiError :+: Writer (ApiTrace api) :+: Trace) sig
+         , HasForeign sig m
+         , Members (Writer (ApiTrace api) :+: Trace) sig
          , MonadIO m)
          => Algebra (Api api :+: sig) (ApiFFIAC api m) where
   alg hdl sig ctx = ApiFFIAC $ case sig of
     L (MkCall call args) -> do
       tell $ apiTrace $ CallOf call args
       trace $ apiName call <> showArgs args
-      vt <- get @VPtrTable
       r <- evalForeign call args
       return (ctx $> r)
-    R other -> alg (runApiFFIAC . hdl) (R other) ctx
+    R other -> alg (runApiFFIAC . hdl) other ctx
 
 -- | Logging
-newtype ApiTracingAC underlying (api :: ApiDefinition) m a = ApiTracingAC {
-  runApiTracingAC :: (forall m b. (Monad m) => underlying api m b -> m b) -> (forall m b. (Monad m) => m b -> underlying api m b) -> m a
-}
-
 -- runApiTracing :: forall api underlying m a. (forall m b. (Monad m) => underlying api m b -> m b) -> (forall m b. (Monad m) => m b -> underlying api m b) -> ApiTracingAC underlying api m a -> m a
 -- runApiTracing f u (ApiTracingAC c) = c f u
 

@@ -14,7 +14,6 @@
 
 module Test.HAPI.PState where
 import Prelude hiding (lookup)
-import Test.HAPI.DataType (TypeSpec, TyIn, TyMember)
 import Control.Algebra (Has, type (:+:))
 import Control.Effect.State (State)
 import Control.Carrier.Fresh.Church (Fresh)
