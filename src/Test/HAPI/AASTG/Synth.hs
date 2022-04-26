@@ -75,11 +75,13 @@ synthEntropyStub :: forall api c sig m.
 synthEntropyStub aastg = go (getStart aastg)
   where
     go i = do
-      w <- getEntropy (length $ edgesFrom i aastg)
-      case lookupEdgeFromEntropy i aastg w of
-        Nothing -> do
-          debug "[HAPI]: Entropy hits an invalid path."
-          return ()
-        Just e  -> do
-          synthOneStep e
-          go (endNode e)
+      let choice = edgesFrom i aastg
+      if null choice then return () else do
+        w <- getEntropy (length choice)
+        case lookupEdgeFromEntropy i aastg w of
+          Nothing -> do
+            debug "[HAPI]: Entropy hits an invalid path."
+            return ()
+          Just e  -> do
+            synthOneStep e
+            go (endNode e)

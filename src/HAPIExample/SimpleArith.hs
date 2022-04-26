@@ -40,6 +40,7 @@ import Test.HAPI.Effect.QVS (runQVSFuzzArbitraryAC)
 import qualified Test.HAPI.PState as PS
 import Test.HAPI.AASTG.Analysis.Path (outPaths)
 import qualified Test.HAPI.VPtr as VP
+import Test.HAPI.DataType (BasicSpec)
 
 foreign import ccall "broken_add"
   add :: CInt -> CInt -> IO CInt
@@ -67,47 +68,48 @@ instance HasForeignDef ArithApi where
   evalForeign Mul [args|a b|] = fromIntegral <$> liftIO (mul (fromIntegral a) (fromIntegral b))
   evalForeign Neg [args|a|]   = fromIntegral <$> liftIO (neg (fromIntegral a))
 
-p :: Building ArithApi Arbitrary
-p = Building
 
-graph1 :: AASTG ArithApi Arbitrary
+graph1 :: forall c. BasicSpec c => AASTG ArithApi c
 graph1 = runEnv $ runBuildAASTG $ do
   a <- val @Int 10  $ p
   b <- var @Int Anything $ p
   call Add (Get a :* Get b :* Nil) $ p
+  where p = Building @ArithApi @c
 
-graph2 :: AASTG ArithApi Arbitrary
+graph2 :: forall c. BasicSpec c => AASTG ArithApi c
 graph2 = runEnv $ runBuildAASTG $ do
   a <- var (Anything @Int) $ p
   b <- var (Anything @Int) $ p
   call Add (Get a :* Get b :* Nil) $ p
-  where p = Building @ArithApi @Arbitrary
+  where p = Building @ArithApi @c
 
-graph3 :: AASTG ArithApi Arbitrary
+graph3 :: forall c. BasicSpec c => AASTG ArithApi c
 graph3 = runEnv $ runBuildAASTG $ do
   a <- var (Anything @Int) $ p
   b <- var (Anything @Int) $ p
   c <- vcall Add (Get b :* Get a :* Nil) $ p
   call Add (Get a :* Get c :* Nil) $ p
+  where p = Building @ArithApi @c
 
-graph4 :: AASTG ArithApi Arbitrary
+graph4 :: forall c. BasicSpec c => AASTG ArithApi c
 graph4 = runEnv $ runBuildAASTG $ do
   a <- var (Anything @Int) $ p
   b <- var (Anything @Int) $ p
   c <- vcall Add (Get a :* Get b :* Nil) $ p
   d <- vcall Add (Get a :* Get c :* Nil) $ p
   call Add (Get c :* Get d :* Nil) $ p
+  where p = Building @ArithApi @c
 
-graph5 :: AASTG ArithApi Arbitrary
+graph5 :: forall c. BasicSpec c => AASTG ArithApi c
 graph5 = runEnv $ runBuildAASTG $ do
   a <- var (Anything @Int) $ p
   b <- var (Anything @Int) $ p
   c <- vcall Add (Get a :* Get b :* Nil) $ p
   d <- vcall Sub (Get a :* Get c :* Nil) $ p
   call Add (Get c :* Get d :* Nil) $ p
+  where p = Building @ArithApi @c
 
-
-graph6 :: AASTG ArithApi Arbitrary
+graph6 :: forall c. BasicSpec c => AASTG ArithApi c
 graph6 = runEnv $ runBuildAASTG $ do
   a <- var (Anything @Int) $ p
   b <- var (Anything @Int) $ p
@@ -115,8 +117,9 @@ graph6 = runEnv $ runBuildAASTG $ do
   d <- vcall Add (Get a :* Get c :* Nil) $ p
   fork p $ call Neg (Get c :* Nil) $ p
   call Mul (Get a :* Get d :* Nil) $ p
+  where p = Building @ArithApi @c
 
-cograph :: AASTG ArithApi Arbitrary
+cograph :: forall c. BasicSpec c => AASTG ArithApi c
 cograph = runEnv $ coalesceAASTGs 500 [graph1, graph2, graph3, graph4, graph5, graph6]
 
 op :: AASTG api c -> AASTG api c -> IO (AASTG api c)
@@ -129,42 +132,42 @@ op' n g1 g2 = runEnvIO @IO $ do
   return c2
 
 
-c1 = op graph1 graph2
-c2 = c1 >>= \g -> op g graph3
-c3 = c2 >>= \g -> op g graph4
-c4 = c3 >>= \g -> op g graph5
-c5 = c4 >>= \g -> op' 5 g graph6
+-- c1 = op graph1 graph2
+-- c2 = c1 >>= \g -> op g graph3
+-- c3 = c2 >>= \g -> op g graph4
+-- c4 = c3 >>= \g -> op g graph5
+-- c5 = c4 >>= \g -> op' 5 g graph6
 
 
 previewCo :: IO ()
-previewCo = previewAASTG cograph
+previewCo = previewAASTG (cograph @Fuzzable)
 
 
-test = do
-  previewAASTG graph6
-  c4 >>= previewAASTG
-  c5 >>= previewAASTG
-  -- previewCo
+-- test = do
+--   previewAASTG graph6
+--   c4 >>= previewAASTG
+--   c5 >>= previewAASTG
+--   -- previewCo
 
-runGraph1 :: forall m sig. (MonadIO m, MonadFail m, Alg sig m) => m ()
-runGraph1 = do
-  let s = synthStub cograph
-  debug $ show (length s)
-  debug $ show (length (outPaths 0 cograph))
-  forM_ s $ \stub -> do id
-       . runGenIO
-       . runError @PropertyError (fail . show) pure
-       . runProperty @PropertyA
-       . runWriter @(ApiTrace ArithApi)
-       . runTrace
-       . runForeign (fail . show)
-       . runApiFFI @ArithApi
-       . runState (\s a -> return a) PS.empty
-       . runQVSFuzzArbitraryAC
-       $ stub
+-- runGraph1 :: forall m sig. (MonadIO m, MonadFail m, Alg sig m) => m ()
+-- runGraph1 = do
+--   let s = synthStub cograph
+--   debug $ show (length s)
+--   debug $ show (length (outPaths 0 cograph))
+--   forM_ s $ \stub -> do id
+--        . runGenIO
+--        . runError @PropertyError (fail . show) pure
+--        . runProperty @PropertyA
+--        . runWriter @(ApiTrace ArithApi)
+--        . runTrace
+--        . runForeign (fail . show)
+--        . runApiFFI @ArithApi
+--        . runState (\s a -> return a) PS.empty
+--        . runQVSFuzzArbitraryAC
+--        $ stub
 
-gogo :: IO ()
-gogo = runEnvIO runGraph1
+-- gogo :: IO ()
+-- gogo = runEnvIO runGraph1
 
 -- foreign export ccall "LLVMFuzzerTestOneInput" testOneInputM
 --     :: CString -> CSize -> IO CInt

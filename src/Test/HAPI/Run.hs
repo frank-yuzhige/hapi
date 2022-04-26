@@ -7,6 +7,7 @@ import Test.HAPI.AASTG.Core (AASTG(AASTG))
 import Control.Monad.IO.Class (MonadIO)
 import Test.QuickCheck (Arbitrary)
 import Test.HAPI.Effect.Property
+    ( PropertyA, PropertyError, runProperty )
 import Test.HAPI.Api (ApiTrace, runForeign, HasForeignDef, ApiName, ValidApiDef)
 import qualified Test.HAPI.PState as PS
 import Test.HAPI.Effect.Eff (debug, runEnvIO, Algebra)
@@ -50,7 +51,10 @@ runFuzzTestNonDet aastg = runEnvIO $ do
 
 
 runFuzzTest :: forall api sig m. (MonadIO m, MonadFail m, Algebra sig m, ValidApiDef api) => AASTG api Fuzzable -> ByteString -> m ()
-runFuzzTest aastg bs = runEnvIO $ do
+runFuzzTest aastg bs
+  | BS.length entropy < 128 = return ()
+  | BS.length qvs     < 128 = return ()
+  | otherwise = runEnvIO $ do
   runGenIO
     $ runError @PropertyError (fail . show) pure
     $ runProperty @PropertyA

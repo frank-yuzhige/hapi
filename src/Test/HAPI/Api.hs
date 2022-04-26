@@ -64,7 +64,6 @@ type ApiDefinition = [Type] -> Type -> Type
 
 type ValidApiDef api = (HasForeignDef api, ApiName api)
 
-
 -- | Local Foreign Label
 data F
 
