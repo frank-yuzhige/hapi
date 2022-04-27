@@ -20,7 +20,6 @@ import Test.HAPI.Common (Fuzzable)
 import Control.Algebra (Has, Algebra (alg), type (:+:) (L, R), send)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Functor (($>))
-import Test.HAPI.FFI (FFIO(unFFIO))
 import Data.List (intercalate)
 import Control.Carrier.Writer.Strict (Writer, tell, runWriter)
 import Control.Effect.Sum (Member, Members)
@@ -34,7 +33,8 @@ import Control.Effect.Error ( Error )
 
 -- | Wrapper to the original Api
 data Api (api :: ApiDefinition) (m :: Type -> Type) a where
-  MkCall :: (ApiName api, All Fuzzable p) =>  api p a -> Args p -> Api api m a
+  MkCall :: (ApiName api, All Fuzzable p)
+         => api p a -> Args p -> Api api m a
 
 mkCall :: (Has (Api api) sig m, Fuzzable a, ApiName api, All Fuzzable p) => api p a -> Args p -> m a
 mkCall = (send .) . MkCall
@@ -93,29 +93,4 @@ instance ( Algebra sig m
       r <- evalForeign call args
       return (ctx $> r)
     R other -> alg (runApiFFIAC . hdl) other ctx
-
--- | Logging
--- runApiTracing :: forall api underlying m a. (forall m b. (Monad m) => underlying api m b -> m b) -> (forall m b. (Monad m) => m b -> underlying api m b) -> ApiTracingAC underlying api m a -> m a
--- runApiTracing f u (ApiTracingAC c) = c f u
-
--- instance (Algebra (Api api :+: sig) (underlying api m),
---           Algebra sig m,
---           Members (Writer (ApiTrace api) :+: Trace) sig,
---           MonadIO m)
---           => Algebra (Api api :+: sig) (ApiTracingAC underlying api m) where
---   alg hdl sig ctx = ApiTracingAC $ \u c -> case sig of
---     L api@(MkCall f args) -> do
---       u (alg (c . runApiTracing u c . hdl) (L api) ctx)
---     R other -> alg (runApiTracing u c . hdl) other ctx
-
-
--- instance (Functor (underlying api m), Functor m) => Functor (ApiTracingAC underlying api m) where
---   fmap f (ApiTracingAC ac) = ApiTracingAC $ \u c -> fmap f (ac u c)
-
--- instance (Applicative (underlying api m), Applicative m) => Applicative (ApiTracingAC underlying api m) where
---   pure a  = ApiTracingAC $ \_ _ -> pure a
---   (ApiTracingAC f) <*> (ApiTracingAC a) = ApiTracingAC $ \u c -> f u c <*> a u c
-
--- instance (Monad (underlying api m), Monad m) => Monad (ApiTracingAC underlying api m) where
---   (ApiTracingAC a) >>= f = ApiTracingAC $ \u c -> a u c >>= (runApiTracing u c . f)
 

@@ -43,8 +43,8 @@ class (Typeable t) => PStateSupports s t where
   forget  :: PKey t -> s -> s
   lookUp  :: PKey t -> s -> Maybe t
 
-empty :: PState
-empty = PState TM.empty
+emptyPState :: PState
+emptyPState = PState TM.empty
 
 instance (Typeable t) => PStateSupports PState t where
   record k v (PState ts) = PState $ case TM.lookup @t ts of

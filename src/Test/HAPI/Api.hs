@@ -21,6 +21,7 @@
 {-# LANGUAGE DefaultSignatures #-}
 
 module Test.HAPI.Api where
+
 import Control.Algebra (Has, alg, send, Algebra, (:+:) (L, R), Handler)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Carrier.State.Church (StateC(..), put, execState, runState)
@@ -32,7 +33,6 @@ import Data.Void (Void)
 import Data.Kind (Constraint, Type)
 import Text.Read (readMaybe)
 import Control.Effect.Labelled (Labelled (Labelled), runLabelled, HasLabelled, sendLabelled)
-import Test.HAPI.FFI (FFIO(FFIO, unFFIO))
 import Control.Monad.Trans.Identity (IdentityT (runIdentityT))
 import Control.Monad.Trans.Class (MonadTrans (lift))
 import Data.HList (HList (HNil, HCons), HBuild')
@@ -46,14 +46,13 @@ import Control.Effect.State (State, modify, gets)
 import Control.Effect.Fail (Fail)
 import Control.Carrier.Fresh.Church (Fresh (Fresh), fresh, runFresh, FreshC)
 import Data.Data (Typeable)
-import Test.HAPI.Effect.FF (FF)
 import Control.Effect.Error (Error, throwError)
 import Data.DList (DList)
-import qualified Data.DList as DL
 import Data.Type.Equality (testEquality, castWith, type (:~:), inner, outer)
 import Type.Reflection (typeOf)
 import Control.Monad (guard)
 import Control.Carrier.Error.Church (runError, ErrorC)
+import qualified Data.DList     as DL
 import qualified Test.HAPI.VPtr as VP
 
 
@@ -64,25 +63,19 @@ type ApiDefinition = [Type] -> Type -> Type
 
 type ValidApiDef api = (HasForeignDef api, ApiName api)
 
--- | Local Foreign Label
-data F
-
 -- | Given API spec has a FFI
 type HasForeign sig m = (Has (State VPtrTable :+: Error ApiError) sig m, HasLabelled F Fresh sig m)
 
-runForeign' :: (ApiError -> m b)
-            -> (a1 -> m b)
-            -> (VPtrTable -> a2 -> ErrorC ApiError m a1)
-            -> (Int -> a3 -> StateC VPtrTable (ErrorC ApiError m) a2)
-            -> VPtrTable
-            -> Int
-            -> Labelled F FreshC (StateC VPtrTable (ErrorC ApiError m)) a3
-            -> m b
-runForeign' fe fa fs ff s i x = runError fe fa $ runState fs s $ runFresh ff i $ runLabelled @F $ x
+-- | Local Foreign Label
+data F
 
-runForeign :: Monad m => (ApiError -> m b) -> Labelled F FreshC (StateC VPtrTable (ErrorC ApiError m)) b -> m b
-runForeign fe = runForeign' fe return (\s a -> return a) (\s a -> return a) VP.empty 0
+-- | "API a la carte". Using generalized DTC to group set of APIs.
+data (f :$$: g) (p :: [Type]) a
+  = ApiL (f p a)
+  | ApiR (g p a)
+  deriving (Eq)
 
+infixr 4 :$$:
 
 -- | Name of an API call
 class (forall p a. Eq (api p a), Typeable api) => ApiName (api :: ApiDefinition) where
@@ -129,13 +122,19 @@ apiEqProofs a b = do
   let fg = outer (outer proof)
   return (fg, pq, ab)
 
+runForeign' :: (ApiError -> m b)
+            -> (a1 -> m b)
+            -> (VPtrTable -> a2 -> ErrorC ApiError m a1)
+            -> (Int -> a3 -> StateC VPtrTable (ErrorC ApiError m) a2)
+            -> VPtrTable
+            -> Int
+            -> Labelled F FreshC (StateC VPtrTable (ErrorC ApiError m)) a3
+            -> m b
+runForeign' fe fa fs ff s i x = runError fe fa $ runState fs s $ runFresh ff i $ runLabelled @F $ x
 
-data (f :$$: g) (p :: [Type]) a
-  = ApiL (f p a)
-  | ApiR (g p a)
-  deriving (Eq)
+runForeign :: Monad m => (ApiError -> m b) -> Labelled F FreshC (StateC VPtrTable (ErrorC ApiError m)) b -> m b
+runForeign fe = runForeign' fe return (\s a -> return a) (\s a -> return a) VP.emptyVPTable 0
 
-infixr 4 :$$:
 
 class (ApiName sup) => ApiMember (sub :: ApiDefinition) sup where
   injApi :: sub p a -> sup p a

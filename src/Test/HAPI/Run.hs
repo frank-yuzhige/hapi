@@ -45,7 +45,7 @@ runFuzzTestNonDet aastg = runEnvIO $ do
     . runTrace
     . runForeign (fail . show)
     . runApiFFI @api
-    . runState (\s a -> return a) PS.empty
+    . runState (\s a -> return a) PS.emptyPState
     . runQVSFuzzArbitraryAC
     $ stub
 
@@ -62,7 +62,7 @@ runFuzzTest aastg bs
     $ runTrace
     $ runForeign (fail . show)
     $ runApiFFI @api
-    $ runState (\s a -> return a) PS.empty
+    $ runState (\s a -> return a) PS.emptyPState
     $ runOrchestrationViaBytes @QVSSupply (fail . show) qvs
     $ runQVSFromOrchestrationAC
     $ runOrchestrationViaBytes @EntropySupply (fail . show) entropy

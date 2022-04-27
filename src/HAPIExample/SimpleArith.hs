@@ -10,35 +10,16 @@
 {-# HLINT ignore "Redundant $" #-}
 
 module HAPIExample.SimpleArith where
-import Test.HAPI.Api (ApiDefinition, HasForeignDef (evalForeign), ApiTrace (ApiTrace), ApiError, runForeign', runForeign, ApiName)
+
+import Test.HAPI
 import Foreign.C (CInt (CInt), CString(..), CSize(..))
 import Data.Data (Typeable)
-import Test.HAPI.Args (args, Attribute (Anything, Get))
 import Control.Monad.IO.Class ( MonadIO(liftIO) )
-import Test.HAPI.AASTG.Core (AASTG)
-import Test.HAPI.Effect.Eff (runEnv, runEnvIO, debug, debugIO, Alg)
-import Test.HAPI.AASTG.Effect.Build (runBuildAASTG, Building (Building), (%>), val, var, call, vcall, fork)
-import Test.HAPI.Common (Fuzzable)
 import Data.SOP (NP(Nil, (:*)))
-import Test.HAPI.AASTG.Analysis.Coalesce (coalesceAASTG, coalesceAASTGs)
-import Test.HAPI.AASTG.GraphViz (previewAASTG)
-import Test.HAPI.AASTG.Analysis.Rename (normalizeNodes)
 import qualified Data.ByteString as BS
 import Test.QuickCheck (Arbitrary)
-import Test.HAPI.Effect.Property (PropertyError, PropertyA, runProperty)
 import Control.Monad (forM_)
-import Test.HAPI.AASTG.Synth (synthStub)
-import Test.HAPI.Effect.Gen (runGenIO)
-import Control.Carrier.Writer.Strict (runWriter)
-import Control.Carrier.Trace.Printing (runTrace)
-import Control.Carrier.Fresh.Church (runFresh)
-import Control.Carrier.State.Church (runState)
-import Test.HAPI.Effect.FF (FFAC(runFFAC))
-import Control.Carrier.Error.Church (runError)
-import Test.HAPI.Effect.Api (runApiFFI)
-import Test.HAPI.Effect.QVS (runQVSFuzzArbitraryAC)
 import qualified Test.HAPI.PState as PS
-import Test.HAPI.AASTG.Analysis.Path (outPaths)
 import qualified Test.HAPI.VPtr as VP
 import Test.HAPI.DataType (BasicSpec)
 

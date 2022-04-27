@@ -27,8 +27,8 @@ data VPtrTableEntry t = VPtrTableEntry {
 
 newtype VPtrTable = VPtrTable { getVPtrTables :: TM.TypeRepMap VPtrTableEntry }
 
-empty :: VPtrTable
-empty = VPtrTable TM.empty
+emptyVPTable :: VPtrTable
+emptyVPTable = VPtrTable TM.empty
 
 storePtr :: forall t. (Typeable t) => String -> Ptr t -> VPtrTable -> VPtrTable
 storePtr x ptr (VPtrTable tables) = VPtrTable $ case TM.lookup @t tables of
