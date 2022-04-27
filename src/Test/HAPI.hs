@@ -1,5 +1,6 @@
 module Test.HAPI (
-  module X
+  module X,
+  NP(..),
 ) where
 
 import Test.HAPI.AASTG     as X
@@ -12,3 +13,5 @@ import Test.HAPI.PState    as X
 import Test.HAPI.Run       as X
 import Test.HAPI.VPtr      as X
 
+-- Re-exports
+import Data.SOP.NP (NP(..))

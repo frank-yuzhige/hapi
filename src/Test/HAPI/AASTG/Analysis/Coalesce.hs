@@ -157,8 +157,6 @@ upperSubNode :: Alg sig m
 upperSubNode ipaths deps degs calls n1 n2 = case ps1 of
   [p1] -> go p1 ps2
   _    -> return Nothing  -- Multiple incoming node forbidden
-
-    -- _ <$> sequence [traverse unifyVarSubstitution <$> sequence [p1 ~<=~ p2 | p2 <- pathsTo n2] | p1 <- pathsTo n1]
   where
     go p1 [] = return Nothing
     go p1 (p2 : ps2) = do

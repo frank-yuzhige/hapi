@@ -30,6 +30,7 @@ library
       Test.HAPI.AASTG
       Test.HAPI.AASTG.Analysis
       Test.HAPI.AASTG.Analysis.Coalesce
+      Test.HAPI.AASTG.Analysis.Cycle
       Test.HAPI.AASTG.Analysis.Dependence
       Test.HAPI.AASTG.Analysis.Nodes
       Test.HAPI.AASTG.Analysis.Path
