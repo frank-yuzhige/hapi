@@ -13,9 +13,9 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 module Test.HAPI.Effect.Api where
-import Test.HAPI.Api (ApiDefinition, HasHaskellDef (evalHaskell), HaskellIOCall (readOut), HasForeignDef (evalForeign), ApiName (apiName), ApiTrace (ApiTrace), ApiTraceEntry (CallOf), ApiError, apiTrace, HasForeign)
+import Test.HAPI.Api (ApiDefinition, HasHaskellDef (evalHaskell), HaskellIOCall (readOut), HasForeignDef (evalForeign), ApiName (apiName, showApiFromPat), ApiTrace (ApiTrace), ApiTraceEntry (CallOf), ApiError, apiTrace, HasForeign)
 import Data.Kind (Type)
-import Test.HAPI.Args (Args, showArgs)
+import Test.HAPI.Args (Args, args2Pat)
 import Test.HAPI.Common (Fuzzable)
 import Control.Algebra (Has, Algebra (alg), type (:+:) (L, R), send)
 import Control.Monad.IO.Class (MonadIO (liftIO))
@@ -89,7 +89,7 @@ instance ( Algebra sig m
   alg hdl sig ctx = ApiFFIAC $ case sig of
     L (MkCall call args) -> do
       tell $ apiTrace $ CallOf call args
-      trace $ apiName call <> showArgs args
+      trace $ showApiFromPat call (args2Pat args)
       r <- evalForeign call args
       return (ctx $> r)
     R other -> alg (runApiFFIAC . hdl) other ctx

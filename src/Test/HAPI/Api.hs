@@ -36,10 +36,10 @@ import Control.Effect.Labelled (Labelled (Labelled), runLabelled, HasLabelled, s
 import Control.Monad.Trans.Identity (IdentityT (runIdentityT))
 import Control.Monad.Trans.Class (MonadTrans (lift))
 import Data.HList (HList (HNil, HCons), HBuild')
-import Test.HAPI.Args (Args, showArgs)
+import Test.HAPI.Args (Args, ArgPattern, args2Pat)
 import Data.Tuple.HList (HLst (toHList))
 import Test.HAPI.Common (Fuzzable)
-import Data.SOP (All)
+import Data.SOP (All, NP (..), Compose, K (K))
 import Test.HAPI.VPtr (VPtr (VPtr), VPtrTable (VPtrTable), ptr2VPtr, storePtr, vPtr2Ptr)
 import Foreign (Ptr)
 import Control.Effect.State (State, modify, gets)
@@ -54,6 +54,7 @@ import Control.Monad (guard)
 import Control.Carrier.Error.Church (runError, ErrorC)
 import qualified Data.DList     as DL
 import qualified Test.HAPI.VPtr as VP
+import Text.Casing (quietSnake)
 
 
 -- TODO: make a data class
@@ -79,10 +80,13 @@ infixr 4 :$$:
 
 -- | Name of an API call
 class (forall p a. Eq (api p a), Typeable api) => ApiName (api :: ApiDefinition) where
-  apiName :: api p a -> String
+  apiName        :: api p a -> String
+  showApiFromPat :: api p a -> ArgPattern p -> String
 
   default apiName :: (forall p a. Show (api p a)) => api p a -> String
-  apiName = show
+  apiName = quietSnake . show
+
+  showApiFromPat = showApiFromPatDefault
 
 -- | Given API spec has a direct mapping to its haskell pure implementation
 class HasHaskellDef (api :: ApiDefinition) where
@@ -90,6 +94,14 @@ class HasHaskellDef (api :: ApiDefinition) where
 
 class HasForeignDef (api :: ApiDefinition) where
   evalForeign :: (HasForeign sig m, MonadIO m) => api p a -> Args p -> m a
+
+showApiFromPatDefault :: ApiName api => api p1 a -> ArgPattern p2 -> String
+showApiFromPatDefault f args = apiName f <> "(" <> showArgs args <> ")"
+  where
+    showArgs :: ArgPattern p -> [Char]
+    showArgs Nil          = ""
+    showArgs (K s :* Nil) = s
+    showArgs (K s :* as)  = s <> ", " <> showArgs as
 
 newVPtr :: forall t m sig. (Typeable t, HasForeign sig m, MonadIO m) => Ptr t -> m (VPtr t)
 newVPtr p = do
@@ -188,6 +200,9 @@ instance (ApiName f, ApiName g) => ApiName (f :$$: g) where
   apiName (ApiL f) = apiName f
   apiName (ApiR g) = apiName g
 
+  showApiFromPat (ApiL f) = showApiFromPat f
+  showApiFromPat (ApiR g) = showApiFromPat g
+
 instance (HasHaskellDef f, HasHaskellDef g) => HasHaskellDef (f :$$: g) where
   evalHaskell (ApiL f) args = evalHaskell f args
   evalHaskell (ApiR g) args = evalHaskell g args
@@ -208,7 +223,7 @@ data ApiTraceEntry (api :: ApiDefinition) where
   CallOf :: All Fuzzable p => api p a -> Args p -> ApiTraceEntry api
 
 instance ApiName api => Show (ApiTraceEntry api) where
-  show (CallOf api args) = apiName api <> showArgs args
+  show (CallOf api args) = apiName api <> showApiFromPat api (args2Pat args)
 
 newtype ApiTrace (api :: ApiDefinition) = ApiTrace { apiTrace2List :: DList (ApiTraceEntry api) }
   deriving (Semigroup, Monoid)

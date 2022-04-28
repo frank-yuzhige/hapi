@@ -23,13 +23,13 @@ import Test.HAPI.AASTG.Core (AASTG (getStart), startNode, NodeID, Edge (Update, 
 import Test.HAPI.AASTG.Effect.Trav (TravHandler (TravHandler), TravEvent (OnEdge, OnNode), TravCA (runTravCA), travPath, runTrav)
 import Control.Algebra (Has, run, type (:+:))
 import Control.Carrier.State.Church (State, runState)
-import Test.HAPI.Args (Attribute (Get, Value), showAttributes, eqAttributes, Attributes)
+import Test.HAPI.Args (Attribute (Get, Value), eqAttributes, Attributes, attrs2Pat)
 import Control.Effect.State (gets, modify)
 import Test.HAPI.AASTG.Analysis.Rename (maxNodeID, minNodeID, SubEntry (SE, unSE), VarSubstitution)
 import Data.Data (Typeable,type  (:~:) (Refl))
 import Data.SOP (NP (Nil, (:*)), All)
 import Test.HAPI.AASTG.Analysis.Path (pathNodesInSeq, Path)
-import Test.HAPI.Api (apiEq, ApiName (apiName), apiEqProofs)
+import Test.HAPI.Api (apiEq, ApiName (apiName, showApiFromPat), apiEqProofs)
 import Data.Type.Equality (testEquality, castWith, apply)
 import Type.Reflection (typeOf)
 import Test.HAPI.Common (Fuzzable)
@@ -282,7 +282,7 @@ showDegDep = intercalate ", " . TM.toListWith (\(DE de) -> show de)
 -- Instances
 instance (Show t) => Show (Dep t) where
   show (DepAttr at)     = "DepAttr(" <> show at  <> ")"
-  show (DepCall api np) = "DepCall(" <> apiName api <> "(" <> intercalate "," (showAttributes np) <> ")"
+  show (DepCall api np) = "DepCall(" <> showApiFromPat api (attrs2Pat np) <> ")"
 
 instance (Eq t, Typeable t) => Eq (Dep t) where
   (DepAttr a)   == (DepAttr b)   = a == b

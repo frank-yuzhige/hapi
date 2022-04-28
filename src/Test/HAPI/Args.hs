@@ -19,7 +19,7 @@
 {-# LANGUAGE LambdaCase #-}
 
 module Test.HAPI.Args where
-import Data.HList (HList (HCons, HNil), HBuild', HList2List (hList2List))
+import Data.HList (HList (HCons, HNil), HBuild', HList2List (hList2List), Proxy (Proxy))
 import GHC.Base (Nat)
 import Data.Kind (Type)
 import GHC.TypeLits (type (-), type (+))
@@ -27,8 +27,7 @@ import Language.Haskell.TH hiding (Type)
 import Language.Haskell.TH.Quote (QuasiQuoter (quoteDec, quotePat, quoteType, quoteExp, QuasiQuoter))
 import Data.HList.HList (hBuild)
 import Data.HList.CommonMain (hEnd)
-import Data.SOP (NP (Nil, (:*)), All, Compose)
-import Data.Functor.Identity (Identity (Identity))
+import Data.SOP (NP (Nil, (:*)), All, Compose, I (I), K (K), hcmap, unI)
 import Data.List (intercalate)
 import Language.Haskell.Meta (parseExp)
 import Test.HAPI.Common (Fuzzable)
@@ -38,11 +37,12 @@ import Data.Type.Equality (testEquality, castWith)
 import Type.Reflection (typeOf)
 import Data.Hashable (Hashable (hashWithSalt))
 
-type Args       a = NP Identity  a
-type Attributes a = NP Attribute a
+type Args       a = NP I          a
+type Attributes a = NP Attribute  a
+type ArgPattern a = NP (K String) a
 
 pattern (::*) :: x -> Args xs -> Args (x : xs)
-pattern a ::* b = Identity a :* b
+pattern a ::* b = I a :* b
 {-# COMPLETE (::*) :: NP #-}
 infixr 2 ::*
 
@@ -60,12 +60,8 @@ data Attribute a where
 noArgs :: Args '[]
 noArgs = Nil
 
-showArgs :: forall p. All Fuzzable p => Args p -> String
-showArgs args = "(" <> intercalate ", " (go args) <> ")"
-  where
-    go :: forall p. All Fuzzable p => Args p -> [String]
-    go Nil                = []
-    go (Identity a :* as) = show a : go as
+args2Pat :: forall p. All Fuzzable p => Args p -> ArgPattern p
+args2Pat = hcmap (Proxy @Fuzzable) (K . show . unI)
 
 args :: QuasiQuoter
 args = QuasiQuoter {
@@ -77,11 +73,11 @@ args = QuasiQuoter {
   where
     err = error "args is for pattern"
     pat []       = [p|Nil|]
-    pat (x : xs) = [p|Identity $(return (if x == "_" then WildP else VarP (mkName x))) :* $(pat xs)|]
+    pat (x : xs) = [p|I $(return (if x == "_" then WildP else VarP (mkName x))) :* $(pat xs)|]
     exp []       = [e|Nil|]
     exp (x : xs) = case parseExp x of
       Left err -> fail err
-      Right r  -> [e|Identity $(return r) :* $(exp xs)|]
+      Right r  -> [e|I $(return r) :* $(exp xs)|]
 
 
 -- | Check if the provided value satisfies the attribute
@@ -101,9 +97,8 @@ repEq a b = case testEquality (typeOf a) (typeOf b) of
   Nothing    -> False
   Just proof -> castWith proof a == b
 
-showAttributes :: (All Fuzzable p) => Attributes p -> [String]
-showAttributes Nil       = []
-showAttributes (a :* as) = show a : showAttributes as
+attrs2Pat :: forall p. All Fuzzable p => Attributes p -> ArgPattern p
+attrs2Pat = hcmap (Proxy @Fuzzable) (K . show)
 
 eqAttributes :: (All Fuzzable p) => Attributes p -> Attributes p -> Bool
 eqAttributes Nil       Nil       = True

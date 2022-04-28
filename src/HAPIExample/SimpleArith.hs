@@ -8,6 +8,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Redundant $" #-}
+{-# LANGUAGE TypeOperators #-}
 
 module HAPIExample.SimpleArith where
 
@@ -22,6 +23,8 @@ import Control.Monad (forM_)
 import qualified Test.HAPI.PState as PS
 import qualified Test.HAPI.VPtr as VP
 import Test.HAPI.DataType (BasicSpec)
+import Test.HAPI.PrimApi (Prim)
+import qualified Test.HAPI.PrimApi.Prelude as Prim
 
 foreign import ccall "broken_add"
   add :: CInt -> CInt -> IO CInt
@@ -50,57 +53,61 @@ instance HasForeignDef ArithApi where
   evalForeign Neg [args|a|]   = fromIntegral <$> liftIO (neg (fromIntegral a))
 
 
-graph1 :: forall c. BasicSpec c => AASTG ArithApi c
+type A = ArithApi :$$: Prim
+
+graph1 :: forall c. BasicSpec c => AASTG A c
 graph1 = runEnv $ runBuildAASTG $ do
   a <- val @Int 10  $ p
   b <- var @Int Anything $ p
   call Add (Get a :* Get b :* Nil) $ p
-  where p = Building @ArithApi @c
+  where p = Building @A @c
 
-graph2 :: forall c. BasicSpec c => AASTG ArithApi c
+graph2 :: forall c. BasicSpec c => AASTG A c
 graph2 = runEnv $ runBuildAASTG $ do
   a <- var (Anything @Int) $ p
   b <- var (Anything @Int) $ p
   call Add (Get a :* Get b :* Nil) $ p
-  where p = Building @ArithApi @c
+  where p = Building @A @c
 
-graph3 :: forall c. BasicSpec c => AASTG ArithApi c
+graph3 :: forall c. BasicSpec c => AASTG A c
 graph3 = runEnv $ runBuildAASTG $ do
   a <- var (Anything @Int) $ p
   b <- var (Anything @Int) $ p
   c <- vcall Add (Get b :* Get a :* Nil) $ p
   call Add (Get a :* Get c :* Nil) $ p
-  where p = Building @ArithApi @c
+  where p = Building @A @c
 
-graph4 :: forall c. BasicSpec c => AASTG ArithApi c
+graph4 :: forall c. BasicSpec c => AASTG A c
 graph4 = runEnv $ runBuildAASTG $ do
   a <- var (Anything @Int) $ p
   b <- var (Anything @Int) $ p
   c <- vcall Add (Get a :* Get b :* Nil) $ p
   d <- vcall Add (Get a :* Get c :* Nil) $ p
   call Add (Get c :* Get d :* Nil) $ p
-  where p = Building @ArithApi @c
+  where p = Building @A @c
 
-graph5 :: forall c. BasicSpec c => AASTG ArithApi c
+graph5 :: forall c. BasicSpec c => AASTG A c
 graph5 = runEnv $ runBuildAASTG $ do
   a <- var (Anything @Int) $ p
   b <- var (Anything @Int) $ p
   c <- vcall Add (Get a :* Get b :* Nil) $ p
   d <- vcall Sub (Get a :* Get c :* Nil) $ p
   call Add (Get c :* Get d :* Nil) $ p
-  where p = Building @ArithApi @c
+  where p = Building @A @c
 
-graph6 :: forall c. BasicSpec c => AASTG ArithApi c
+graph6 :: forall c. BasicSpec c => AASTG A c
 graph6 = runEnv $ runBuildAASTG $ do
   a <- var (Anything @Int) $ p
   b <- var (Anything @Int) $ p
   c <- vcall Add (Get a :* Get b :* Nil) $ p
   d <- vcall Add (Get a :* Get c :* Nil) $ p
   fork p $ call Neg (Get c :* Nil) $ p
+  fork p $ call (Prim.+) (Get c :* Get c :* Nil) $ p
   call Mul (Get a :* Get d :* Nil) $ p
-  where p = Building @ArithApi @c
 
-cograph :: forall c. BasicSpec c => AASTG ArithApi c
+  where p = Building @A @c
+
+cograph :: forall c. BasicSpec c => AASTG A c
 cograph = runEnv $ coalesceAASTGs 500 [graph1, graph2, graph3, graph4, graph5, graph6]
 
 op :: AASTG api c -> AASTG api c -> IO (AASTG api c)

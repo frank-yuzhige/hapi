@@ -58,6 +58,8 @@ library
       Test.HAPI.Effect.Property
       Test.HAPI.Effect.QVS
       Test.HAPI.Lib
+      Test.HAPI.PrimApi
+      Test.HAPI.PrimApi.Prelude
       Test.HAPI.PState
       Test.HAPI.Run
       Test.HAPI.Util.Empty
@@ -79,6 +81,7 @@ library
     , base >=4.10 && <5
     , bytestring >=0.11.3.0
     , c-storable-deriving >=0.1.3
+    , casing ==0.1.4.1
     , cereal >=0.5.8.2
     , constraints >=0.13.2
     , containers >=0.6.5.1
@@ -117,6 +120,7 @@ executable hapi-exe
     , base >=4.10 && <5
     , bytestring >=0.11.3.0
     , c-storable-deriving >=0.1.3
+    , casing ==0.1.4.1
     , cereal >=0.5.8.2
     , constraints >=0.13.2
     , containers >=0.6.5.1
@@ -157,6 +161,7 @@ test-suite hapi-test
     , base >=4.10 && <5
     , bytestring >=0.11.3.0
     , c-storable-deriving >=0.1.3
+    , casing ==0.1.4.1
     , cereal >=0.5.8.2
     , constraints >=0.13.2
     , containers >=0.6.5.1

@@ -14,8 +14,8 @@
 
 module Test.HAPI.AASTG.Core where
 import Test.HAPI.Effect.QVS (QVS (QVS), attributes2QVSs, qvs2m)
-import Test.HAPI.Api (ApiDefinition, ApiName (apiName), apiEq)
-import Test.HAPI.Args (Args, showArgs, Attribute (Get), attributesEq, repEq, showAttributes)
+import Test.HAPI.Api (ApiDefinition, ApiName (apiName, showApiFromPat), apiEq)
+import Test.HAPI.Args (Args, Attribute (Get), attributesEq, repEq, attrs2Pat)
 import Test.HAPI.PState (PKey (PKey, getPKeyID), PState (PState), PStateSupports (record, forget))
 import Test.HAPI.Common (Fuzzable)
 import Data.SOP (All, NP)
@@ -129,7 +129,7 @@ showEdgeLabel = \case
   Update  s e k  a        -> "update " <> getPKeyID k <> " = " <> show a
   Forget  s e k           -> "forget " <> getPKeyID k
   Assert  s e x  y        -> "assert " <> getPKeyID x <> " = " <> show y
-  APICall s e mx api args -> "call "   <> maybe "" ((<> " = ") . getPKeyID) mx <> apiName api <> "(" <> intercalate ", " (showAttributes args) <> ")"
+  APICall s e mx api args -> ""        <> maybe "" ((<> " = ") . getPKeyID) mx <> showApiFromPat api (attrs2Pat args) -- apiName api <> "(" <> intercalate ", " (showAttributes args) <> ")"
   Redirect s e            -> "redir "
 
 -- | Instances

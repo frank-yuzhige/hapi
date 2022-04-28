@@ -61,6 +61,7 @@ dependencies:
 - fgl >= 5.7.0.3
 - graphviz >= 299.20.1.0
 - vector >= 0.12.3.1
+- casing == 0.1.4.1
 
 # ghc-options:
   # - -dynamic
