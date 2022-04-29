@@ -4,17 +4,23 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE InstanceSigs #-}
 
 module Test.HAPI.PrimApi where
 
-import Test.HAPI.Api ( ApiDefinition, ApiName (apiName), HasForeignDef (evalForeign), showApiFromPatDefault )
-import Test.HAPI (Attribute, args, ApiName (showApiFromPat), NP (..))
+import Test.HAPI.Api ( ApiDefinition, ApiName (apiName), HasForeignDef (evalForeign), showApiFromPatDefault, HasForeign, implE )
+import Test.HAPI (Attribute, args, ApiName (showApiFromPat), NP (..), Args)
 import Data.Kind (Type)
 import Data.SOP (K(..))
+import Control.Algebra (Has)
 
 
 -- | A "primitive API" that leverages pure functions in Haskell.
--- | Some transformations might be required in AASTG (e.g. y = x + 3) can be expressed using Prim API.
+-- | Some transformations might be required in AASTG (e.g. y = x + 3) can be expressed using Prim API. (UB?)
 -- | In addition, provides a easy-to-use interface for testing some Haskell library functions (Hooray!~)
 data Prim p a = Prim { getPrimName :: String, getPrim :: Prim' p a }
 
@@ -44,6 +50,7 @@ instance Eq (Prim p a) where
 
 instance ApiName Prim where
   apiName (Prim f _) = f
+  {-# inline apiName #-}
 
   showApiFromPat (Prim f (Arity0   _)) _
     = f
@@ -53,6 +60,8 @@ instance ApiName Prim where
     = p1 <> " " <> f <> " " <> p2
   showApiFromPat f p
     = showApiFromPatDefault f p
+  {-# inline showApiFromPat #-}
+
 
 instance HasForeignDef Prim where
   evalForeign (Prim _ (Arity0 a)) _
@@ -72,3 +81,4 @@ instance HasForeignDef Prim where
     = return (f a)
   evalForeign (Prim _ (BinaryOp f)) [args| a b |]
     = return (f a b)
+  {-# inline evalForeign #-}

@@ -11,7 +11,7 @@ import Data.Serialize (Serialize)
 import Data.Functor.Identity (Identity)
 
 import qualified Data.TypeRepMap as TM
-import qualified Data.Map.Strict as M
+import qualified Data.HashMap.Strict as M
 import Control.Algebra (Has)
 import Data.Hashable (Hashable)
 
@@ -21,8 +21,8 @@ data VPtr t = VPtr String | VOffset (VPtr t) Int
 instance Serialize (VPtr t)
 
 data VPtrTableEntry t = VPtrTableEntry {
-  getVPtr2PtrMap :: M.Map String (Ptr t),
-  getPtr2VPtrMap :: M.Map (Ptr t) String
+  getVPtr2PtrMap :: M.HashMap String (Ptr t),
+  getPtr2VPtrMap :: M.HashMap (Ptr t) String
 }
 
 newtype VPtrTable = VPtrTable { getVPtrTables :: TM.TypeRepMap VPtrTableEntry }

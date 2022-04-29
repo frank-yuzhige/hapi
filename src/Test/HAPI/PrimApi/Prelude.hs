@@ -17,3 +17,10 @@ import Prelude (($))
 (&&) = Prim "&&" $ BinaryOp (P.&&)
 (||) = Prim "||" $ BinaryOp (P.||)
 not  = Prim "not " $ UnaryOp P.not
+
+
+len :: P.Foldable t => Prim '[t a] P.Int
+len = Prim "length" $ Arity1 P.length
+
+(==) :: P.Eq a => Prim '[a, a] P.Bool
+(==) = Prim "==" $ BinaryOp (P.==)

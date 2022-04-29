@@ -33,7 +33,7 @@ import Control.Effect.Error ( Error )
 
 -- | Wrapper to the original Api
 data Api (api :: ApiDefinition) (m :: Type -> Type) a where
-  MkCall :: (ApiName api, All Fuzzable p)
+  MkCall :: (ApiName api, All Fuzzable p, Fuzzable a)
          => api p a -> Args p -> Api api m a
 
 mkCall :: (Has (Api api) sig m, Fuzzable a, ApiName api, All Fuzzable p) => api p a -> Args p -> m a

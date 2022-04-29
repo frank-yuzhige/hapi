@@ -47,10 +47,11 @@ deriving instance Eq       (ArithApi p a)
 instance ApiName  ArithApi
 
 instance HasForeignDef ArithApi where
-  evalForeign Add [args|a b|] = fromIntegral <$> liftIO (add (fromIntegral a) (fromIntegral b))
-  evalForeign Sub [args|a b|] = fromIntegral <$> liftIO (sub (fromIntegral a) (fromIntegral b))
-  evalForeign Mul [args|a b|] = fromIntegral <$> liftIO (mul (fromIntegral a) (fromIntegral b))
-  evalForeign Neg [args|a|]   = fromIntegral <$> liftIO (neg (fromIntegral a))
+  -- evalForeign Add [args|a b|] = fromIntegral <$> liftIO (add (fromIntegral a) (fromIntegral b))
+  evalForeign Add = implE $ \a b -> fromIntegral <$> liftIO (add (fromIntegral a) (fromIntegral b))
+  evalForeign Sub = implE $ \a b -> fromIntegral <$> liftIO (sub (fromIntegral a) (fromIntegral b))
+  evalForeign Mul = implE $ \a b -> fromIntegral <$> liftIO (mul (fromIntegral a) (fromIntegral b))
+  evalForeign Neg = implE $ \a   -> fromIntegral <$> liftIO (neg (fromIntegral a))
 
 
 type A = ArithApi :$$: Prim

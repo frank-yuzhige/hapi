@@ -46,7 +46,6 @@ pattern a ::* b = I a :* b
 {-# COMPLETE (::*) :: NP #-}
 infixr 2 ::*
 
-
 data Attribute a where
   Value    :: (Fuzzable a) => a -> Attribute a
   Anything :: (Fuzzable a) => Attribute a

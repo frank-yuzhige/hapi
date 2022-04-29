@@ -39,7 +39,7 @@ import Data.HList (HList (HNil, HCons), HBuild')
 import Test.HAPI.Args (Args, ArgPattern, args2Pat)
 import Data.Tuple.HList (HLst (toHList))
 import Test.HAPI.Common (Fuzzable)
-import Data.SOP (All, NP (..), Compose, K (K))
+import Data.SOP (All, NP (..), Compose, K (K), I (..))
 import Test.HAPI.VPtr (VPtr (VPtr), VPtrTable (VPtrTable), ptr2VPtr, storePtr, vPtr2Ptr)
 import Foreign (Ptr)
 import Control.Effect.State (State, modify, gets)
@@ -49,7 +49,7 @@ import Data.Data (Typeable)
 import Control.Effect.Error (Error, throwError)
 import Data.DList (DList)
 import Data.Type.Equality (testEquality, castWith, type (:~:), inner, outer)
-import Type.Reflection (typeOf)
+import Type.Reflection (typeOf, typeRep)
 import Control.Monad (guard)
 import Control.Carrier.Error.Church (runError, ErrorC)
 import qualified Data.DList     as DL
@@ -65,7 +65,10 @@ type ApiDefinition = [Type] -> Type -> Type
 type ValidApiDef api = (HasForeignDef api, ApiName api)
 
 -- | Given API spec has a FFI
-type HasForeign sig m = (Has (State VPtrTable :+: Error ApiError) sig m, HasLabelled F Fresh sig m)
+type HasForeign sig m =
+  ( Has (State VPtrTable :+: Error ApiError) sig m
+  , HasLabelled F Fresh sig m
+  , MonadIO m)
 
 -- | Local Foreign Label
 data F
@@ -78,6 +81,11 @@ data (f :$$: g) (p :: [Type]) a
 
 infixr 4 :$$:
 
+type family ApiEvalType (p :: [Type]) (a :: Type) :: Type where
+  ApiEvalType '[]      a = a
+  ApiEvalType (p : ps) a = p -> ApiEvalType ps a
+
+
 -- | Name of an API call
 class (forall p a. Eq (api p a), Typeable api) => ApiName (api :: ApiDefinition) where
   apiName        :: api p a -> String
@@ -85,15 +93,27 @@ class (forall p a. Eq (api p a), Typeable api) => ApiName (api :: ApiDefinition)
 
   default apiName :: (forall p a. Show (api p a)) => api p a -> String
   apiName = quietSnake . show
+  {-# inline apiName #-}
 
   showApiFromPat = showApiFromPatDefault
+  {-# inline showApiFromPat #-}
+
 
 -- | Given API spec has a direct mapping to its haskell pure implementation
 class HasHaskellDef (api :: ApiDefinition) where
   evalHaskell :: api p a -> Args p -> a
 
 class HasForeignDef (api :: ApiDefinition) where
-  evalForeign :: (HasForeign sig m, MonadIO m) => api p a -> Args p -> m a
+  evalForeign :: forall sig m p a. (HasForeign sig m, All Fuzzable p, Fuzzable a) => api p a -> Args p -> m a
+
+applyArgs :: ApiEvalType p a -> Args p -> a
+applyArgs a Nil         = a
+applyArgs f (I p :* ps) = applyArgs (f p) ps
+{-# inline applyArgs #-}
+
+implE :: (HasForeign sig m) => ApiEvalType p (m a) -> Args p -> m a
+implE = applyArgs
+{-# inline implE #-}
 
 showApiFromPatDefault :: ApiName api => api p1 a -> ArgPattern p2 -> String
 showApiFromPatDefault f args = apiName f <> "(" <> showArgs args <> ")"
@@ -103,7 +123,7 @@ showApiFromPatDefault f args = apiName f <> "(" <> showArgs args <> ")"
     showArgs (K s :* Nil) = s
     showArgs (K s :* as)  = s <> ", " <> showArgs as
 
-newVPtr :: forall t m sig. (Typeable t, HasForeign sig m, MonadIO m) => Ptr t -> m (VPtr t)
+newVPtr :: forall t m sig. (Typeable t, HasForeign sig m) => Ptr t -> m (VPtr t)
 newVPtr p = do
   i <- sendLabelled @F Fresh
   let name = "p" <> show i
@@ -113,7 +133,7 @@ newVPtr p = do
     Nothing -> throwError "Should not be here"
     Just vp -> return vp
 
-getPtr :: forall t m sig. (Typeable t, HasForeign sig m, MonadIO m) => VPtr t -> m (Ptr t)
+getPtr :: forall t m sig. (Typeable t, HasForeign sig m) => VPtr t -> m (Ptr t)
 getPtr v = do
   p <- gets @VPtrTable (vPtr2Ptr v)
   case p of

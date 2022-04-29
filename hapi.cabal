@@ -59,6 +59,7 @@ library
       Test.HAPI.Effect.QVS
       Test.HAPI.Lib
       Test.HAPI.PrimApi
+      Test.HAPI.PrimApi.HLibPtr
       Test.HAPI.PrimApi.Prelude
       Test.HAPI.PState
       Test.HAPI.Run
