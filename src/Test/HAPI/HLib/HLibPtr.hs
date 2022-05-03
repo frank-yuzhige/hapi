@@ -3,7 +3,7 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
-module Test.HAPI.PrimApi.HLibPtr where
+module Test.HAPI.HLib.HLibPtr where
 import Test.HAPI.Api (ApiDefinition, ApiName (..), HasForeignDef (..), implE)
 import Test.HAPI (VPtr, vPtr2Ptr)
 import Foreign (Storable (poke, peek))

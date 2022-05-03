@@ -62,6 +62,7 @@ dependencies:
 - graphviz >= 299.20.1.0
 - vector >= 0.12.3.1
 - casing == 0.1.4.1
+- llvm-hs-pure == 9.0.0
 
 # ghc-options:
   # - -dynamic

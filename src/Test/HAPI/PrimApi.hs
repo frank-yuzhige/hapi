@@ -17,12 +17,13 @@ import Test.HAPI (Attribute, args, ApiName (showApiFromPat), NP (..), Args)
 import Data.Kind (Type)
 import Data.SOP (K(..))
 import Control.Algebra (Has)
+import Data.Data (Typeable)
 
 
 -- | A "primitive API" that leverages pure functions in Haskell.
 -- | Some transformations might be required in AASTG (e.g. y = x + 3) can be expressed using Prim API. (UB?)
 -- | In addition, provides a easy-to-use interface for testing some Haskell library functions (Hooray!~)
-data Prim p a = Prim { getPrimName :: String, getPrim :: Prim' p a }
+data Prim tag p a = Prim { getPrimName :: String, getPrim :: Prim' p a }
 
 data Prim' :: ApiDefinition where
   -- Normal Functions
@@ -45,10 +46,10 @@ data Prim' :: ApiDefinition where
   BinaryOp :: (p1 -> p2 -> a)
            -> Prim' '[p1, p2] a
 
-instance Eq (Prim p a) where
+instance Typeable tag => Eq (Prim tag p a) where
   Prim a _ == Prim b _ = a == b  -- Only compare equality via its identifier
 
-instance ApiName Prim where
+instance Typeable tag => ApiName (Prim tag) where
   apiName (Prim f _) = f
   {-# inline apiName #-}
 
@@ -63,7 +64,7 @@ instance ApiName Prim where
   {-# inline showApiFromPat #-}
 
 
-instance HasForeignDef Prim where
+instance HasForeignDef (Prim tag) where
   evalForeign (Prim _ (Arity0 a)) _
     = return a
   evalForeign (Prim _ (Arity1 f)) [args| a |]
@@ -77,7 +78,7 @@ instance HasForeignDef Prim where
   evalForeign (Prim _ (Arity5 f)) [args| a b c d e |]
     = return (f a b c d e)
 
-  evalForeign (Prim _ (UnaryOp f)) [args| a |]
+  evalForeign (Prim _ (UnaryOp  f)) [args| a |]
     = return (f a)
   evalForeign (Prim _ (BinaryOp f)) [args| a b |]
     = return (f a b)

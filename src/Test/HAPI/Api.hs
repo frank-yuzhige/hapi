@@ -19,6 +19,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE UndecidableSuperClasses #-}
 
 module Test.HAPI.Api where
 
@@ -168,7 +169,7 @@ runForeign :: Monad m => (ApiError -> m b) -> Labelled F FreshC (StateC VPtrTabl
 runForeign fe = runForeign' fe return (\s a -> return a) (\s a -> return a) VP.emptyVPTable 0
 
 
-class (ApiName sup) => ApiMember (sub :: ApiDefinition) sup where
+class (ApiName sub, ApiName sup) => ApiMember sub sup where
   injApi :: sub p a -> sup p a
 
 instance (ApiName t) => ApiMember t t where
@@ -231,10 +232,34 @@ instance (HasForeignDef f, HasForeignDef g) => HasForeignDef (f :$$: g) where
   evalForeign (ApiL f) args = evalForeign f args
   evalForeign (ApiR g) args = evalForeign g args
 
-type family ApiMembers sub sup :: Constraint where
-  ApiMembers (f :$$: g) u = (ApiMembers f u, ApiMembers g u)
-  ApiMembers t          u = ApiMember t u
+type family ApiMembersF sub sup :: Constraint where
+  ApiMembersF (f :$$: g) u = (ApiMembersF f u, ApiMembersF g u)
+  ApiMembersF t          u = ApiMember t u
 
+type ApiMembers sub sup = (ApiMembersF sub sup, ApiMembersC sub sup)
+
+class (ApiName sub, ApiName sup) => ApiMembersC sub sup where
+  injApis :: sub p a -> sup p a
+
+instance {-# OVERLAPPABLE #-}
+         ( ApiMember t u
+         , ApiName t
+         , ApiName u)
+      => ApiMembersC t u where
+  injApis = injApi
+  {-# INLINE injApis #-}
+
+
+instance {-# OVERLAPPABLE #-}
+         ( ApiMembersC f u
+         , ApiMembersC g u
+         , ApiName f
+         , ApiName g
+         , ApiName u)
+      => ApiMembersC (f :$$: g) u where
+  injApis (ApiL f) = injApis f
+  injApis (ApiR g) = injApis g
+  {-# INLINE injApis #-}
 
 class (ApiName api) => HaskellIOCall (api :: ApiDefinition) where
   readOut  :: api p a -> String -> Maybe a

@@ -1,7 +1,7 @@
 module Test.HAPI.AASTG.Analysis.Cycle where
 
 import Test.HAPI.AASTG.Core ( AASTG (AASTG), NodeID, edgesFrom, endNode )
-import Data.IntSet as IS
+import Data.IntSet as IS ( IntSet, empty, member )
 import Control.Carrier.State.Church (runState, run)
 import Control.Effect.State (gets, State)
 import Control.Algebra (Has)

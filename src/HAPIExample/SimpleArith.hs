@@ -24,7 +24,8 @@ import qualified Test.HAPI.PState as PS
 import qualified Test.HAPI.VPtr as VP
 import Test.HAPI.DataType (BasicSpec)
 import Test.HAPI.PrimApi (Prim)
-import qualified Test.HAPI.PrimApi.Prelude as Prim
+import qualified Test.HAPI.HLib.HLibPrelude as HLib
+import Test.HAPI.HLib.HLibPrelude (HLibPrelude)
 
 foreign import ccall "broken_add"
   add :: CInt -> CInt -> IO CInt
@@ -54,7 +55,7 @@ instance HasForeignDef ArithApi where
   evalForeign Neg = implE $ \a   -> fromIntegral <$> liftIO (neg (fromIntegral a))
 
 
-type A = ArithApi :$$: Prim
+type A = ArithApi :$$: HLibPrelude
 
 graph1 :: forall c. BasicSpec c => AASTG A c
 graph1 = runEnv $ runBuildAASTG $ do
@@ -103,7 +104,7 @@ graph6 = runEnv $ runBuildAASTG $ do
   c <- vcall Add (Get a :* Get b :* Nil) $ p
   d <- vcall Add (Get a :* Get c :* Nil) $ p
   fork p $ call Neg (Get c :* Nil) $ p
-  fork p $ call (Prim.+) (Get c :* Get c :* Nil) $ p
+  fork p $ call (HLib.+) (Get c :* Get c :* Nil) $ p
   call Mul (Get a :* Get d :* Nil) $ p
 
   where p = Building @A @c
