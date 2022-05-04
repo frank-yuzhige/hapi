@@ -26,6 +26,7 @@ import Test.HAPI.DataType (BasicSpec)
 import Test.HAPI.PrimApi (Prim)
 import qualified Test.HAPI.HLib.HLibPrelude as HLib
 import Test.HAPI.HLib.HLibPrelude (HLibPrelude)
+import Test.HAPI.AASTG.Analysis.Cycle (unrollCycle)
 
 foreign import ccall "broken_add"
   add :: CInt -> CInt -> IO CInt
@@ -110,7 +111,7 @@ graph6 = runEnv $ runBuildAASTG $ do
   where p = Building @A @c
 
 cograph :: forall c. BasicSpec c => AASTG A c
-cograph = runEnv $ coalesceAASTGs 500 [graph1, graph2, graph3, graph4, graph5, graph6]
+cograph = unrollCycle 500 $ runEnv $ coalesceAASTGs 500 [graph1, graph2, graph3, graph4, graph5, graph6]
 
 op :: AASTG api c -> AASTG api c -> IO (AASTG api c)
 op = op' 5

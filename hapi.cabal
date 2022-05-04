@@ -29,6 +29,7 @@ library
       Test.HAPI
       Test.HAPI.AASTG
       Test.HAPI.AASTG.Analysis
+      Test.HAPI.AASTG.Analysis.Add
       Test.HAPI.AASTG.Analysis.Coalesce
       Test.HAPI.AASTG.Analysis.Cycle
       Test.HAPI.AASTG.Analysis.Dependence

@@ -124,13 +124,22 @@ edgesFrom2EdgesTo = groupEdgesOn startNode . concat . IM.elems
 edgesTo2EdgesFrom :: IntMap [Edge sig c] -> IntMap [Edge sig c]
 edgesTo2EdgesFrom = groupEdgesOn endNode . concat . IM.elems
 
+changeEdgeNode :: NodeID -> NodeID -> Edge api c -> Edge api c
+changeEdgeNode i j = \case
+  Update   _ _ k  a        -> Update   i j k  a
+  Forget   _ _ k           -> Forget   i j k
+  Assert   _ _ x  y        -> Assert   i j x  y
+  APICall  _ _ mx api args -> APICall  i j mx api args
+  Redirect _ _             -> Redirect i j
+
 showEdgeLabel :: Edge api c -> String
 showEdgeLabel = \case
-  Update  s e k  a        -> "update " <> getPKeyID k <> " = " <> show a
-  Forget  s e k           -> "forget " <> getPKeyID k
-  Assert  s e x  y        -> "assert " <> getPKeyID x <> " = " <> show y
-  APICall s e mx api args -> ""        <> maybe "" ((<> " = ") . getPKeyID) mx <> showApiFromPat api (attrs2Pat args) -- apiName api <> "(" <> intercalate ", " (showAttributes args) <> ")"
-  Redirect s e            -> "redir "
+  Update   s e k  a        -> "update " <> getPKeyID k <> " = " <> show a
+  Forget   s e k           -> "forget " <> getPKeyID k
+  Assert   s e x  y        -> "assert " <> getPKeyID x <> " = " <> show y
+  APICall  s e mx api args -> ""        <> maybe "" ((<> " = ") . getPKeyID) mx <> showApiFromPat api (attrs2Pat args) -- apiName api <> "(" <> intercalate ", " (showAttributes args) <> ")"
+  Redirect s e             -> "redir "
+
 
 -- | Instances
 instance Show (Edge api c) where
