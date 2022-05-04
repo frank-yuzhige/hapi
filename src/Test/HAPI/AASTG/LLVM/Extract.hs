@@ -12,7 +12,7 @@
 {-# HLINT ignore "Use newtype instead of data" #-}
 {-# LANGUAGE LambdaCase #-}
 
-module Test.HAPI.AASTG.LLVM.Translate where
+module Test.HAPI.AASTG.LLVM.Extract where
 
 import Test.HAPI.AASTG.Core ( AASTG, NodeID, Edge (APICall, Redirect), IsValidCall )
 import Test.HAPI.Effect.Eff ( Eff, (:+:), debug, Alg )
@@ -87,14 +87,14 @@ type Translator api apis c sig m =
 
 $(makeLenses ''TranslateState)
 
-runLLVMTranslator :: forall api apis c sig m.
-                  ( Alg sig m
-                  , ApiMembers api apis
-                  , ApiMembers (HLibPrelude :$$: HLibPtr) apis)
-               => TranslateConfig api apis c
-               -> LLVM.Global
-               -> m (AASTG apis c)
-runLLVMTranslator cfg llvm
+runLLVMExtract :: forall api apis c sig m.
+                ( Alg sig m
+                , ApiMembers api apis
+                , ApiMembers (HLibPrelude :$$: HLibPtr) apis)
+             => TranslateConfig api apis c
+             -> LLVM.Global
+             -> m (AASTG apis c)
+runLLVMExtract cfg llvm
   = runBuildAASTG @apis
   $ runReader cfg
   $ runState (\s a -> return a) (TranslateState HM.empty)

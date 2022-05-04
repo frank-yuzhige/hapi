@@ -43,7 +43,7 @@ library
       Test.HAPI.AASTG.Effect.Build
       Test.HAPI.AASTG.Effect.Trav
       Test.HAPI.AASTG.GraphViz
-      Test.HAPI.AASTG.LLVM.Translate
+      Test.HAPI.AASTG.LLVM.Extract
       Test.HAPI.AASTG.Synth
       Test.HAPI.Api
       Test.HAPI.Args
