@@ -31,7 +31,7 @@ import Data.SOP (NP (Nil, (:*)), All, Compose, I (I), K (K), hcmap, unI)
 import Data.List (intercalate)
 import Language.Haskell.Meta (parseExp)
 import Test.HAPI.Common (Fuzzable)
-import Test.HAPI.PState (PKey (getPKeyID))
+import Test.HAPI.PState (PKey (..))
 import Data.Data (Typeable)
 import Data.Type.Equality (testEquality, castWith)
 import Type.Reflection (typeOf)
@@ -102,6 +102,22 @@ attrs2Pat = hcmap (Proxy @Fuzzable) (K . show)
 eqAttributes :: (All Fuzzable p) => Attributes p -> Attributes p -> Bool
 eqAttributes Nil       Nil       = True
 eqAttributes (a :* as) (b :* bs) = a == b && eqAttributes as bs
+
+
+-- Hoist
+attrInt2Bool :: (Integral i, Fuzzable i) => Attribute i -> Attribute Bool
+attrInt2Bool (Value i)      = Value (i /= 0)
+attrInt2Bool Anything       = Anything
+attrInt2Bool (IntRange l r)
+  | l == 0 && r == 0 = Value False
+  | l <= 0 && 0 <= r = Range False True
+  | otherwise        = Value True
+attrInt2Bool (Range l r)
+  | l == 0 && r == 0 = Value False
+  | l <= 0 && 0 <= r = Range False True
+  | otherwise        = Value True
+attrInt2Bool (Get pk)       = Get (PKey $ getPKeyID pk)
+attrInt2Bool (AnyOf ats)    = AnyOf (map attrInt2Bool ats)
 
 instance Show a => Show (Attribute a) where
   show (Value a) = show a

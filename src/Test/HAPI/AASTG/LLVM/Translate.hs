@@ -19,10 +19,11 @@ import Test.HAPI.Effect.Eff ( Eff, (:+:), debug, Alg )
 import Control.Effect.State (State, gets, get, put, modify, Has)
 import Control.Effect.Reader (Reader, asks)
 import LLVM.AST (Global(..), Named ((:=), Do), BasicBlock (BasicBlock), Instruction (..), Name (..), Type (..), Terminator (..), Operand (..))
-import Test.HAPI.AASTG.Effect.Build (BuildAASTG, newEdge, newNode)
+import Test.HAPI.AASTG.Effect.Build
+    ( BuildAASTG, newEdge, newNode, currNode, setNode, runBuildAASTG )
 import Test.HAPI.PState ( PKey(PKey) )
 import Data.Char (chr)
-import Test.HAPI.Args (Attributes, Attribute (Get, Value))
+import Test.HAPI.Args (Attributes, Attribute (Get, Value, Anything), attrInt2Bool)
 import Test.HAPI.Common ( Fuzzable )
 import Data.Either (fromRight)
 import Test.HAPI.Util.TH (moduleOf, fatalError, FatalErrorKind (FATAL_ERROR))
@@ -49,8 +50,8 @@ import Data.Word (Word32)
 import Control.Carrier.State.Church (runState)
 import Control.Carrier.Reader (runReader)
 import Control.Carrier.Lift (runM)
-import Test.HAPI.AASTG.Effect.Build ( runBuildAASTG )
 import Test.HAPI (NP(..))
+import LLVM.AST.Float (SomeFloat(Single, Double))
 
 
 type LLVMRequiredHLibs = HLibPrelude :$$: HLibPtr
@@ -69,8 +70,8 @@ data TranslateConfig api apis c = TranslateConfig
   }
 
 data TranslateState = TranslateState {
-  _block2NodeMap :: HM.HashMap LLVM.Name NodeID,
-  _currNode      :: NodeID
+  _block2NodeMap :: HM.HashMap LLVM.Name NodeID
+  -- _currNode      :: NodeID
 }
 
 
@@ -96,7 +97,7 @@ runLLVMTranslator :: forall api apis c sig m.
 runLLVMTranslator cfg llvm
   = runBuildAASTG @apis
   $ runReader cfg
-  $ runState (\s a -> return a) (TranslateState HM.empty 0)
+  $ runState (\s a -> return a) (TranslateState HM.empty)
   $ fromGlobal @api @apis @c llvm
 
 fromLLVM :: [LLVM.Definition] -> AASTG api c
@@ -123,7 +124,7 @@ fromGlobal _ = undefined
 fromBasicBlock :: forall api apis c sig m. Translator api apis c sig m => LLVM.BasicBlock -> m ()
 fromBasicBlock (BasicBlock name ins term) = do
   n <- blockNode name
-  modify $ over currNode $ const n
+  setNode @apis @c n
   forM_ ins $ \instr -> fromInstruction @api @apis @c instr
   fromTerminator @api @apis @c term
 
@@ -145,7 +146,7 @@ fromInstruction namedInstr = case namedInstr of
       --   newEdge @apis @c (APICall @Int i j (name2Var <$> mx) (injApis (HLib.+)) undefined)
       --   return j
       Call { function, arguments } -> do
-        i <- gets (view currNode)
+        i <- currNode @apis @c
         handler <- asks @(TranslateConfig api apis c) translateCall
         case function of
           Left  inlineAsm -> do
@@ -157,10 +158,9 @@ fromInstruction namedInstr = case namedInstr of
                 args <- opsViaSpec pargs (map fst arguments)
                 j <- newNode @apis @c
                 newEdge @apis @c (APICall i j (name2Var <$> mx) (injApis api) args)
-                modify $ over currNode $ const j
-      _ -> do
-        debug $ printf "[INFO] %s: Ignoring unsupported instruction"
-
+                setNode @apis @c j
+      other -> do
+        debug $ printf "[WARNING] %s: Ignoring unsupported instruction! :%s" (show 'fromInstruction) (show other)
 
 
 fromTerminator :: forall api apis c sig m. Translator api apis c sig m
@@ -171,12 +171,26 @@ fromTerminator namedTerminator = case namedTerminator of
   Do   c -> fromTerminator' c Nothing
   where
     fromTerminator' term mx = do
-      i <- gets (view currNode)
+      i <- currNode @apis @c
       case term of
         Br dest _ -> do
           j <- blockNode dest
           newEdge @apis @c (Redirect i j)
-          modify $ over currNode $ const j
+        CondBr op trDest flDest _ -> do
+          tr <- blockNode trDest
+          fl <- blockNode trDest
+          newEdge @apis @c (Redirect i tr)
+          newEdge @apis @c (Redirect i fl)
+        Switch op dd dests _ -> do
+          d <- blockNode dd
+          newEdge @apis @c (Redirect i d)
+          forM_ dests $ \(dop, dname) -> do
+            j <- blockNode dname
+            newEdge @apis @c (Redirect i j)
+        IndirectBr addr dests _ -> do
+          forM_ dests $ \dest -> do
+            j <- blockNode dest
+            newEdge @apis @c (Redirect i j)
         Invoke { function', arguments' } -> do
           handler <- asks @(TranslateConfig api apis c) translateCall
           case function' of
@@ -189,8 +203,8 @@ fromTerminator namedTerminator = case namedTerminator of
                   args <- opsViaSpec pargs (map fst arguments')
                   j <- newNode @apis @c
                   newEdge @apis @c (APICall i j (name2Var <$> mx) (injApis api) args)
-                  modify $ over currNode $ const j
-        _ -> do
+        other -> do
+          debug $ printf "[WARNING] %s: Ignoring unsupported terminator! :%s" (show 'fromInstruction) (show other)
           return ()
 
 
@@ -208,24 +222,60 @@ opInteger bits = \case
   ConstantOperand con -> case con of
     LLVMC.Int b n | b == bits -> return $ Value (fromIntegral n)
     -- TODO: Support other operands
-    _                         -> fatalError 'opInteger FATAL_ERROR "123"
+    other              -> do
+      debug $ printf "[WARNING] %s: Unsupported operand %s, replace with Anything" (show 'opInteger) (show other)
+      return Anything
   MetadataOperand meta -> fatalError 'opInteger FATAL_ERROR "123"
-
+{-# INLINE opInteger #-}
 
 opI1 :: forall api apis c sig m. Translator api apis c sig m => AttrParse api apis c Int
 opI1 = AttrParse $ opInteger @api @apis @c 1
 
-opI8 :: forall api apis c sig m. Translator api apis c sig m => AttrParse api apis c Int
+opBool :: forall api apis c sig m. Translator api apis c sig m => AttrParse api apis c Bool
+opBool = AttrParse $ fmap (attrInt2Bool @Int) . opInteger @api @apis @c 1
+
+opI8 :: forall api apis c sig m. Translator api apis c sig m => AttrParse api apis c Int8
 opI8 = AttrParse $ opInteger @api @apis @c 8
 
-opI16 :: forall api apis c sig m. Translator api apis c sig m => AttrParse api apis c Int
+opI16 :: forall api apis c sig m. Translator api apis c sig m => AttrParse api apis c Int16
 opI16 = AttrParse $ opInteger @api @apis @c 16
 
-opI32 :: forall api apis c sig m. Translator api apis c sig m => AttrParse api apis c Int
+opI32 :: forall api apis c sig m. Translator api apis c sig m => AttrParse api apis c Int32
 opI32 = AttrParse $ opInteger @api @apis @c 32
 
-opI64 :: forall api apis c sig m. Translator api apis c sig m => AttrParse api apis c Int
+opI64 :: forall api apis c sig m. Translator api apis c sig m => AttrParse api apis c Int64
 opI64 = AttrParse $ opInteger @api @apis @c 64
+
+opFloat :: forall api apis c sig m.
+        ( Translator api apis c sig m )
+     => AttrParse api apis c Float
+opFloat = AttrParse $ \case
+  LocalReference ty x -> return $ Get (name2Var x)
+  ConstantOperand con -> case con of
+    LLVMC.Float (Single f) -> return $ Value f
+    -- TODO: Support other operands
+    other             -> do
+      debug $ printf "[WARNING] %s: Unsupported operand %s, replace with Anything" (show 'opFloat) (show other)
+      return Anything
+  MetadataOperand meta -> do
+      debug $ printf "[WARNING] %s: Unsupported metadata operand %s, replace with Anything" (show 'opFloat) (show meta)
+      return Anything
+
+opDouble :: forall api apis c sig m.
+         ( Translator api apis c sig m )
+      => AttrParse api apis c Double
+opDouble = AttrParse $ \case
+  LocalReference ty x -> return $ Get (name2Var x)
+  ConstantOperand con -> case con of
+    LLVMC.Float (Double f) -> return $ Value f
+    -- TODO: Support other operands
+    other             -> do
+      debug $ printf "[WARNING] %s: Unsupported operand %s, replace with Anything" (show 'opDouble) (show other)
+      return Anything
+  MetadataOperand meta -> do
+    debug $ printf "[WARNING] %s: Unsupported metadata operand %s, replace with Anything" (show 'opDouble) (show meta)
+    return Anything
+
 
 -- Utils
 name2Str :: LLVM.Name -> String

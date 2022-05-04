@@ -17,7 +17,7 @@
 {-# LANGUAGE QuantifiedConstraints #-}
 
 -- | Extended internal API for 'TypeRepMap' and operations on it.
--- Unfortunately, stack is too dinosaur to adopt new packages, so some important functionality provided in later versions of
+-- Unfortunately, stack is too dinosaur to adopt new packages, so some important functionalities provided in later versions of
 -- Data.TypeRepMap is not available. I have to "re-create" them...
 module Test.HAPI.Util.TypeRepMap (
   module TM,
