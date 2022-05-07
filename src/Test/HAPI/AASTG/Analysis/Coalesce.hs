@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -75,10 +76,11 @@ autoCoalesce 0       aastg = return ([], aastg)
 autoCoalesce maxStep aastg = do
   (record, aastg') <- coalesceOneStep aastg
   debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.autoCoalesce: coalesce %s" (show record)
+  let aastg'' = normalizeNodes 0 aastg'
   case record of
-    Nothing -> return ([], aastg')
+    Nothing -> return ([], aastg'')
     Just p  -> do
-      (history, ans) <- autoCoalesce (maxStep - 1) aastg'
+      (history, ans) <- autoCoalesce (maxStep - 1) aastg''
       return (p : history, ans)
 
 -- FIXME
@@ -116,13 +118,14 @@ coalesceOneStep :: Alg sig m
 coalesceOneStep aastg = do
   debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: depths = %s" (show nodeDepths)
   debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: allNodes = %s" (show (allNodes aastg))
+  debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: num of paths = %d" (length paths)
+  debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: candidates count = %d" (length candidates)
   -- debugIO $ previewAASTG aastg
-  go [(b, r) | b <- sortBy (compare `on` (nodeDepths IM.!)) (allNodes aastg)
-             , r <- candidateMap IM.! b
-             ]
+  go candidates
   where
     go []           = return (Nothing, aastg)
     go ((b, r): xs) = do
+      -- debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: checking: %s" (show (b, r))
       r' <- r ~<=~ b
       case r' of
         Just vsb -> do
@@ -145,6 +148,9 @@ coalesceOneStep aastg = do
     calls          = HM.fromList [(path, pathCalls        path) | path <- paths]
     (~<=~)         = upperSubNode ipaths (deps HM.!) (degs HM.!) (calls HM.!)
     singlePathOf   = head . (ipaths HM.!)
+    candidates     = [(b, r) | b <- sortBy (compare `on` (nodeDepths IM.!)) (allNodes aastg)
+                             , r <- sortBy (compare `on` (nodeDepths IM.!)) (candidateMap IM.! b)
+                             ]
 
 upperSubNode :: Alg sig m
              => NodePathMap api c                  -- All paths went through each node
@@ -156,7 +162,9 @@ upperSubNode :: Alg sig m
              -> m (Maybe VarSubstitution)
 upperSubNode ipaths deps degs calls n1 n2 = case ps1 of
   [p1] -> go p1 ps2
-  _    -> return Nothing  -- Multiple incoming node forbidden
+  _    -> do
+    debug $ printf "%s: Node %d has multiple incoming paths, skipping..." (show 'upperSubNode) n1
+    return Nothing  -- Multiple incoming node forbidden
   where
     go p1 [] = return Nothing
     go p1 (p2 : ps2) = do

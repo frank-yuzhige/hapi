@@ -82,6 +82,9 @@ data (f :$$: g) (p :: [Type]) a
 
 infixr 4 :$$:
 
+data ApiMetaAttribute = EXTERNAL_PURE
+  deriving (Eq, Ord, Show, Enum)
+
 type family ApiEvalType (p :: [Type]) (a :: Type) :: Type where
   ApiEvalType '[]      a = a
   ApiEvalType (p : ps) a = p -> ApiEvalType ps a
@@ -89,8 +92,9 @@ type family ApiEvalType (p :: [Type]) (a :: Type) :: Type where
 
 -- | Name of an API call
 class (forall p a. Eq (api p a), Typeable api) => ApiName (api :: ApiDefinition) where
-  apiName        :: api p a -> String
-  showApiFromPat :: api p a -> ArgPattern p -> String
+  apiName           :: api p a -> String
+  showApiFromPat    :: api p a -> ArgPattern p -> String
+  apiMetaAttributes :: api p a -> [ApiMetaAttribute]
 
   default apiName :: (forall p a. Show (api p a)) => api p a -> String
   apiName = quietSnake . show
@@ -98,6 +102,9 @@ class (forall p a. Eq (api p a), Typeable api) => ApiName (api :: ApiDefinition)
 
   showApiFromPat = showApiFromPatDefault
   {-# inline showApiFromPat #-}
+
+  apiMetaAttributes _ = []
+  {-# inline apiMetaAttributes #-}
 
 
 -- | Given API spec has a direct mapping to its haskell pure implementation
@@ -168,6 +175,8 @@ runForeign' fe fa fs ff s i x = runError fe fa $ runState fs s $ runFresh ff i $
 runForeign :: Monad m => (ApiError -> m b) -> Labelled F FreshC (StateC VPtrTable (ErrorC ApiError m)) b -> m b
 runForeign fe = runForeign' fe return (\s a -> return a) (\s a -> return a) VP.emptyVPTable 0
 
+isExternalPure :: ApiName api => api p a -> Bool
+isExternalPure n = EXTERNAL_PURE `elem` apiMetaAttributes n
 
 class (ApiName sub, ApiName sup) => ApiMember sub sup where
   injApi :: sub p a -> sup p a
@@ -223,6 +232,9 @@ instance (ApiName f, ApiName g) => ApiName (f :$$: g) where
 
   showApiFromPat (ApiL f) = showApiFromPat f
   showApiFromPat (ApiR g) = showApiFromPat g
+
+  apiMetaAttributes (ApiL f) = apiMetaAttributes f
+  apiMetaAttributes (ApiR g) = apiMetaAttributes g
 
 instance (HasHaskellDef f, HasHaskellDef g) => HasHaskellDef (f :$$: g) where
   evalHaskell (ApiL f) args = evalHaskell f args

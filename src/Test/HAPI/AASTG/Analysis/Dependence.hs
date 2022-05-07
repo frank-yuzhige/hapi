@@ -30,13 +30,13 @@ import Data.Data (Typeable,type  (:~:) (Refl))
 import Data.SOP (NP (Nil, (:*)), All)
 import Test.HAPI.AASTG.Analysis.Path (pathNodesInSeq, Path)
 import Test.HAPI.Api (apiEq, ApiName (apiName, showApiFromPat), apiEqProofs)
-import Data.Type.Equality (testEquality, castWith, apply)
+import Data.Type.Equality (testEquality, castWith, apply, inner)
 import Type.Reflection (typeOf)
 import Test.HAPI.Common (Fuzzable)
 import Data.Maybe (fromJust, isJust, fromMaybe)
 import Data.Function (on)
 import Data.List (intercalate)
-import Control.Applicative (Const(getConst, Const), Applicative (liftA2))
+import Control.Applicative (Const(getConst, Const), Applicative (liftA2), Alternative ((<|>)))
 import Control.Effect.Labelled (Labelled, runLabelled, sendLabelled, HasLabelled)
 import Control.Effect.Fresh (Fresh (Fresh), fresh)
 import Control.Carrier.Fresh.Church (runFresh)
@@ -45,6 +45,7 @@ import Test.HAPI.Effect.Eff (Eff, debug)
 import Control.Effect.Empty (Empty, empty)
 import Test.HAPI.Util.Empty (liftMaybe)
 import Text.Printf (printf)
+import qualified Data.HashMap.Strict as HM
 
 type DependenceMap' dep = IntMap (NodeDependence' dep)
 
@@ -303,4 +304,66 @@ instance Hashable t => Hashable (DegradedDep t) where
     `hashWithSalt` n
 
 deriving instance Show t => Show (DegradedDep t)
+
+------ EXPERIMENTAL
+
+type Variable = String
+
+data Action where
+  Action :: (ApiName api, Typeable p, All Fuzzable p, Fuzzable a) => Maybe (PKey a) -> api p a -> Attributes p -> Action
+
+instance Eq Action where
+  Action m f as == Action n g bs = case apiEqProofs f g of
+    Nothing        -> False
+    Just (_, p, a) -> castWith (apply Refl $ apply Refl a) m == n
+                   && castWith (apply Refl p) as `eqAttributes` bs
+
+data CallSeqType
+  = Var Variable
+  | Act Action CallSeqType
+  | Par [CallSeqType]
+  | Mu  Variable CallSeqType
+  | Zero
+  deriving (Eq)
+data CallSeqVarAttr a
+  = Attr (Attribute a)
+  | CallResult
+
+unwind :: CallSeqType -> CallSeqType
+unwind t@(Mu x t') = go t'
+  where
+    go (Var y)
+      | x == y    = t
+      | otherwise = Var y
+    go (Act a t') = Act a (go t')
+    go (Par ts)   = Par (map go ts)
+    go (Mu y t')
+      | x == y    = Mu y t'
+      | otherwise = Mu y (go t')
+    go Zero       = Zero
+unwind t = t
+
+type CDEntry = DEntry' CallSeqVarAttr
+
+lookupPKInType :: Fuzzable t => PKey t -> CallSeqType -> Maybe (Dep t)
+lookupPKInType k = \case
+  Var x      -> Nothing
+  Act a t  -> case a of
+    Action Nothing  api as -> lookupPKInType k t
+    Action (Just x) api as -> do
+      proof <- inner <$> testEquality (typeOf x) (typeOf k)
+      if castWith (apply Refl proof) x == k
+        then return $ castWith (apply Refl proof) $ DepCall api as
+        else lookupPKInType k t
+  Par ts -> foldr ((<|>) . lookupPKInType k) Nothing ts
+  Mu s t -> lookupPKInType k t
+  Zero   -> Nothing
+
+lookupVar :: Fuzzable t => PKey t -> NodeDependence' CallSeqVarAttr -> CallSeqType -> Dep t
+lookupVar k nd t = fromJust $ do
+  DE de <- TM.lookup nd
+  s <- HM.lookup k de
+  case s of
+    Attr a     -> return $ DepAttr a
+    CallResult -> lookupPKInType k t
 

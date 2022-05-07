@@ -21,7 +21,8 @@ import qualified Data.IntSet as IS
 import Control.Algebra (Has)
 import Control.Effect.State (State)
 import GHC.Generics (Generic)
-import Data.Hashable (Hashable (hashWithSalt))
+import Data.Hashable (Hashable (hashWithSalt, hash))
+import Data.Containers.ListUtils (nubIntOn)
 
 
 class Path p where
@@ -45,21 +46,31 @@ newtype APath api c = APath { getPathEdges :: Vector (Edge api c) }
 
 slice :: Int -> Int -> APath api c -> APath api c
 slice i n (APath p) = APath (V.slice i n p)
+{-# INLINE slice #-}
 
 outPaths :: NodeID -> AASTG api c -> [APath api c]
-outPaths i aastg = map constrAPath (gen i)
+outPaths = outPaths' 20
+{-# INLINE outPaths #-}
+
+outPaths' :: Int -> NodeID -> AASTG api c -> [APath api c]
+outPaths' c i aastg = nubIntOn hash $ map constrAPath (gen i c)
   where
-    gen n = case edgesFrom n aastg of
+    gen _ 0 = [D.empty]
+    gen n c = case edgesFrom n aastg of
       [] -> [D.empty]
-      es -> concat [D.cons e <$> gen (endNode e) | e <- es]
+      es -> concat [D.cons e <$> gen (endNode e) (c - 1) | e <- es]
 
 inPaths :: NodeID -> AASTG api c -> [APath api c]
-inPaths i aastg = map constrAPath (gen i)
-  where
-    gen n = case edgesTo n aastg of
-      [] -> [D.empty]
-      es -> concat [D.cons e <$> gen (startNode e) | e <- es]
+inPaths = inPaths' 20
+{-# INLINE inPaths #-}
 
+inPaths' :: Int -> NodeID -> AASTG api c -> [APath api c]
+inPaths' c i aastg = nubIntOn hash $ map constrAPath (gen i c)
+  where
+    gen _ 0 = [D.empty]
+    gen n c = case edgesTo n aastg of
+      [] -> [D.empty]
+      es -> concat [D.cons e <$> gen (startNode e) (c - 1) | e <- es]
 
 
 -- | APath Incremental Constructor

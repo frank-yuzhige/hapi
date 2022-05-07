@@ -14,7 +14,7 @@ import Control.Algebra (Has)
 import Control.Monad (forM, forM_)
 import Test.HAPI.AASTG.Effect.Build (BuildAASTG, newNode, setNode, currNode, newEdge, runBuildAASTG)
 import Data.Functor.Contravariant (phantom)
-import Control.Effect.Labelled (HasLabelled)
+import Control.Effect.Labelled (HasLabelled, runLabelled)
 import Data.IntMap (IntMap)
 
 import qualified Control.Effect.State.Labelled as LS
@@ -40,17 +40,17 @@ unrollCycle maxDepth aastg
   $ runBuildAASTG @api @c
   $ unroll
   where
-    unroll :: ( Has (BuildAASTG api c) sig m)
+    unroll :: ( Has (BuildAASTG api c) sig m )
           => m ()
-    unroll = trav maxDepth (getStart aastg)
+    unroll = trav maxDepth (getStart aastg) IS.empty
       where
-        trav 0 _ = return ()
-        trav d i = do
+        trav 0 _ _ = return ()
+        trav d i h = do
           i' <- currNode @api @c
           forM_ (edgesFrom i aastg) $ \edge -> do
             let e = endNode edge
             e' <- newNode @api @c
             setNode @api @c e'
             newEdge (changeEdgeNode i' e' edge)
-            trav (d - 1) e
+            trav (d - 1) e h
             setNode @api @c i'

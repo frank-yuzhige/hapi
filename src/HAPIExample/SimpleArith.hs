@@ -27,6 +27,8 @@ import Test.HAPI.PrimApi (Prim)
 import qualified Test.HAPI.HLib.HLibPrelude as HLib
 import Test.HAPI.HLib.HLibPrelude (HLibPrelude)
 import Test.HAPI.AASTG.Analysis.Cycle (unrollCycle)
+import Data.GraphViz.Types.Graph (addEdge)
+import Test.HAPI.AASTG.Analysis.NodeDepType (inferNodeDepType)
 
 foreign import ccall "broken_add"
   add :: CInt -> CInt -> IO CInt
@@ -111,10 +113,51 @@ graph6 = runEnv $ runBuildAASTG $ do
   where p = Building @A @c
 
 cograph :: forall c. BasicSpec c => AASTG A c
-cograph = unrollCycle 500 $ runEnv $ coalesceAASTGs 500 [graph1, graph2, graph3, graph4, graph5, graph6]
+cograph = unrollCycle 200 $ runEnv $ coalesceAASTGs 500 [graph1, graph2, graph3, graph4, graph5, graph6]
+
+diamond :: forall c. BasicSpec c => AASTG A c
+diamond = runEnv $ runBuildAASTG $ do
+  n1 <- currNode @A @c
+  n2 <- newNode @A @c
+  n3 <- newNode @A @c
+  n4 <- newNode @A @c
+  n5 <- newNode @A @c
+  x  <- newVar  @A @c
+  newEdge @A @c (Update n1 n2 x Anything)
+  newEdge @A @c (APICall n2 n3 Nothing (injApi Add) (Get x :* Value 1 :* Nil))
+  newEdge @A @c (APICall n3 n5 Nothing (injApi Add) (Get x :* Value 2 :* Nil))
+  newEdge @A @c (APICall n2 n4 Nothing (injApi Add) (Get x :* Value 3 :* Nil))
+  newEdge @A @c (APICall n4 n5 Nothing (injApi Add) (Get x :* Value 4 :* Nil))
+
+cyc :: forall c. BasicSpec c => AASTG A c
+cyc = runEnv $ runBuildAASTG $ do
+  n1 <- currNode @A @c
+  n2 <- newNode @A @c
+  n3 <- newNode @A @c
+  n4 <- newNode @A @c
+  n5 <- newNode @A @c
+  x  <- newVar  @A @c
+  newEdge @A @c (Update n1 n2 x Anything)
+  newEdge @A @c (APICall n2 n3 Nothing (injApi Add) (Get x :* Value 1 :* Nil))
+  newEdge @A @c (APICall n3 n4 Nothing (injApi Add) (Get x :* Value 2 :* Nil))
+  newEdge @A @c (APICall n4 n2 Nothing (injApi Add) (Get x :* Value 3 :* Nil))
+  newEdge @A @c (APICall n4 n3 Nothing (injApi Add) (Get x :* Value 4 :* Nil))
+  -- newEdge @A @c (Redirect n2 n5)
+
+cyc2 :: forall c. BasicSpec c => AASTG A c
+cyc2 = runEnv $ runBuildAASTG $ do
+  n1 <- currNode @A @c
+  n2 <- newNode @A @c
+  n3 <- newNode @A @c
+  n4 <- newNode @A @c
+  x  <- newVar  @A @c
+  newEdge @A @c (Update n1 n2 x Anything)
+  newEdge @A @c (APICall n2 n3 Nothing (injApi Add) (Get x :* Value 1 :* Nil))
+  newEdge @A @c (APICall n3 n4 Nothing (injApi Add) (Get x :* Value 2 :* Nil))
+  newEdge @A @c (APICall n4 n2 Nothing (injApi Add) (Get x :* Value 3 :* Nil))
 
 op :: AASTG api c -> AASTG api c -> IO (AASTG api c)
-op = op' 5
+op = op' 100
 
 op' :: Int -> AASTG api c -> AASTG api c -> IO (AASTG api c)
 op' n g1 g2 = runEnvIO @IO $ do
@@ -133,7 +176,16 @@ op' n g1 g2 = runEnvIO @IO $ do
 previewCo :: IO ()
 previewCo = previewAASTG (cograph @Fuzzable)
 
+previewCy = previewAASTG (cyc @Fuzzable)
 
+previewD = previewAASTG =<< op (unrollCycle 10 $ cyc2 @Fuzzable) (unrollCycle 10 $ cyc @Fuzzable)
+
+q = do
+  x <- runEnvIO @IO (inferNodeDepType test)
+  print x
+  previewAASTG test
+  where
+    test = cyc @Fuzzable
 -- test = do
 --   previewAASTG graph6
 --   c4 >>= previewAASTG

@@ -21,16 +21,17 @@ type NodeSet         = IntSet
 type NodeRelationMap = IntMap NodeSet
 
 childrenNodes :: AASTG api c -> NodeRelationMap
-childrenNodes aastg = run $ runState (\s a -> return s) IM.empty $ calcChildren (getStart aastg)
+childrenNodes aastg = run $ runState (\s a -> return s) IM.empty $ calcChildren IS.empty (getStart aastg)
   where
-    calcChildren :: Has (State NodeRelationMap) sig m => NodeID -> m NodeSet
-    calcChildren n = do
+    calcChildren :: Has (State NodeRelationMap) sig m => NodeSet -> NodeID -> m NodeSet
+    calcChildren visited n = do
       computed <- gets @NodeRelationMap (IM.member n)
-      if computed then gets (IM.! n) else do
-        allChildren <- mapM (calcChildren . endNode) (edgesFrom n aastg)
-        let ans = IS.insert n $ IS.unions allChildren
-        modify $ IM.insert n ans
-        return ans
+      if computed then gets (IM.! n) else
+        if IS.member n visited then return IS.empty else do
+          allChildren <- mapM (calcChildren (IS.insert n visited) . endNode) (edgesFrom n aastg)
+          let ans = IS.insert n $ IS.unions allChildren
+          modify $ IM.insert n ans
+          return ans
 
 type UnrelatedNodeMap  = IntMap [NodeID]
 
@@ -43,14 +44,16 @@ unrelatedNodeMap aastg = IM.map (IS.toList . IS.difference nodes) relatives
     children = childrenNodes aastg
     relatives = run
               . runState @NodeRelationMap (\s a -> return s) children
-              $ addParents [] (getStart aastg)
+              $ addParents IS.empty (getStart aastg)
 
-    addParents :: Has (State NodeRelationMap) sig m => [NodeID] -> NodeID -> m ()
-    addParents trace n = do
-      let trace' = n : trace
-      modify $ IM.update (\s -> Just $ foldr IS.insert s trace') n
-      forM_ (edgesFrom n aastg) $ \edge -> do
-        addParents trace' (endNode edge)
+    addParents :: Has (State NodeRelationMap) sig m => NodeSet -> NodeID -> m ()
+    addParents trace n
+      | IS.member n trace = return ()
+      | otherwise = do
+        let trace' = IS.insert n trace
+        modify $ IM.update (\s -> Just $ IS.union s trace') n
+        forM_ (edgesFrom n aastg) $ \edge -> do
+          addParents trace' (endNode edge)
 
 type NodeDepthMap  = IntMap Int
 

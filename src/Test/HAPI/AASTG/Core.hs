@@ -102,6 +102,9 @@ endNode (Assert _ e _ _) = e
 endNode (APICall _ e _ _ _) = e
 endNode (Redirect _ e) = e
 
+getTerminators :: AASTG api c -> [NodeID]
+getTerminators aastg = [ n | n <- allNodes aastg, null (edgesFrom n aastg) ]
+
 edgesFrom :: NodeID -> AASTG api c -> [Edge api c]
 edgesFrom i (AASTG _ f _) = fromMaybe [] (f IM.!? i)
 
@@ -156,6 +159,7 @@ instance Eq (Edge api c) where
   APICall s e mx api args == APICall s' e' mx' api' args' =
     s == s' && e == e' && repEq mx mx' && apiEq api api' && attributesEq args args'
   _ == _ = False
+
 instance Hashable (Edge api c) where
   hashWithSalt salt (Update s e k a) = salt
     `hashWithSalt` "u"
