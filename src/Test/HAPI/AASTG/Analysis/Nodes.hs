@@ -4,7 +4,7 @@
 module Test.HAPI.AASTG.Analysis.Nodes where
 
 import Data.HashMap.Strict (HashMap)
-import Test.HAPI.AASTG.Core (NodeID, AASTG (getStart), allNodes, endNode, edgesFrom)
+import Test.HAPI.AASTG.Core (NodeID, AASTG (getStart, AASTG), allNodes, endNode, edgesFrom, edgesFrom2EdgesTo)
 import Data.HashSet (HashSet)
 import Control.Algebra (Has, run)
 import Control.Effect.State (State, gets, modify)
@@ -36,7 +36,7 @@ childrenNodes aastg = run $ runState (\s a -> return s) IM.empty $ calcChildren 
 type UnrelatedNodeMap  = IntMap [NodeID]
 
 -- | 2 nodes are unrelated, iff there exists no path that passes n1 and n2.
--- Return a HashMap that maps each node to a list of unrelated nodes.
+-- Return a HashMap that maps each node to a list of its unrelated nodes.
 unrelatedNodeMap :: AASTG api c -> UnrelatedNodeMap
 unrelatedNodeMap aastg = IM.map (IS.toList . IS.difference nodes) relatives
   where
@@ -67,3 +67,8 @@ nodeDepthMap aastg = run $ runState (\s _ -> return s) IM.empty $ visit (getStar
         forM_ [endNode e | e <- edgesFrom n aastg] $ \e -> do
           visit e (h + 1)
 
+dropOrphanNodes :: AASTG api c -> AASTG api c
+dropOrphanNodes aastg@(AASTG s fs _) = AASTG s fs' (edgesFrom2EdgesTo fs)
+  where
+    un = unrelatedNodeMap aastg
+    fs' = foldr IM.delete fs (un IM.! s)

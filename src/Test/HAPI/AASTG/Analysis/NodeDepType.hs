@@ -11,26 +11,25 @@ module Test.HAPI.AASTG.Analysis.NodeDepType where
 import Test.HAPI.Args (Attributes, Attribute (..), eqAttributes, attrs2Pat)
 import Test.HAPI.Common (Fuzzable)
 import Test.HAPI.PState (PKey(..))
-import Test.HAPI.Api (ApiName, apiEqProofs, isExternalPure)
-import Data.SOP (All, NP (Nil))
+import Test.HAPI.Api (ApiName (..), apiEqProofs, isExternalPure)
+import Data.SOP (All, NP (..))
 import Data.Type.Equality (castWith, apply,type  (:~:) (Refl), testEquality, inner)
 import Data.Data (Typeable)
-import Test.HAPI.Effect.Eff (Eff, debug, Alg)
+import Test.HAPI.Effect.Eff (Eff, debug, Alg, runEnv)
 import Control.Effect.Empty (Empty, empty)
-import Test.HAPI (VarSubstitution, apiName, emptyVarSub, unifyVarSubstitution, NP (..), SubEntry (..), AASTG, edgesTo, startNode, showApiFromPat, getTerminators)
 import Control.Carrier.State.Church (runState)
 import Data.Set (Set)
 import Data.Hashable (Hashable(..))
 import qualified Data.HashSet as HS
 import Data.HashSet (HashSet)
 import Control.Lens (makeLenses, view, over)
-import Control.Effect.State (gets, modify)
+import Control.Effect.State (gets, modify, get)
 import GHC.Generics (Generic)
 import Test.HAPI.Util.Empty (liftMaybe)
 import Control.Carrier.Cull.Church (NonDet)
 import Control.Effect.Choose ((<|>))
 
-import Test.HAPI.AASTG.Analysis.Dependence (Dep(..))
+import Test.HAPI.AASTG.Analysis.Dependence (Dep(..), unifyVarSubstitution)
 import qualified Data.TypeRepMap as TM
 import qualified Data.IntMap.Strict as IM
 import qualified Data.IntSet as IS
@@ -40,10 +39,14 @@ import Text.Printf (printf)
 import Data.IntMap (IntMap)
 import Data.Maybe (fromJust)
 import Data.IntSet (IntSet)
-import Test.HAPI.AASTG.Core (NodeID, Edge (..), allNodes)
-import Control.Monad (forM_, forM)
+import Test.HAPI.AASTG.Core (NodeID, Edge (..), allNodes, AASTG (..), startNode, edgesTo, getTerminators)
+import Control.Monad (forM_, forM, join)
 import Test.HAPI.Util.TH (fatalError, FatalErrorKind (FATAL_ERROR))
 import Data.List (intercalate)
+import Test.HAPI.AASTG.Analysis.Rename (VarSubstitution, emptyVarSub, SubEntry (..))
+import Control.Carrier.NonDet.Church (runNonDet)
+import Control.Applicative (liftA2)
+import qualified Control.Applicative as A
 
 type Variable = NodeID
 
@@ -70,6 +73,8 @@ data SubTypeCtx = SubTypeCtx {
   _checkedPairs :: HashSet (NodeDepType, NodeDepType),
   _nmb          :: String
 }
+
+deriving instance Show SubTypeCtx
 
 data NodeDepType
   = SVar Variable
@@ -171,45 +176,53 @@ inferNodeDepType aastg = do
               then Mu s t
               else t
 
+isST :: NodeDepType -> NodeDepType -> Maybe VarSubstitution
+isST sub sup = runEnv $ runNonDet fork (return . Just) (return Nothing) $ isSubType sub sup
+  where
+    fork = liftA2 (A.<|>)
+
 -- | Check if the given @sub@ type is a sub-type of the given @sup@ type
 --   Return the variable substitution that instantiates such sub-type relation.
 isSubType :: forall sig m. (Eff NonDet sig m) => NodeDepType -> NodeDepType -> m VarSubstitution
 isSubType sub sup
-  = runState (\s a -> return a) emptySubTypeCtx
-  $ go sub sup
+  = do
+  -- debug $ printf "%s: Checking ... \n>>  %s\n>>  %s" (show 'isSubType) (show sub) (show sup)
+  runState (\s a -> return a) emptySubTypeCtx
+   $ sub ~<=~ sup
   where
-    go a b = do
-      checked <- gets (HS.member (sub, sup) . view checkedPairs)
+    a ~<=~ b = do
+      -- debug $ printf "%s: Checking \n>>  %s\n>>  %s" (show 'isSubType) (show a) (show b)
+      checked <- gets (HS.member (a, b) . view checkedPairs)
       if checked then return emptyVarSub else do
         modify $ over checkedPairs $ HS.insert (a, b)
         case (a, b) of
           (Zero, Zero) ->
             return emptyVarSub
           (Mu {}, _) ->
-            go (unwind a) b
+            unwind a ~<=~ b
           (_, Mu {}) ->
-            go a (unwind b)
+            a ~<=~ unwind b
           (Par as, _) -> do
-            vs <- mapM (`isSubType` b) as
+            vs <- mapM (~<=~ b) as
             liftMaybe $ foldr (\v a -> a >>= unifyVarSubstitution v) (Just emptyVarSub) vs
           (_, Par bs) -> checkAny bs
             where
               checkAny []        = empty
-              checkAny (b' : bs) = a `isSubType` b' <|> checkAny bs
+              checkAny (b' : bs) = a ~<=~ b' <|> checkAny bs
           -- Ignoring variable from attributes and external-pure functions (e.g. Anything)
           (Act (ActGen _ _) ta, _)
-            -> go ta b
+            -> ta ~<=~ b
           (_, Act (ActGen _ _) tb)
-            -> go a tb
+            -> a ~<=~ tb
           (Act (ActCall _ a _) ta, _) | isExternalPure a
-            -> go ta b
+            -> ta ~<=~ b
           (_, Act (ActCall _ b _) tb) | isExternalPure b
-            -> go a tb
-          (Act (ActCall _ a as) ta, Act (ActCall _ b bs) tb) -> do
+            -> a ~<=~ tb
+          (Act a'@(ActCall _ a as) ta, Act b'@(ActCall _ b bs) tb) -> do
             (papi, pp, pa) <- liftMaybe $ apiEqProofs a b
             let as' = castWith (apply Refl pp) as
             s1 <- getVarSubFromArgs sub sup as' bs
-            s2 <- go ta tb
+            s2 <- ta ~<=~ tb
             liftMaybe $ s1 `unifyVarSubstitution` s2
           _ -> empty
 
@@ -262,7 +275,7 @@ lookupPKInType k = \case
       if castWith (apply Refl proof) x == k
         then return $ castWith (apply Refl proof) $ DepAttr at
         else lookupPKInType k t
-    ActCall Nothing  api as -> lookupPKInType k t
+    ActCall Nothing  _   _ -> lookupPKInType k t
     ActCall (Just x) api as -> do
       proof <- liftMaybe $ inner <$> testEquality (typeOf x) (typeOf k)
       if castWith (apply Refl proof) x == k

@@ -19,7 +19,7 @@ import Control.Monad.IO.Class ( MonadIO(liftIO) )
 import Data.SOP (NP(Nil, (:*)))
 import qualified Data.ByteString as BS
 import Test.QuickCheck (Arbitrary)
-import Control.Monad (forM_)
+import Control.Monad (forM_, join)
 import qualified Test.HAPI.PState as PS
 import qualified Test.HAPI.VPtr as VP
 import Test.HAPI.DataType (BasicSpec)
@@ -28,7 +28,11 @@ import qualified Test.HAPI.HLib.HLibPrelude as HLib
 import Test.HAPI.HLib.HLibPrelude (HLibPrelude)
 import Test.HAPI.AASTG.Analysis.Cycle (unrollCycle)
 import Data.GraphViz.Types.Graph (addEdge)
-import Test.HAPI.AASTG.Analysis.NodeDepType (inferNodeDepType)
+import Test.HAPI.AASTG.Analysis.NodeDepType (inferNodeDepType, isST, isSubType)
+import qualified Data.IntMap as IM
+import Control.Carrier.NonDet.Church (runNonDet)
+import Control.Applicative (liftA2)
+import Data.Hashable (hash)
 
 foreign import ccall "broken_add"
   add :: CInt -> CInt -> IO CInt
@@ -109,7 +113,6 @@ graph6 = runEnv $ runBuildAASTG $ do
   fork p $ call Neg (Get c :* Nil) $ p
   fork p $ call (HLib.+) (Get c :* Get c :* Nil) $ p
   call Mul (Get a :* Get d :* Nil) $ p
-
   where p = Building @A @c
 
 cograph :: forall c. BasicSpec c => AASTG A c
@@ -156,10 +159,10 @@ cyc2 = runEnv $ runBuildAASTG $ do
   newEdge @A @c (APICall n3 n4 Nothing (injApi Add) (Get x :* Value 2 :* Nil))
   newEdge @A @c (APICall n4 n2 Nothing (injApi Add) (Get x :* Value 3 :* Nil))
 
-op :: AASTG api c -> AASTG api c -> IO (AASTG api c)
-op = op' 100
+op :: ApiName api => AASTG api c -> AASTG api c -> IO (AASTG api c)
+op = op' 1000
 
-op' :: Int -> AASTG api c -> AASTG api c -> IO (AASTG api c)
+op' :: ApiName api => Int -> AASTG api c -> AASTG api c -> IO (AASTG api c)
 op' n g1 g2 = runEnvIO @IO $ do
   (h, c2) <- coalesceAASTG n g1 g2
   debug   $ show h
@@ -178,7 +181,28 @@ previewCo = previewAASTG (cograph @Fuzzable)
 
 previewCy = previewAASTG (cyc @Fuzzable)
 
-previewD = previewAASTG =<< op (unrollCycle 10 $ cyc2 @Fuzzable) (unrollCycle 10 $ cyc @Fuzzable)
+previewD = do
+  let a = diamond @Fuzzable
+      b = cyc @Fuzzable
+  previewAASTG a
+  previewAASTG b
+  previewAASTG =<< op' 0 a b
+  c <- op' 1 a b
+  previewAASTG c
+  -- x <- runEnvIO @IO (inferNodeDepType c)
+  -- y <- runEnvIO @IO $ runNonDet fork (return . Just) (return Nothing) $ isSubType (x IM.! 5) (x IM.! 2)
+  -- putStrLn "-----------"
+  -- print y
+  -- print (x IM.! 5)
+  -- print (x IM.! 2)
+  -- print (x IM.! 5 == x IM.! 2)
+  -- print (hash (x IM.! 5), hash (x IM.! 2))
+  previewAASTG =<< op' 2 a b
+
+
+
+
+  -- previewAASTG =<< op' 3 a b
 
 q = do
   x <- runEnvIO @IO (inferNodeDepType test)
