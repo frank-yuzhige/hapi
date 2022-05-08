@@ -27,8 +27,6 @@ import Test.HAPI.PrimApi (Prim)
 import qualified Test.HAPI.HLib.HLibPrelude as HLib
 import Test.HAPI.HLib.HLibPrelude (HLibPrelude)
 import Test.HAPI.AASTG.Analysis.Cycle (unrollCycle)
-import Data.GraphViz.Types.Graph (addEdge)
-import Test.HAPI.AASTG.Analysis.NodeDepType (inferNodeDepType, isST, isSubType)
 import qualified Data.IntMap as IM
 import Control.Carrier.NonDet.Church (runNonDet)
 import Control.Applicative (liftA2)
@@ -161,6 +159,19 @@ cyc2 = runEnv $ runBuildAASTG $ do
   p <%(n4,n2)%> call Add (Get x, Value 3)
   where p = Building @A @c
 
+cyc3 :: forall c. BasicSpec c => AASTG A c
+cyc3 = runEnv $ runBuildAASTG $ do
+  n1 <- currNode @A @c
+  n2 <- newNode @A @c
+  n3 <- newNode @A @c
+  n4 <- newNode @A @c
+  x <- p <%(n1,n2)%> var Anything
+  p <%(n2,n3)%> call Add (Get x, Value 1)
+  p <%(n3,n4)%> call Sub (Get x, Value 2)
+  p <%(n4,n2)%> call Add (Get x, Value 3)
+  p <%(n4,n3)%> call Add (Get x, Value 4)
+  p <%(n4,n3)%> call Add (Get x, Value 5)
+  where p = Building @A @c
 
 op :: ApiName api => AASTG api c -> AASTG api c -> IO (AASTG api c)
 op = op' 1000
@@ -185,7 +196,7 @@ previewCo = previewAASTG (cograph @Fuzzable)
 previewCy = previewAASTG (cyc @Fuzzable)
 
 previewD = do
-  let a = cyc2 @Fuzzable
+  let a = cyc3 @Fuzzable
       b = cyc @Fuzzable
   previewAASTG a
   previewAASTG b
@@ -197,7 +208,7 @@ previewD = do
   previewAASTG =<< op' 4 a b
 
 q = do
-  x <- runEnvIO @IO (inferNodeDepType test)
+  x <- runEnvIO @IO (inferProcType test)
   print x
   previewAASTG test
   where

@@ -10,8 +10,7 @@ module Test.HAPI.AASTG.Analysis.Coalesce where
 
 import Test.HAPI.AASTG.Core (AASTG (AASTG, getEdgesFrom, getEdgesTo, getStart), NodeID, Edge (Update, Forget, Assert, APICall), allNodes, edgesFrom, edgesTo2EdgesFrom, startNode, edgesFrom2EdgesTo, endNode)
 import Test.HAPI.AASTG.Analysis.Rename (normalizeNodes, maxNodeID, renameNodesInEdge, VarSubstitution, emptyVarSub, renameNodesViaOffset, renameVars, isIdempotentVarSub, renameVarsInEdge)
-import Test.HAPI.AASTG.Analysis.PathExtra (NodePathMap, effectiveSubpath, getIncomingPathsMap, findForkParent)
-import Test.HAPI.AASTG.Analysis.Dependence (pathDeps, pathDegradedDeps, DependenceMap, DegradedDepMap, unifyVarSubstitution, applyVarSubstitution)
+import Test.HAPI.AASTG.Analysis.Dependence (pathDeps, pathDegradedDeps, DependenceMap, DegradedDepMap, applyVarSubstitution)
 import Test.HAPI.AASTG.Analysis.Path (Path(pathCalls, pathEndNode), APath)
 import Data.List ( partition, (\\), sortBy )
 import Data.IntMap (IntMap)
@@ -32,7 +31,7 @@ import qualified Data.IntSet as IS
 import Test.HAPI.Util.Empty (liftMaybe)
 import qualified Data.TypeRepMap as TM
 import qualified Data.HashMap.Strict as HS
-import Test.HAPI.AASTG.Analysis.NodeDepType (NodeDepTypeMap, isSubType, inferNodeDepType, emptySubTypeCtx)
+import Test.HAPI.AASTG.Analysis.ProcType (ProcTypeMap, isSubType, inferProcType, emptySubTypeCtx)
 import Control.Carrier.NonDet.Church (runNonDet)
 import Control.Applicative (Applicative(liftA2))
 import Test.HAPI.Api (ApiName)
@@ -61,7 +60,6 @@ coalesceAASTGs n = \case
     (_, r) <- coalesceAASTG  n a  x
     return r
 
--- | TODO: Children will fight, fix me! (fork children on var substitution)
 directCoalesceState :: NodeID -> NodeID -> AASTG api c -> AASTG api c
 directCoalesceState er ee aastg@(AASTG s fs bs) = AASTG 0 fs' (edgesFrom2EdgesTo fs')
   where
@@ -105,31 +103,21 @@ directCoalesceNode ::
                    -> AASTG api c       --
                    -> m (AASTG api c)   --
 directCoalesceNode er ee vsb ur aastg@(AASTG s fs bs)
-  | er `notElem` ur IM.! ee || ee `notElem` ur IM.! er
+  | related er ee || related ee er
     = fatalError 'directCoalesceNode FATAL_ERROR $ printf "Node %d and %d are related!" er ee
-  -- | isIdempotentVarSub vsb = do
-  --   debug $ printf "%s: Idempotent var sub" (show 'directCoalesceNode)
-  --   return $ directCoalesceState er ee aastg
+  | isIdempotentVarSub vsb = do
+    debug $ printf "%s: Idempotent var sub" (show 'directCoalesceNode)
+    return $ directCoalesceState er ee aastg
   | otherwise = do
     -- debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.directCoalesceNode: coalescing [%d <- %d]" er ee
     -- debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.directCoalesceNode: children = %s" (show children)
     debug $ printf "%s: apply sub on biparted AASTG, coalesce %d <- %d" (show 'directCoalesceNode) er ee
     -- debug $ printf "%s: combine = %s" (show 'directCoalesceNode) (show combine)
-    let ans = directCoalesceState er ee combine
-    return ans
+    return $ directCoalesceState er ee combine
     where
-      -- ee' = maxNodeID aastg + 1
-      -- -- | Delete from the original graph, the subgraph from the last parent node with only 1 outgoing edge.
-      -- fs' = foldr IM.delete fs (childrenOf ee)
-      -- subgraph = let f = childGraph ee aastg
-      --            in  renameVars vsb
-      --             .  normalizeNodes ee'
-      --             $  AASTG ee f (edgesFrom2EdgesTo f)
-      -- childrenOf = IS.toList . (childrenNodes aastg IM.!)
-      -- froms      = IM.filter (not . null) (fs' <> getEdgesFrom subgraph)
-      -- tc      = childGraph ee aastg
-      froms   = IM.mapWithKey (\k e -> if k `elem` (ur IM.! ee) then e else map (renameVarsInEdge vsb) e) fs
-      combine = AASTG s froms (edgesFrom2EdgesTo froms)
+      related a b = a `notElem` ur IM.! b
+      froms       = IM.mapWithKey (\k e -> if k `elem` (ur IM.! ee) then e else map (renameVarsInEdge vsb) e) fs
+      combine     = AASTG s froms (edgesFrom2EdgesTo froms)
 
 coalesceOneStep ::
                  ( Alg sig m
@@ -143,55 +131,47 @@ coalesceOneStep aastg = do
   -- debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: num of paths = %d" (length paths)
   -- debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: candidates count = %d" (length candidates)
   -- debugIO $ previewAASTG aastg
-  nodeTypeMap <- inferNodeDepType aastg
-  go nodeTypeMap candidates
+  ptm <- inferProcType aastg
+  go ptm candidates
   where
-    go ntm []           = return (Nothing, aastg)
-    go ntm ((b, r): xs) = do
+    go ptm []           = return (Nothing, aastg)
+    go ptm ((b, r): xs) = do
       debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: checking: %s" (show (b, r))
-      debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: type of b = %s" (show (ntm IM.! b))
-      debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: type of r = %s" (show (ntm IM.! r))
+      debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: type of b = %s" (show (ptm IM.! b))
+      debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: type of r = %s" (show (ptm IM.! r))
       r' <- r ~<=~ b
       case r' of
         Just vsb -> do
-          debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: type of er = %s" (show (ntm IM.! b))
-          debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: type of ee = %s" (show (ntm IM.! r))
+          debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: type of er = %s" (show (ptm IM.! b))
+          debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: type of ee = %s" (show (ptm IM.! r))
           ans <- directCoalesceNode b r vsb unrelatedMap aastg
           return (Just (b, r), ans)
         Nothing  -> do
           b' <- b ~<=~ r
           case b' of
             Just vsb -> do
-              debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: type of er = %s" (show (ntm IM.! r))
-              debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: type of ee = %s" (show (ntm IM.! b))
+              debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: type of er = %s" (show (ptm IM.! r))
+              debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: type of ee = %s" (show (ptm IM.! b))
               ans <- directCoalesceNode r b vsb unrelatedMap aastg
               return (Just (r, b), ans)
-            Nothing  -> go ntm xs
+            Nothing  -> go ptm xs
       where
-        (~<=~) = upperSubNode ntm
-
-
+        (~<=~) = upperSubNode ptm
     nodeDepths     = nodeDepthMap        aastg
     unrelatedMap   = unrelatedNodeMap    aastg
-    ipaths         = getIncomingPathsMap aastg
-    paths          = concat $ HM.elems ipaths
-    deps           = HM.fromList [(path, pathDeps         path) | path <- paths]
-    degs           = HM.fromList [(path, pathDegradedDeps path) | path <- paths]
-    calls          = HM.fromList [(path, pathCalls        path) | path <- paths]
-    singlePathOf   = head . (ipaths HM.!)
     candidates     = [(b, r) | b <- sortBy (compare `on` (nodeDepths IM.!)) (allNodes aastg)
                              , r <- sortBy (compare `on` (nodeDepths IM.!)) (unrelatedMap IM.! b)
                              ]
 
 upperSubNode :: Alg sig m
-             => NodeDepTypeMap
+             => ProcTypeMap
              -> NodeID
              -> NodeID
              -> m (Maybe VarSubstitution)
-upperSubNode tys n1 n2 = do
+upperSubNode ptm n1 n2 = do
   ans <- runState (\s a -> return a) emptySubTypeCtx
        $ runNonDet (liftA2 (A.<|>)) (return . Just) (return Nothing)
-       $ isSubType (tys IM.! n1) (tys IM.! n2)
+       $ isSubType (ptm IM.! n1) (ptm IM.! n2)
   when (isJust ans) $ debug $ printf "%s: %d <= %d, %s" (show 'upperSubNode) n1 n2 (show ans)
   return ans
 

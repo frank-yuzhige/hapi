@@ -8,7 +8,8 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
-module Test.HAPI.AASTG.Analysis.NodeDepType where
+module Test.HAPI.AASTG.Analysis.ProcType where
+
 import Test.HAPI.Args (Attributes, Attribute (..), eqAttributes, attrs2Pat)
 import Test.HAPI.Common (Fuzzable)
 import Test.HAPI.PState (PKey(..))
@@ -30,7 +31,7 @@ import Test.HAPI.Util.Empty (liftMaybe)
 import Control.Carrier.Cull.Church (NonDet)
 import Control.Effect.Choose ((<|>))
 
-import Test.HAPI.AASTG.Analysis.Dependence (Dep(..), unifyVarSubstitution)
+import Test.HAPI.AASTG.Analysis.Dependence (Dep(..))
 import qualified Data.TypeRepMap as TM
 import qualified Data.IntMap.Strict as IM
 import qualified Data.IntSet as IS
@@ -44,14 +45,14 @@ import Test.HAPI.AASTG.Core (NodeID, Edge (..), allNodes, AASTG (..), startNode,
 import Control.Monad (forM_, forM, join)
 import Test.HAPI.Util.TH (fatalError, FatalErrorKind (FATAL_ERROR))
 import Data.List (intercalate)
-import Test.HAPI.AASTG.Analysis.Rename (VarSubstitution, emptyVarSub, SubEntry (..), singletonVarSub)
+import Test.HAPI.AASTG.Analysis.Rename (VarSubstitution, emptyVarSub, SubEntry (..), singletonVarSub, unifyVarSubstitution)
 import Control.Carrier.NonDet.Church (runNonDet)
 import Control.Applicative (liftA2)
 import qualified Control.Applicative as A
 
-type Variable = NodeID
+type SVar = NodeID
 
-type NodeDepTypeMap = IntMap NodeDepType
+type ProcTypeMap = IntMap ProcType
 
 data Action where
   ActCall :: forall api p a.
@@ -63,35 +64,29 @@ data Action where
         -> api p a
         -> Attributes p
         -> Action
-  ActGen   :: forall a.
-            ( Fuzzable a )
-           => PKey a
-           -> Attribute a
-           -> Action
+  ActGen  :: forall a.
+           ( Fuzzable a )
+        => PKey a
+        -> Attribute a
+        -> Action
 
 
 data SubTypeCtx = SubTypeCtx {
-  _checkedPairs :: HashSet (NodeDepType, NodeDepType),
+  _checkedPairs :: HashSet (ProcType, ProcType),
   _nmb          :: String
 }
 
-deriving instance Show SubTypeCtx
-
-data NodeDepType
-  = SVar Variable
-  | Act  Action NodeDepType
-  | Par  [NodeDepType]
-  | Mu   Variable NodeDepType
+data ProcType
+  = SVar SVar
+  | Act  Action ProcType
+  | Par  [ProcType]
+  | Mu   SVar ProcType
   | Zero
-
-data CallSeqVarAttr a
-  = Attr (Attribute a)
-  | CallResult
 
 $(makeLenses ''SubTypeCtx)
 
 -- Smart Par that auto evals to Zero if list is empty, or just the element if the list only contains that element.
-par :: [NodeDepType] -> NodeDepType
+par :: [ProcType] -> ProcType
 par []  = Zero
 par [t] = t
 par xs  = Par xs
@@ -99,7 +94,9 @@ par xs  = Par xs
 emptySubTypeCtx :: SubTypeCtx
 emptySubTypeCtx = SubTypeCtx HS.empty ""
 
-unwind :: NodeDepType -> NodeDepType
+-- | Unwind Recursion construct (μ) once.
+--   For any other constructs, remain what it was.
+unwind :: ProcType -> ProcType
 unwind t@(Mu x t') = go t'
   where
     go (SVar y)
@@ -113,14 +110,16 @@ unwind t@(Mu x t') = go t'
     go Zero       = Zero
 unwind t = t
 
-freeSVar :: NodeDepType -> IntSet
+-- | Get a set of free SVars
+freeSVar :: ProcType -> IntSet
 freeSVar (SVar v)  = IS.singleton v
 freeSVar (Act a t) = freeSVar t
 freeSVar (Par ts)  = IS.unions (map freeSVar ts)
 freeSVar (Mu n t)  = IS.delete n $ freeSVar t
 freeSVar Zero      = IS.empty
 
-subSVar :: Variable -> NodeDepType -> NodeDepType -> NodeDepType
+-- | Given SVar V, type S and type T, Substitute all free occurrences of V in T with S
+subSVar :: SVar -> ProcType -> ProcType -> ProcType
 subSVar v s = \case
   SVar x | x == v    -> s
          | otherwise -> SVar x
@@ -130,10 +129,11 @@ subSVar v s = \case
          | otherwise -> Mu x (subSVar v s t)
   Zero    -> Zero
 
-isValidType :: NodeDepType -> Bool
+isValidType :: ProcType -> Bool
 isValidType x = IS.null $ freeSVar x
 
-simplifyMu :: NodeDepType -> NodeDepType
+-- | Simplify the Recursive construct, by removing all unnecessary μ-constructs when quantified no SVar.
+simplifyMu :: ProcType -> ProcType
 simplifyMu (Mu x t)
   | x `IS.member` freeSVar t = Mu x (simplifyMu t)
   | otherwise                = simplifyMu t
@@ -142,15 +142,15 @@ simplifyMu (Par ts)  = Par (map simplifyMu ts)
 simplifyMu (SVar x)  = SVar x
 simplifyMu Zero      = Zero
 
-inferNodeDepType :: forall sig m api c.
-                  ( Alg sig m
-                  , ApiName api )
-               => AASTG api c
-               -> m NodeDepTypeMap
-inferNodeDepType aastg = do
-  debug $ printf "%s: Terminator Nodes %s" (show 'inferNodeDepType) (show $ getTerminators aastg)
-  let unground = foldr inferUnground IM.empty (allNodes aastg)
-  return $ ground unground
+-- | Infer procedure types for all nodes in the given AASTG using iterative algorithm.
+inferProcType :: forall sig m api c.
+               ( Alg sig m
+               , ApiName api )
+            => AASTG api c
+            -> m ProcTypeMap
+inferProcType aastg = do
+  debug $ printf "%s: Terminator Nodes %s" (show 'inferProcType) (show $ getTerminators aastg)
+  return $ ground $ foldr inferUnground IM.empty (allNodes aastg)
   where
     inferUnground i = IM.insert i (par ts)
       where
@@ -160,9 +160,9 @@ inferNodeDepType aastg = do
                             Update s e k a ->
                               Act (ActGen k a) tau
                             Forget s e x   ->
-                              fatalError 'inferNodeDepType FATAL_ERROR "Unsupported construct 'forget'"
+                              fatalError 'inferProcType FATAL_ERROR "Unsupported construct 'forget'"
                             Assert n j pk pk' ->
-                              fatalError 'inferNodeDepType FATAL_ERROR "Unsupported construct 'assert'"
+                              fatalError 'inferProcType FATAL_ERROR "Unsupported construct 'assert'"
                             APICall s e mx api args ->
                               Act (ActCall mx api args) tau
                             Redirect n j ->
@@ -177,20 +177,30 @@ inferNodeDepType aastg = do
               then Mu s t
               else t
 
-isST :: NodeDepType -> NodeDepType -> Maybe VarSubstitution
-isST sub sup = runEnv
-  $ runState (\s a -> return a) emptySubTypeCtx      -- Pitfall: first state then nondet. Other way round will cause state not propagate between (<|>)
-  $ runNonDet fork (return . Just) (return Nothing)
+-- | Check if the given procedure type is well-formed. A well-formed procedure type should satisfy the following statements:
+--     1. It does not contain any `free` SVar (state variable).
+--     2.
+checkValidType :: forall sig m api c.
+                ( Alg sig m
+                , ApiName api )
+             => AASTG api c
+             -> m ProcTypeMap
+checkValidType = undefined
+
+-- | Check if the given @sub@ type is a sub-type of the given @sup@ type
+--   Return @Just@ the variable substitution that instantiates such sub-type relation, or @Nothing@ if @sub@ is not a sub-type of @sup@.
+isSubType' :: ProcType -> ProcType -> Maybe VarSubstitution
+isSubType' sub sup = runEnv
+  $ runState (\s a -> return a) emptySubTypeCtx      -- Pitfall: first state then nondet. Other way round will stop propagation of state between (<|>)
+  $ runNonDet (liftA2 (A.<|>)) (return . Just) (return Nothing)
   $ isSubType sub sup
-  where
-    fork = liftA2 (A.<|>)
 
 -- | Check if the given @sub@ type is a sub-type of the given @sup@ type
 --   Return the variable substitution that instantiates such sub-type relation.
-isSubType :: forall sig m. (Eff (NonDet :+: State SubTypeCtx) sig m) => NodeDepType -> NodeDepType -> m VarSubstitution
+isSubType :: forall sig m. (Eff (NonDet :+: State SubTypeCtx) sig m) => ProcType -> ProcType -> m VarSubstitution
 isSubType sub sup
   = do
-  debug $ printf "%s: Checking ... \n>>  %s\n>>  %s" (show 'isSubType) (show sub) (show sup)
+  -- debug $ printf "%s: Checking ... \n>>  %s\n>>  %s" (show 'isSubType) (show sub) (show sup)
   sub ~<=~ sup
   where
     a ~<=~ b = do
@@ -230,18 +240,14 @@ isSubType sub sup
             s2 <- ta ~<=~ tb
             liftMaybe $ s1' `unifyVarSubstitution` s2
           _ -> empty
-      -- where
-      --   debugctx = do
-      --     size <- gets (HS.size . view checkedPairs)
-      --     debug $ printf "%s: Ctx size = %d" (show 'isSubType) size
 
--- | Given 2 different NodeDependence and 2 attribute lists, attempt to find a unification (i.e. Variable substitution scheme)
+-- | Given 2 different procedure types and 2 attribute lists, attempt to find a unification (i.e. SVar substitution scheme)
 -- that makes all corresponding attributes in each list `effectively the same`.
 getVarSubFromArgs :: forall p sig m.
                    ( All Fuzzable p
                    , Eff NonDet sig m)
-                => NodeDepType
-                -> NodeDepType
+                => ProcType
+                -> ProcType
                 -> Attributes p
                 -> Attributes p
                 -> m VarSubstitution
@@ -261,20 +267,21 @@ getVarSubFromArgs d1 d2 (a :* as) (b :* bs) = do
       | a == b    = return TM.empty
       | otherwise = empty
     -- Api calls are the same, iff the function they calls are the same, and all arguments are pairwise-effectively the same.
+    -- TODO: Same api call, different location?
     unify (DepCall f fa) (DepCall g ga) = do
       (_, proof, _) <- liftMaybe $ f `apiEqProofs` g
       getVarSubFromArgs d1 d2 (castWith (apply Refl proof) fa) ga
     -- Otherwise, not unifiable (e.g. x <-> some attr, not unifiable since x could be used in later context)
     unify _ _ = empty
 
-unaliasVar :: (Typeable p, Eff NonDet sig m) => NodeDepType -> PKey p -> m (PKey p, Dep p)
+unaliasVar :: (Typeable p, Eff NonDet sig m) => ProcType -> PKey p -> m (PKey p, Dep p)
 unaliasVar dep x = do
   n <- lookupPKInType x dep
   case n of
     (DepAttr (Get y)) -> unaliasVar dep y
     other             -> return (x, other)
 
-lookupPKInType :: (Typeable t, Eff NonDet sig m) => PKey t -> NodeDepType -> m (Dep t)
+lookupPKInType :: (Typeable t, Eff NonDet sig m) => PKey t -> ProcType -> m (Dep t)
 lookupPKInType k = \case
   SVar x   -> empty
   Act a t  -> case a of
@@ -309,9 +316,9 @@ instance Show Action where
   show (ActGen x a)
     = printf "%s=%s" (getPKeyID x) (show a)
 
-deriving instance Eq NodeDepType
+deriving instance Eq ProcType
 
-instance Show NodeDepType where
+instance Show ProcType where
   show (SVar v)  = printf "X%d" v
   show (Act a t) = printf "%s.%s" (show a) (show t)
   show (Par ts)  = "(" <> intercalate " | " (map show ts) <> ")"
@@ -330,5 +337,7 @@ instance Hashable Action where
     `hashWithSalt` x
     `hashWithSalt` a
 
-deriving instance Generic NodeDepType
-instance Hashable NodeDepType
+deriving instance Generic ProcType
+instance Hashable ProcType
+
+deriving instance Show SubTypeCtx

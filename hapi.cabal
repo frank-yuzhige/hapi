@@ -33,10 +33,10 @@ library
       Test.HAPI.AASTG.Analysis.Coalesce
       Test.HAPI.AASTG.Analysis.Cycle
       Test.HAPI.AASTG.Analysis.Dependence
-      Test.HAPI.AASTG.Analysis.NodeDepType
       Test.HAPI.AASTG.Analysis.Nodes
       Test.HAPI.AASTG.Analysis.Path
       Test.HAPI.AASTG.Analysis.PathExtra
+      Test.HAPI.AASTG.Analysis.ProcType
       Test.HAPI.AASTG.Analysis.Rename
       Test.HAPI.AASTG.Analysis.TypeCheck
       Test.HAPI.AASTG.Core

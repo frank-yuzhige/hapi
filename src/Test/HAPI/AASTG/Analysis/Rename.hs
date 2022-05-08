@@ -26,6 +26,7 @@ import qualified Test.HAPI.Util.TypeRepMap as TM
 import Data.Data (typeRep, Data, Typeable)
 import GHC.Generics
 import Data.Hashable (Hashable)
+import qualified Data.HashSet as HS
 
 type NodeRenameMap = IntMap NodeID  -- NodeID -> NodeID
 
@@ -34,8 +35,11 @@ type VarSubstitution = TypeRepMap SubEntry
 newtype SubEntry t = SE { unSE :: HM.HashMap (PKey t) (PKey t) }
   deriving (Eq, Show, Ord, Generic)
 
+newtype SubEntry' t = SE' { unSE' :: HM.HashMap (PKey t) (HS.HashSet (PKey t)) }
+
 instance Hashable (SubEntry t) where
 
+-- Node Sub
 
 maxNodeID :: AASTG api c -> NodeID
 maxNodeID (AASTG start fs bs) = maximum (start : IM.keys fs <> IM.keys bs)
@@ -83,6 +87,28 @@ lookVar' k vsb = fromMaybe k (lookVar k vsb) -- error $ "Test.HAPI.AASTG.Analysi
 
 isIdempotentVarSub :: VarSubstitution -> Bool
 isIdempotentVarSub vsb = and $ TM.toListWith (\(SE se) -> HM.foldrWithKey (\k v n -> k == v && n) True se) vsb
+
+-- | Unify 2 variable substitutions
+-- Unification fails when a variable is assigned to 2 different variables in 2 subs.
+unifyVarSubstitution :: VarSubstitution -> VarSubstitution -> Maybe VarSubstitution
+unifyVarSubstitution vs1 vs2 = TM.hoistA unliftSE merge
+  where
+    -- Need to use helper SE' since @TM.unionWith@ only works for @f x -> f x -> f x@
+    vs1'  = TM.hoist liftSE vs1
+    vs2'  = TM.hoist liftSE vs2
+    merge = TM.unionWith (\a b -> SE' $ HM.unionWith HS.union (unSE' a) (unSE' b)) vs1' vs2'
+
+-- | Lift a SubEntry to SubEntry', where it is a key -> Set of key mapping
+liftSE :: SubEntry t -> SubEntry' t
+liftSE = SE' . HM.map HS.singleton . unSE
+
+-- | Unlift a SubEntry' to SubEntry. If the SubEntry' contains a one-to-many mapping, then unlift fails.
+unliftSE :: SubEntry' t -> Maybe (SubEntry t)
+unliftSE (SE' se) = SE <$> HM.foldrWithKey folder (Just HM.empty) se
+  where
+    folder k s e
+      | HS.size s == 1 = HM.insert k (head $ HS.toList s) <$> e
+      | otherwise     = Nothing
 
 renameVars :: VarSubstitution -> AASTG api c -> AASTG api c
 renameVars vsb aastg@(AASTG start fs bs) = AASTG start (renameVarsInMap vsb fs) (renameVarsInMap vsb bs)
