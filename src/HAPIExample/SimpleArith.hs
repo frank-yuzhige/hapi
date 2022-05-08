@@ -68,51 +68,51 @@ graph1 :: forall c. BasicSpec c => AASTG A c
 graph1 = runEnv $ runBuildAASTG $ do
   a <- p <%> val @Int 10
   b <- p <%> var @Int Anything
-  p <%> call Add (Get a :* Get b :* Nil)
+  p <%> call Add (Get a, Get b)
   where p = Building @A @c
 
 graph2 :: forall c. BasicSpec c => AASTG A c
 graph2 = runEnv $ runBuildAASTG $ do
   a <- p <%> var (Anything @Int)
   b <- p <%> var (Anything @Int)
-  p <%> call Add (Get a :* Get b :* Nil)
+  p <%> call Add (Get a, Get b)
   where p = Building @A @c
 
 graph3 :: forall c. BasicSpec c => AASTG A c
 graph3 = runEnv $ runBuildAASTG $ do
   a <- p <%> var (Anything @Int)
   b <- p <%> var (Anything @Int)
-  c <- p <%> vcall Add (Get b :* Get a :* Nil)
-  p <%> call Add (Get a :* Get c :* Nil)
+  c <- p <%> vcall Add (Get b, Get a)
+  p <%> call Add (Get a, Get c)
   where p = Building @A @c
 
 graph4 :: forall c. BasicSpec c => AASTG A c
 graph4 = runEnv $ runBuildAASTG $ do
   a <- p <%> var (Anything @Int)
   b <- p <%> var (Anything @Int)
-  c <- p <%> vcall Add (Get a :* Get b :* Nil)
-  d <- p <%> vcall Add (Get a :* Get c :* Nil)
-  p <%> call Add (Get c :* Get d :* Nil)
+  c <- p <%> vcall Add (Get a, Get b)
+  d <- p <%> vcall Add (Get a, Get c)
+  p <%> call Add (Get c, Get d)
   where p = Building @A @c
 
 graph5 :: forall c. BasicSpec c => AASTG A c
 graph5 = runEnv $ runBuildAASTG $ do
   a <- p <%> var (Anything @Int)
   b <- p <%> var (Anything @Int)
-  c <- p <%> vcall Add (Get a :* Get b :* Nil)
-  d <- p <%> vcall Sub (Get a :* Get c :* Nil)
-  p <%> call Add (Get c :* Get d :* Nil)
+  c <- p <%> vcall Add (Get a, Get b)
+  d <- p <%> vcall Sub (Get a, Get c)
+  p <%> call Add (Get c, Get d)
   where p = Building @A @c
 
 graph6 :: forall c. BasicSpec c => AASTG A c
 graph6 = runEnv $ runBuildAASTG $ do
   a <- p <%> var (Anything @Int)
   b <- p <%> var (Anything @Int)
-  c <- p <%> vcall Add (Get a :* Get b :* Nil)
-  d <- p <%> vcall Add (Get a :* Get c :* Nil)
-  fork p $ p <%> call Neg (Get c :* Nil)
-  fork p $ p <%> call (HLib.+) (Get c :* Get c :* Nil)
-  p <%> call Mul (Get a :* Get d :* Nil)
+  c <- p <%> vcall Add (Get a, Get b)
+  d <- p <%> vcall Add (Get a, Get c)
+  fork p $ p <%> call Neg (Get c)
+  fork p $ p <%> call (HLib.+) (Get c, Get c)
+  p <%> call Mul (Get a, Get d)
   where p = Building @A @c
 
 cograph :: forall c. BasicSpec c => AASTG A c
@@ -126,10 +126,10 @@ diamond = runEnv $ runBuildAASTG $ do
   n4 <- newNode @A @c
   n5 <- newNode @A @c
   x <- p <%(n1,n2)%> var Anything
-  p <%(n2,n3)%> call Add (Get x :* Value 1 :* Nil)
-  p <%(n3,n5)%> call Add (Get x :* Value 2 :* Nil)
-  p <%(n2,n4)%> call Add (Get x :* Value 3 :* Nil)
-  p <%(n4,n5)%> call Add (Get x :* Value 4 :* Nil)
+  p <%(n2,n3)%> call Add (Get x, Value 1)
+  p <%(n3,n5)%> call Add (Get x, Value 2)
+  p <%(n2,n4)%> call Add (Get x, Value 3)
+  p <%(n4,n5)%> call Add (Get x, Value 4)
   where p = Building @A @c
 
 
@@ -141,10 +141,10 @@ cyc = runEnv $ runBuildAASTG $ do
   n4 <- newNode @A @c
   n5 <- newNode @A @c
   x  <- p <%(n1,n2)%> var Anything
-  p <%(n4,n3)%> call Add (Get x :* Value 4 :* Nil)
-  p <%(n3,n4)%> call Add (Get x :* Value 2 :* Nil)
-  p <%(n4,n2)%> call Add (Get x :* Value 3 :* Nil)
-  p <%(n2,n3)%> call Add (Get x :* Value 1 :* Nil)
+  p <%(n4,n3)%> call Add (Get x, Value 4)
+  p <%(n3,n4)%> call Add (Get x, Value 2)
+  p <%(n4,n2)%> call Add (Get x, Value 3)
+  p <%(n2,n3)%> call Add (Get x, Value 1)
   where p = Building @A @c
 
   -- newEdge @A @c (Redirect n2 n5)
@@ -156,9 +156,9 @@ cyc2 = runEnv $ runBuildAASTG $ do
   n3 <- newNode @A @c
   n4 <- newNode @A @c
   x <- p <%(n1,n2)%> var Anything
-  p <%(n2,n3)%> call Add (Get x :* Value 1 :* Nil)
-  p <%(n3,n4)%> call Add (Get x :* Value 2 :* Nil)
-  p <%(n4,n2)%> call Add (Get x :* Value 3 :* Nil)
+  p <%(n2,n3)%> call Add (Get x, Value 1)
+  p <%(n3,n4)%> call Add (Get x, Value 2)
+  p <%(n4,n2)%> call Add (Get x, Value 3)
   where p = Building @A @c
 
 

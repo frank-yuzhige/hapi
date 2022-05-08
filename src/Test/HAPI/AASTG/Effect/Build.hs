@@ -31,6 +31,7 @@ import Data.SOP (All)
 import Data.Functor (($>))
 import Control.Carrier.State.Church (runState)
 import Control.Monad (void)
+import Test.HAPI.Util.SOP (InjNP (injNP))
 
 {-
 do
@@ -116,19 +117,33 @@ var attr (s, e) _ = do
   setNode @api @c e
   return x
 
-call ::  forall api apis c sig m a p proxy. (Has (BuildAASTG apis c) sig m, ApiMember api apis, IsValidCall c api p, Fuzzable a)
-     => api p a -> Attributes p -> EdgeCon proxy apis c m ()
+call :: forall api apis c sig m a p t proxy.
+      ( Has (BuildAASTG apis c) sig m
+      , ApiMember api apis
+      , IsValidCall c api p
+      , InjNP t Attribute p
+      , Fuzzable a)
+   => api p a
+   -> t
+   -> EdgeCon proxy apis c m ()
 call f args e p = void $ vcall @_ @apis f args e p
   -- s <- currNode @apis @c
   -- e <- newNode @apis @c
   -- newEdge @apis @c (APICall s e Nothing (injApi f) args)
   -- setNode @apis @c e
 
-vcall :: forall api apis c sig m a p proxy. (Has (BuildAASTG apis c) sig m, ApiMember api apis, IsValidCall c api p, Fuzzable a)
-        => api p a -> Attributes p -> EdgeCon proxy apis c m (PKey a)
+vcall :: forall api apis c sig m a p t proxy.
+       ( Has (BuildAASTG apis c) sig m
+       , ApiMember api apis
+       , IsValidCall c api p
+       , InjNP t Attribute p
+       , Fuzzable a)
+    => api p a
+    -> t
+    -> EdgeCon proxy apis c m (PKey a)
 vcall f args (s, e) _ = do
   x <- newVar @apis @c
-  newEdge @apis @c (APICall s e x (injApi f) args)
+  newEdge @apis @c (APICall s e x (injApi f) (injNP args))
   setNode @apis @c e
   return x
 
