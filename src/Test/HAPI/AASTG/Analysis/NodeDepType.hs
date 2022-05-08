@@ -7,6 +7,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
 module Test.HAPI.AASTG.Analysis.NodeDepType where
 import Test.HAPI.Args (Attributes, Attribute (..), eqAttributes, attrs2Pat)
 import Test.HAPI.Common (Fuzzable)
@@ -15,7 +16,7 @@ import Test.HAPI.Api (ApiName (..), apiEqProofs, isExternalPure)
 import Data.SOP (All, NP (..))
 import Data.Type.Equality (castWith, apply,type  (:~:) (Refl), testEquality, inner)
 import Data.Data (Typeable)
-import Test.HAPI.Effect.Eff (Eff, debug, Alg, runEnv)
+import Test.HAPI.Effect.Eff (Eff, debug, Alg, runEnv, (:+:))
 import Control.Effect.Empty (Empty, empty)
 import Control.Carrier.State.Church (runState)
 import Data.Set (Set)
@@ -23,7 +24,7 @@ import Data.Hashable (Hashable(..))
 import qualified Data.HashSet as HS
 import Data.HashSet (HashSet)
 import Control.Lens (makeLenses, view, over)
-import Control.Effect.State (gets, modify, get)
+import Control.Effect.State (gets, modify, get, State)
 import GHC.Generics (Generic)
 import Test.HAPI.Util.Empty (liftMaybe)
 import Control.Carrier.Cull.Church (NonDet)
@@ -177,21 +178,23 @@ inferNodeDepType aastg = do
               else t
 
 isST :: NodeDepType -> NodeDepType -> Maybe VarSubstitution
-isST sub sup = runEnv $ runNonDet fork (return . Just) (return Nothing) $ isSubType sub sup
+isST sub sup = runEnv
+  $ runState (\s a -> return a) emptySubTypeCtx      -- Pitfall: first state then nondet. Other way round will cause state not propagate between (<|>)
+  $ runNonDet fork (return . Just) (return Nothing)
+  $ isSubType sub sup
   where
     fork = liftA2 (A.<|>)
 
 -- | Check if the given @sub@ type is a sub-type of the given @sup@ type
 --   Return the variable substitution that instantiates such sub-type relation.
-isSubType :: forall sig m. (Eff NonDet sig m) => NodeDepType -> NodeDepType -> m VarSubstitution
+isSubType :: forall sig m. (Eff (NonDet :+: State SubTypeCtx) sig m) => NodeDepType -> NodeDepType -> m VarSubstitution
 isSubType sub sup
   = do
-  -- debug $ printf "%s: Checking ... \n>>  %s\n>>  %s" (show 'isSubType) (show sub) (show sup)
-  runState (\s a -> return a) emptySubTypeCtx
-   $ sub ~<=~ sup
+  debug $ printf "%s: Checking ... \n>>  %s\n>>  %s" (show 'isSubType) (show sub) (show sup)
+  sub ~<=~ sup
   where
     a ~<=~ b = do
-      -- debug $ printf "%s: Checking \n>>  %s\n>>  %s" (show 'isSubType) (show a) (show b)
+      -- debugctx
       checked <- gets (HS.member (a, b) . view checkedPairs)
       if checked then return emptyVarSub else do
         modify $ over checkedPairs $ HS.insert (a, b)
@@ -207,8 +210,8 @@ isSubType sub sup
             liftMaybe $ foldr (\v a -> a >>= unifyVarSubstitution v) (Just emptyVarSub) vs
           (_, Par bs) -> checkAny bs
             where
-              checkAny []        = empty
-              checkAny (b' : bs) = a ~<=~ b' <|> checkAny bs
+              checkAny []         = empty
+              checkAny (b' : bs') = a ~<=~ b' <|> checkAny bs'
           -- Ignoring variable from attributes and external-pure functions (e.g. Anything)
           (Act (ActGen _ _) ta, _)
             -> ta ~<=~ b
@@ -218,14 +221,17 @@ isSubType sub sup
             -> ta ~<=~ b
           (_, Act (ActCall _ b _) tb) | isExternalPure b
             -> a ~<=~ tb
-          (Act a'@(ActCall _ a as) ta, Act b'@(ActCall _ b bs) tb) -> do
+          (Act a'@(ActCall xa a as) ta, Act b'@(ActCall xb b bs) tb) -> do
             (papi, pp, pa) <- liftMaybe $ apiEqProofs a b
             let as' = castWith (apply Refl pp) as
             s1 <- getVarSubFromArgs sub sup as' bs
             s2 <- ta ~<=~ tb
             liftMaybe $ s1 `unifyVarSubstitution` s2
           _ -> empty
-
+      -- where
+      --   debugctx = do
+      --     size <- gets (HS.size . view checkedPairs)
+      --     debug $ printf "%s: Ctx size = %d" (show 'isSubType) size
 
 -- | Given 2 different NodeDependence and 2 attribute lists, attempt to find a unification (i.e. Variable substitution scheme)
 -- that makes all corresponding attributes in each list `effectively the same`.

@@ -32,12 +32,13 @@ import qualified Data.IntSet as IS
 import Test.HAPI.Util.Empty (liftMaybe)
 import qualified Data.TypeRepMap as TM
 import qualified Data.HashMap.Strict as HS
-import Test.HAPI.AASTG.Analysis.NodeDepType (NodeDepTypeMap, isSubType, inferNodeDepType)
+import Test.HAPI.AASTG.Analysis.NodeDepType (NodeDepTypeMap, isSubType, inferNodeDepType, emptySubTypeCtx)
 import Control.Carrier.NonDet.Church (runNonDet)
 import Control.Applicative (Applicative(liftA2))
 import Test.HAPI.Api (ApiName)
 import Test.HAPI.Util.TH (fatalError, FatalErrorKind (FATAL_ERROR))
 import qualified Control.Applicative as A
+import Control.Carrier.State.Church (runState)
 
 -- TODO: Optimize me!!!!
 -- | Coalesce 2 AASTGs
@@ -62,13 +63,12 @@ coalesceAASTGs n = \case
 
 -- | TODO: Children will fight, fix me! (fork children on var substitution)
 directCoalesceState :: NodeID -> NodeID -> AASTG api c -> AASTG api c
-directCoalesceState er ee aastg@(AASTG s fs bs) = AASTG 0 fs' bs'
+directCoalesceState er ee aastg@(AASTG s fs bs) = AASTG 0 fs' (edgesFrom2EdgesTo fs')
   where
     fs' = IM.map (nubIntOn hash . map (renameNodesInEdge (IM.singleton ee er)))
         . IM.delete ee
-        . IM.adjust (<> edgesFrom ee aastg) er
+        . IM.unionWith (<>) (IM.singleton er (edgesFrom ee aastg))
         $ fs
-    bs' = edgesTo2EdgesFrom fs'
 
 coalescePreprocess :: AASTG api c -> AASTG api c -> AASTG api c
 coalescePreprocess a1 a2 = directCoalesceState 0 (lb + 1) combine
@@ -107,14 +107,14 @@ directCoalesceNode ::
 directCoalesceNode er ee vsb ur aastg@(AASTG s fs bs)
   | er `notElem` ur IM.! ee || ee `notElem` ur IM.! er
     = fatalError 'directCoalesceNode FATAL_ERROR $ printf "Node %d and %d are related!" er ee
-  | isIdempotentVarSub vsb = do
-    debug $ printf "%s: Idempotent var sub" (show 'directCoalesceNode)
-    return $ directCoalesceState er ee aastg
+  -- | isIdempotentVarSub vsb = do
+  --   debug $ printf "%s: Idempotent var sub" (show 'directCoalesceNode)
+  --   return $ directCoalesceState er ee aastg
   | otherwise = do
     -- debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.directCoalesceNode: coalescing [%d <- %d]" er ee
     -- debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.directCoalesceNode: children = %s" (show children)
-    -- debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.directCoalesceNode: ee' = %d" ee'
-    debug $ printf "%s: apply sub on biparted AASTG" (show 'directCoalesceNode)
+    debug $ printf "%s: apply sub on biparted AASTG, coalesce %d <- %d" (show 'directCoalesceNode) er ee
+    -- debug $ printf "%s: combine = %s" (show 'directCoalesceNode) (show combine)
     let ans = directCoalesceState er ee combine
     return ans
     where
@@ -127,8 +127,9 @@ directCoalesceNode er ee vsb ur aastg@(AASTG s fs bs)
       --             $  AASTG ee f (edgesFrom2EdgesTo f)
       -- childrenOf = IS.toList . (childrenNodes aastg IM.!)
       -- froms      = IM.filter (not . null) (fs' <> getEdgesFrom subgraph)
-      froms = IM.mapWithKey (\k e -> if k `notElem` (ur IM.! er) then e else map (renameVarsInEdge vsb) e) fs
-      combine    = AASTG s froms (edgesFrom2EdgesTo froms)
+      -- tc      = childGraph ee aastg
+      froms   = IM.mapWithKey (\k e -> if k `elem` (ur IM.! ee) then e else map (renameVarsInEdge vsb) e) fs
+      combine = AASTG s froms (edgesFrom2EdgesTo froms)
 
 coalesceOneStep ::
                  ( Alg sig m
@@ -188,7 +189,9 @@ upperSubNode :: Alg sig m
              -> NodeID
              -> m (Maybe VarSubstitution)
 upperSubNode tys n1 n2 = do
-  ans <- runNonDet (liftA2 (A.<|>)) (return . Just) (return Nothing) $ isSubType (tys IM.! n1) (tys IM.! n2)
+  ans <- runState (\s a -> return a) emptySubTypeCtx
+       $ runNonDet (liftA2 (A.<|>)) (return . Just) (return Nothing)
+       $ isSubType (tys IM.! n1) (tys IM.! n2)
   when (isJust ans) $ debug $ printf "%s: %d <= %d, %s" (show 'upperSubNode) n1 n2 (show ans)
   return ans
 

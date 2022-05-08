@@ -115,17 +115,17 @@ allNodes :: AASTG api c -> [NodeID]
 allNodes (AASTG start fs bs) = nubInt (start : IM.keys fs <> IM.keys bs)
 
 allEdges :: AASTG api c -> [Edge api c]
-allEdges = concatMap snd . IM.toList . getEdgesFrom
+allEdges = concat . IM.elems . getEdgesFrom
 
 groupEdgesOn :: (Edge sig c -> NodeID) -> [Edge sig c] -> IntMap [Edge sig c]
 groupEdgesOn f = IM.fromListWith (<>)
                . fmap (\e -> (f e, [e]))
 
 edgesFrom2EdgesTo :: IntMap [Edge sig c] -> IntMap [Edge sig c]
-edgesFrom2EdgesTo = groupEdgesOn startNode . concat . IM.elems
+edgesFrom2EdgesTo = groupEdgesOn endNode . concat . IM.elems
 
 edgesTo2EdgesFrom :: IntMap [Edge sig c] -> IntMap [Edge sig c]
-edgesTo2EdgesFrom = groupEdgesOn endNode . concat . IM.elems
+edgesTo2EdgesFrom = groupEdgesOn startNode . concat . IM.elems
 
 changeEdgeNode :: NodeID -> NodeID -> Edge api c -> Edge api c
 changeEdgeNode i j = \case

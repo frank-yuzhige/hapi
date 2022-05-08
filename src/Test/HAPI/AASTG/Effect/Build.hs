@@ -20,7 +20,7 @@ import Test.HAPI.Args (Attribute (Value), Attributes)
 import Test.HAPI.PState (PKey(PKey))
 import Test.HAPI.Effect.Eff (Algebra(alg), type (:+:) (..), Alg, send, runEnv, Eff)
 import Test.HAPI.AASTG.Core (AASTG, Edge (Update, APICall), newAASTG, NodeID, IsValidCall)
-import Test.HAPI.Api (ApiName, ApiDefinition, ApiMember (injApi))
+import Test.HAPI.Api (ApiName, ApiDefinition, ApiMember (injApi), newVPtr)
 import Test.HAPI.Common (Fuzzable)
 import Control.Effect.Sum (Members, Member)
 import Control.Effect.State ( State, modify, get, put )
@@ -30,6 +30,7 @@ import Control.Effect.Labelled (HasLabelled, sendLabelled, runLabelled, Labelled
 import Data.SOP (All)
 import Data.Functor (($>))
 import Control.Carrier.State.Church (runState)
+import Control.Monad (void)
 
 {-
 do
@@ -102,11 +103,11 @@ var attr _ = do
 
 call ::  forall api apis c sig m a p proxy. (Has (BuildAASTG apis c) sig m, ApiMember api apis, IsValidCall c api p, Fuzzable a)
      => api p a -> Attributes p -> proxy apis c -> m ()
-call f args _ = do
-  s <- currNode @apis @c
-  e <- newNode @apis @c
-  newEdge @apis @c (APICall s e Nothing (injApi f) args)
-  setNode @apis @c e
+call f args p = void $ vcall f args p
+  -- s <- currNode @apis @c
+  -- e <- newNode @apis @c
+  -- newEdge @apis @c (APICall s e Nothing (injApi f) args)
+  -- setNode @apis @c e
 
 vcall :: forall api apis c sig m a p proxy. (Has (BuildAASTG apis c) sig m, ApiMember api apis, IsValidCall c api p, Fuzzable a)
         => api p a -> Attributes p -> proxy apis c -> m (PKey a)

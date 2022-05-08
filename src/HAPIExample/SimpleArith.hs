@@ -116,7 +116,7 @@ graph6 = runEnv $ runBuildAASTG $ do
   where p = Building @A @c
 
 cograph :: forall c. BasicSpec c => AASTG A c
-cograph = unrollCycle 200 $ runEnv $ coalesceAASTGs 500 [graph1, graph2, graph3, graph4, graph5, graph6]
+cograph = runEnv $ coalesceAASTGs 500 [graph1, graph2, graph3, graph4, graph5, graph6]
 
 diamond :: forall c. BasicSpec c => AASTG A c
 diamond = runEnv $ runBuildAASTG $ do
@@ -182,27 +182,16 @@ previewCo = previewAASTG (cograph @Fuzzable)
 previewCy = previewAASTG (cyc @Fuzzable)
 
 previewD = do
-  let a = diamond @Fuzzable
+  let a = cyc2 @Fuzzable
       b = cyc @Fuzzable
   previewAASTG a
   previewAASTG b
   previewAASTG =<< op' 0 a b
-  c <- op' 1 a b
-  previewAASTG c
-  -- x <- runEnvIO @IO (inferNodeDepType c)
-  -- y <- runEnvIO @IO $ runNonDet fork (return . Just) (return Nothing) $ isSubType (x IM.! 5) (x IM.! 2)
-  -- putStrLn "-----------"
-  -- print y
-  -- print (x IM.! 5)
-  -- print (x IM.! 2)
-  -- print (x IM.! 5 == x IM.! 2)
-  -- print (hash (x IM.! 5), hash (x IM.! 2))
-  previewAASTG =<< op' 2 a b
-
-
-
-
-  -- previewAASTG =<< op' 3 a b
+  previewAASTG =<< op' 1 a b
+  x <- op' 2 a b
+  previewAASTG x
+  previewAASTG =<< op' 3 a b
+  previewAASTG =<< op' 4 a b
 
 q = do
   x <- runEnvIO @IO (inferNodeDepType test)
