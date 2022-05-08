@@ -23,7 +23,7 @@ import qualified Data.HashMap.Strict as HM
 import Test.HAPI.Args (Attribute (..), Attributes)
 import Data.SOP.NP (NP(Nil, (:*)))
 import qualified Test.HAPI.Util.TypeRepMap as TM
-import Data.Data (typeRep, Data)
+import Data.Data (typeRep, Data, Typeable)
 import GHC.Generics
 import Data.Hashable (Hashable)
 
@@ -70,6 +70,9 @@ normalizeNodes offset aastg = renameNodes (IM.fromList (allNodes aastg `zip` [of
 emptyVarSub :: VarSubstitution
 emptyVarSub = TM.empty
 
+singletonVarSub :: forall t. Typeable t => PKey t -> PKey t -> VarSubstitution
+singletonVarSub k v = TM.insert (SE $ HM.singleton k v) emptyVarSub
+
 lookVar :: forall t. (Fuzzable t) => PKey t -> VarSubstitution -> Maybe (PKey t)  -- NoMonoLocalBinds
 lookVar k vsb = do
   SE se <- TM.lookup @t vsb
@@ -89,11 +92,11 @@ renameVarsInMap vsb = IM.map (renameVarsInEdge vsb <$>)
 
 renameVarsInEdge :: VarSubstitution -> Edge api c -> Edge api c
 renameVarsInEdge vsb = \case
-  Update   s e k a          -> Update   s e (look k) a
-  Forget   s e k            -> Forget   s e (look k)
-  Assert   s e x y          -> Assert   s e (look x) (look y)
-  APICall  s e mx api args  -> APICall  s e (look <$> mx) api (renameVarsInAttrs vsb args)
-  Redirect s e              -> Redirect s e
+  Update   s e k a        -> Update   s e (look k) a
+  Forget   s e k          -> Forget   s e (look k)
+  Assert   s e x y        -> Assert   s e (look x) (look y)
+  APICall  s e x api args -> APICall  s e  (look x) api (renameVarsInAttrs vsb args)
+  Redirect s e            -> Redirect s e
   where
     look k = lookVar' k vsb
 

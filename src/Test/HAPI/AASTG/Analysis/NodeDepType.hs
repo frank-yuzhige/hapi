@@ -44,7 +44,7 @@ import Test.HAPI.AASTG.Core (NodeID, Edge (..), allNodes, AASTG (..), startNode,
 import Control.Monad (forM_, forM, join)
 import Test.HAPI.Util.TH (fatalError, FatalErrorKind (FATAL_ERROR))
 import Data.List (intercalate)
-import Test.HAPI.AASTG.Analysis.Rename (VarSubstitution, emptyVarSub, SubEntry (..))
+import Test.HAPI.AASTG.Analysis.Rename (VarSubstitution, emptyVarSub, SubEntry (..), singletonVarSub)
 import Control.Carrier.NonDet.Church (runNonDet)
 import Control.Applicative (liftA2)
 import qualified Control.Applicative as A
@@ -59,7 +59,7 @@ data Action where
            , Typeable p
            , All Fuzzable p
            , Fuzzable a)
-        => Maybe (PKey a)
+        => PKey a
         -> api p a
         -> Attributes p
         -> Action
@@ -224,9 +224,11 @@ isSubType sub sup
           (Act a'@(ActCall xa a as) ta, Act b'@(ActCall xb b bs) tb) -> do
             (papi, pp, pa) <- liftMaybe $ apiEqProofs a b
             let as' = castWith (apply Refl pp) as
+            let s0  = singletonVarSub xb (castWith (apply Refl pa) xa)
             s1 <- getVarSubFromArgs sub sup as' bs
+            s1' <- liftMaybe $ s0 `unifyVarSubstitution` s1
             s2 <- ta ~<=~ tb
-            liftMaybe $ s1 `unifyVarSubstitution` s2
+            liftMaybe $ s1' `unifyVarSubstitution` s2
           _ -> empty
       -- where
       --   debugctx = do
@@ -281,8 +283,7 @@ lookupPKInType k = \case
       if castWith (apply Refl proof) x == k
         then return $ castWith (apply Refl proof) $ DepAttr at
         else lookupPKInType k t
-    ActCall Nothing  _   _ -> lookupPKInType k t
-    ActCall (Just x) api as -> do
+    ActCall x api as -> do
       proof <- liftMaybe $ inner <$> testEquality (typeOf x) (typeOf k)
       if castWith (apply Refl proof) x == k
         then return $ castWith (apply Refl proof) $ DepCall api as
@@ -294,7 +295,7 @@ lookupPKInType k = \case
 instance Eq Action where
   ActCall m f as == ActCall n g bs = case apiEqProofs f g of
     Nothing        -> False
-    Just (_, p, a) -> castWith (apply Refl $ apply Refl a) m == n
+    Just (_, p, a) -> castWith (apply Refl a) m == n
                    && castWith (apply Refl p) as `eqAttributes` bs
   ActGen x a == ActGen y b = case testEquality (typeOf x) (typeOf y) of
     Nothing    -> False
@@ -303,9 +304,7 @@ instance Eq Action where
   _ == _ = False
 
 instance Show Action where
-  show (ActCall Nothing  api args)
-    = showApiFromPat api (attrs2Pat args)
-  show (ActCall (Just x) api args)
+  show (ActCall x api args)
     = printf "%s=%s" (getPKeyID x) (showApiFromPat api (attrs2Pat args))
   show (ActGen x a)
     = printf "%s=%s" (getPKeyID x) (show a)

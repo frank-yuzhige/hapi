@@ -20,7 +20,7 @@ import Control.Effect.State (State, gets, get, put, modify, Has)
 import Control.Effect.Reader (Reader, asks)
 import LLVM.AST (Global(..), Named ((:=), Do), BasicBlock (BasicBlock), Instruction (..), Name (..), Type (..), Terminator (..), Operand (..))
 import Test.HAPI.AASTG.Effect.Build
-    ( BuildAASTG, newEdge, newNode, currNode, setNode, runBuildAASTG )
+    ( BuildAASTG, newEdge, newNode, currNode, setNode, runBuildAASTG, newVar )
 import Test.HAPI.PState ( PKey(PKey) )
 import Data.Char (chr)
 import Test.HAPI.Args (Attributes, Attribute (Get, Value, Anything), attrInt2Bool)
@@ -157,7 +157,10 @@ fromInstruction namedInstr = case namedInstr of
               Just (ApiParseCtx api pargs) -> do
                 args <- opsViaSpec pargs (map fst arguments)
                 j <- newNode @apis @c
-                newEdge @apis @c (APICall i j (name2Var <$> mx) (injApis api) args)
+                x <- case mx of
+                    Nothing -> newVar @apis @c
+                    Just x' -> return $ name2Var x'
+                newEdge @apis @c (APICall i j x (injApis api) args)
                 setNode @apis @c j
       other -> do
         debug $ printf "[WARNING] %s: Ignoring unsupported instruction! :%s" (show 'fromInstruction) (show other)
@@ -202,7 +205,10 @@ fromTerminator namedTerminator = case namedTerminator of
                 Just (ApiParseCtx api pargs) -> do
                   args <- opsViaSpec pargs (map fst arguments')
                   j <- newNode @apis @c
-                  newEdge @apis @c (APICall i j (name2Var <$> mx) (injApis api) args)
+                  x <- case mx of
+                    Nothing -> newVar @apis @c
+                    Just x' -> return $ name2Var x'
+                  newEdge @apis @c (APICall i j x (injApis api) args)
         other -> do
           debug $ printf "[WARNING] %s: Ignoring unsupported terminator! :%s" (show 'fromInstruction) (show other)
           return ()

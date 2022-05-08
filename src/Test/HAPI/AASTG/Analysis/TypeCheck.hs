@@ -91,12 +91,10 @@ checkEdgeAndUpdate = \case
     tx <- st M.!? getPKeyID x
     ty <- st M.!? getPKeyID y
     if tx == ty then return st else Nothing
-  APICall s e mx api args -> \st ->
+  APICall s e x api args -> \st ->
     if not (attrsCheck args st)
       then Nothing
-      else case mx of
-        Nothing -> return st
-        Just k  -> return (M.insert (getPKeyID k) (typeRep k) st)
+      else return (M.insert (getPKeyID x) (typeRep x) st)
     where
       attrsCheck :: (All Fuzzable a) => Attributes a -> StateType -> Bool
       attrsCheck Nil       _  = True

@@ -66,53 +66,53 @@ type A = ArithApi :$$: HLibPrelude
 
 graph1 :: forall c. BasicSpec c => AASTG A c
 graph1 = runEnv $ runBuildAASTG $ do
-  a <- val @Int 10  $ p
-  b <- var @Int Anything $ p
-  call Add (Get a :* Get b :* Nil) $ p
+  a <- p <%> val @Int 10
+  b <- p <%> var @Int Anything
+  p <%> call Add (Get a :* Get b :* Nil)
   where p = Building @A @c
 
 graph2 :: forall c. BasicSpec c => AASTG A c
 graph2 = runEnv $ runBuildAASTG $ do
-  a <- var (Anything @Int) $ p
-  b <- var (Anything @Int) $ p
-  call Add (Get a :* Get b :* Nil) $ p
+  a <- p <%> var (Anything @Int)
+  b <- p <%> var (Anything @Int)
+  p <%> call Add (Get a :* Get b :* Nil)
   where p = Building @A @c
 
 graph3 :: forall c. BasicSpec c => AASTG A c
 graph3 = runEnv $ runBuildAASTG $ do
-  a <- var (Anything @Int) $ p
-  b <- var (Anything @Int) $ p
-  c <- vcall Add (Get b :* Get a :* Nil) $ p
-  call Add (Get a :* Get c :* Nil) $ p
+  a <- p <%> var (Anything @Int)
+  b <- p <%> var (Anything @Int)
+  c <- p <%> vcall Add (Get b :* Get a :* Nil)
+  p <%> call Add (Get a :* Get c :* Nil)
   where p = Building @A @c
 
 graph4 :: forall c. BasicSpec c => AASTG A c
 graph4 = runEnv $ runBuildAASTG $ do
-  a <- var (Anything @Int) $ p
-  b <- var (Anything @Int) $ p
-  c <- vcall Add (Get a :* Get b :* Nil) $ p
-  d <- vcall Add (Get a :* Get c :* Nil) $ p
-  call Add (Get c :* Get d :* Nil) $ p
+  a <- p <%> var (Anything @Int)
+  b <- p <%> var (Anything @Int)
+  c <- p <%> vcall Add (Get a :* Get b :* Nil)
+  d <- p <%> vcall Add (Get a :* Get c :* Nil)
+  p <%> call Add (Get c :* Get d :* Nil)
   where p = Building @A @c
 
 graph5 :: forall c. BasicSpec c => AASTG A c
 graph5 = runEnv $ runBuildAASTG $ do
-  a <- var (Anything @Int) $ p
-  b <- var (Anything @Int) $ p
-  c <- vcall Add (Get a :* Get b :* Nil) $ p
-  d <- vcall Sub (Get a :* Get c :* Nil) $ p
-  call Add (Get c :* Get d :* Nil) $ p
+  a <- p <%> var (Anything @Int)
+  b <- p <%> var (Anything @Int)
+  c <- p <%> vcall Add (Get a :* Get b :* Nil)
+  d <- p <%> vcall Sub (Get a :* Get c :* Nil)
+  p <%> call Add (Get c :* Get d :* Nil)
   where p = Building @A @c
 
 graph6 :: forall c. BasicSpec c => AASTG A c
 graph6 = runEnv $ runBuildAASTG $ do
-  a <- var (Anything @Int) $ p
-  b <- var (Anything @Int) $ p
-  c <- vcall Add (Get a :* Get b :* Nil) $ p
-  d <- vcall Add (Get a :* Get c :* Nil) $ p
-  fork p $ call Neg (Get c :* Nil) $ p
-  fork p $ call (HLib.+) (Get c :* Get c :* Nil) $ p
-  call Mul (Get a :* Get d :* Nil) $ p
+  a <- p <%> var (Anything @Int)
+  b <- p <%> var (Anything @Int)
+  c <- p <%> vcall Add (Get a :* Get b :* Nil)
+  d <- p <%> vcall Add (Get a :* Get c :* Nil)
+  fork p $ p <%> call Neg (Get c :* Nil)
+  fork p $ p <%> call (HLib.+) (Get c :* Get c :* Nil)
+  p <%> call Mul (Get a :* Get d :* Nil)
   where p = Building @A @c
 
 cograph :: forall c. BasicSpec c => AASTG A c
@@ -125,12 +125,13 @@ diamond = runEnv $ runBuildAASTG $ do
   n3 <- newNode @A @c
   n4 <- newNode @A @c
   n5 <- newNode @A @c
-  x  <- newVar  @A @c
-  newEdge @A @c (Update n1 n2 x Anything)
-  newEdge @A @c (APICall n2 n3 Nothing (injApi Add) (Get x :* Value 1 :* Nil))
-  newEdge @A @c (APICall n3 n5 Nothing (injApi Add) (Get x :* Value 2 :* Nil))
-  newEdge @A @c (APICall n2 n4 Nothing (injApi Add) (Get x :* Value 3 :* Nil))
-  newEdge @A @c (APICall n4 n5 Nothing (injApi Add) (Get x :* Value 4 :* Nil))
+  x <- p <%(n1,n2)%> var Anything
+  p <%(n2,n3)%> call Add (Get x :* Value 1 :* Nil)
+  p <%(n3,n5)%> call Add (Get x :* Value 2 :* Nil)
+  p <%(n2,n4)%> call Add (Get x :* Value 3 :* Nil)
+  p <%(n4,n5)%> call Add (Get x :* Value 4 :* Nil)
+  where p = Building @A @c
+
 
 cyc :: forall c. BasicSpec c => AASTG A c
 cyc = runEnv $ runBuildAASTG $ do
@@ -139,12 +140,13 @@ cyc = runEnv $ runBuildAASTG $ do
   n3 <- newNode @A @c
   n4 <- newNode @A @c
   n5 <- newNode @A @c
-  x  <- newVar  @A @c
-  newEdge @A @c (Update n1 n2 x Anything)
-  newEdge @A @c (APICall n2 n3 Nothing (injApi Add) (Get x :* Value 1 :* Nil))
-  newEdge @A @c (APICall n3 n4 Nothing (injApi Add) (Get x :* Value 2 :* Nil))
-  newEdge @A @c (APICall n4 n2 Nothing (injApi Add) (Get x :* Value 3 :* Nil))
-  newEdge @A @c (APICall n4 n3 Nothing (injApi Add) (Get x :* Value 4 :* Nil))
+  x  <- p <%(n1,n2)%> var Anything
+  p <%(n4,n3)%> call Add (Get x :* Value 4 :* Nil)
+  p <%(n3,n4)%> call Add (Get x :* Value 2 :* Nil)
+  p <%(n4,n2)%> call Add (Get x :* Value 3 :* Nil)
+  p <%(n2,n3)%> call Add (Get x :* Value 1 :* Nil)
+  where p = Building @A @c
+
   -- newEdge @A @c (Redirect n2 n5)
 
 cyc2 :: forall c. BasicSpec c => AASTG A c
@@ -153,11 +155,12 @@ cyc2 = runEnv $ runBuildAASTG $ do
   n2 <- newNode @A @c
   n3 <- newNode @A @c
   n4 <- newNode @A @c
-  x  <- newVar  @A @c
-  newEdge @A @c (Update n1 n2 x Anything)
-  newEdge @A @c (APICall n2 n3 Nothing (injApi Add) (Get x :* Value 1 :* Nil))
-  newEdge @A @c (APICall n3 n4 Nothing (injApi Add) (Get x :* Value 2 :* Nil))
-  newEdge @A @c (APICall n4 n2 Nothing (injApi Add) (Get x :* Value 3 :* Nil))
+  x <- p <%(n1,n2)%> var Anything
+  p <%(n2,n3)%> call Add (Get x :* Value 1 :* Nil)
+  p <%(n3,n4)%> call Add (Get x :* Value 2 :* Nil)
+  p <%(n4,n2)%> call Add (Get x :* Value 3 :* Nil)
+  where p = Building @A @c
+
 
 op :: ApiName api => AASTG api c -> AASTG api c -> IO (AASTG api c)
 op = op' 1000

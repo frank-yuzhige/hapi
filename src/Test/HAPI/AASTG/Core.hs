@@ -64,7 +64,7 @@ data Edge apis c where
   APICall  :: forall a sig api p c. (Fuzzable a, IsValidCall c api p)
            => NodeID             -- From
            -> NodeID             -- To
-           -> Maybe (PKey a)     -- Store result to variable
+           -> PKey a             -- Store result to variable
            -> api p a            -- API call (constructor)
            -> NP Attribute p     -- Argument Attributes List
            -> Edge api c
@@ -140,7 +140,7 @@ showEdgeLabel = \case
   Update   s e k  a        -> "update " <> getPKeyID k <> " = " <> show a
   Forget   s e k           -> "forget " <> getPKeyID k
   Assert   s e x  y        -> "assert " <> getPKeyID x <> " = " <> show y
-  APICall  s e mx api args -> ""        <> maybe "" ((<> " = ") . getPKeyID) mx <> showApiFromPat api (attrs2Pat args) -- apiName api <> "(" <> intercalate ", " (showAttributes args) <> ")"
+  APICall  s e mx api args -> ""        <> getPKeyID mx <> " = " <> showApiFromPat api (attrs2Pat args) -- apiName api <> "(" <> intercalate ", " (showAttributes args) <> ")"
   Redirect s e             -> "redir "
 
 

@@ -40,6 +40,10 @@ do
 
 -}
 
+type EdgeDir = (NodeID, NodeID)
+
+type EdgeCon proxy (api :: ApiDefinition) (c :: Type -> Constraint) m a = EdgeDir -> proxy api c -> m a
+
 data VAR
 
 data Building (api :: ApiDefinition) (c :: Type -> Constraint) = Building
@@ -83,39 +87,48 @@ newEdge = send . NewEdgeB
 
 -- | Build Function
 
-(%>) :: forall api c proxy sig m a. (Has (BuildAASTG api c) sig m)
-      => proxy api c -> (proxy api c -> m a) -> m a
-f %> ma = ma f
+(%>) :: forall f. EdgeDir -> (EdgeDir -> f) -> f
+d %> ma = ma d
+
+(<%) :: forall api c proxy sig m a. (Has (BuildAASTG api c) sig m)
+     => proxy api c -> (proxy api c -> m a) -> m a
+p <% ma = ma p
+
+infixr 5 %>
+infixr 4 <%
+
+(<%>) :: forall api c proxy sig m a. (Has (BuildAASTG api c) sig m)
+      => proxy api c -> EdgeCon proxy api c m a -> m a
+p <%> ec = do
+  s <- currNode @api @c
+  e <- newNode  @api @c
+  p <% (s, e) %> ec
 
 val :: forall t api c sig m proxy. (Has (BuildAASTG api c) sig m, Fuzzable t, c t)
-    => t -> proxy api c -> m (PKey t)
+    => t -> EdgeCon proxy api c m (PKey t)
 val v = var (Value v)
 
 var :: forall t api c sig m proxy. (Has (BuildAASTG api c) sig m, Fuzzable t, c t)
-    => Attribute t -> proxy api c -> m (PKey t)
-var attr _ = do
+    => Attribute t -> EdgeCon proxy api c m (PKey t)
+var attr (s, e) _ = do
   x <- newVar @api @c
-  s <- currNode @api @c
-  e <- newNode @api @c
   newEdge @api @c (Update s e x attr)
   setNode @api @c e
   return x
 
 call ::  forall api apis c sig m a p proxy. (Has (BuildAASTG apis c) sig m, ApiMember api apis, IsValidCall c api p, Fuzzable a)
-     => api p a -> Attributes p -> proxy apis c -> m ()
-call f args p = void $ vcall f args p
+     => api p a -> Attributes p -> EdgeCon proxy apis c m ()
+call f args e p = void $ vcall @_ @apis f args e p
   -- s <- currNode @apis @c
   -- e <- newNode @apis @c
   -- newEdge @apis @c (APICall s e Nothing (injApi f) args)
   -- setNode @apis @c e
 
 vcall :: forall api apis c sig m a p proxy. (Has (BuildAASTG apis c) sig m, ApiMember api apis, IsValidCall c api p, Fuzzable a)
-        => api p a -> Attributes p -> proxy apis c -> m (PKey a)
-vcall f args _ = do
+        => api p a -> Attributes p -> EdgeCon proxy apis c m (PKey a)
+vcall f args (s, e) _ = do
   x <- newVar @apis @c
-  s <- currNode @apis @c
-  e <- newNode @apis @c
-  newEdge @apis @c (APICall s e (Just x) (injApi f) args)
+  newEdge @apis @c (APICall s e x (injApi f) args)
   setNode @apis @c e
   return x
 
@@ -128,11 +141,12 @@ ma <+> mb = do
   setNode @api @c s
   return ()
 
-fork :: forall api c sig m a proxy. (Has (BuildAASTG api c) sig m) => proxy api c -> m a -> m ()
+fork :: forall api c sig m a proxy. (Has (BuildAASTG api c) sig m) => proxy api c -> m a -> m a
 fork _ f = do
   s <- currNode @api @c
-  f
+  a <- f
   setNode @api @c s
+  return a
 
 instance ( Has (State [Edge api c]) sig m
          , Has (State NodeID      ) sig m

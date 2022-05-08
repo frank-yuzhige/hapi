@@ -43,15 +43,13 @@ synthOneStep (Assert s e x y) = do
   x' <- send (QVS @c (Get x))
   y' <- send (QVS @c (Get y))
   x' `shouldBe` y'
-synthOneStep (APICall s e mx api args) = do
+synthOneStep (APICall s e x api args) = do
   -- 1. Resolve Attributes (Into QVS)
   args <- qvs2m @c (attributes2QVSs args)
   -- 2. Make APICall using qvs
   r <- mkCall api args
   -- 3. Store return value in state
-  case mx of
-    Nothing -> return ()
-    Just k  -> modify @PState (record k r)
+  modify @PState (record x r)
 synthOneStep (Redirect s e) = return ()
 
 -- | Entropy

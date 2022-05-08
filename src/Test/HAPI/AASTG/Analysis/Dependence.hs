@@ -240,7 +240,7 @@ pathDepCollector = TravHandler $ \case
     new <- case edge of
       Update s e k a -> return $ updatePKey k (DepAttr a) prev
       Forget s e x   -> return $ deletePKey x prev
-      APICall s e (Just x) api args
+      APICall s e x api args
                      -> return $ updatePKey x (DepCall api args) prev
       _              -> return prev
     modify $ updateDependence @Dep e new
@@ -260,9 +260,7 @@ pathDegradedDepCollector = TravHandler $ \case
     new <- case edge of
       Update s e k a          -> return $ updatePKey k (DepAttr' a) prev
       Forget s e x            -> return $ deletePKey x prev
-      APICall s e mx api args -> case mx of
-        Nothing -> return prev
-        Just x  -> do
+      APICall s e x api args  -> do
           i <- sendLabelled @DegradedDep Fresh
           return $ updatePKey x (DepCall' i) prev
       _                       -> return prev
