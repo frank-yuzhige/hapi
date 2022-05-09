@@ -8,7 +8,7 @@ import Data.HashSet (HashSet)
 
 
 import Test.HAPI.PState (PKey (getPKeyID))
-import Test.HAPI.AASTG.Analysis.ProcType ( ProcType (..), Action (..), SVar, ProcTypeMap )
+import Test.HAPI.AASTG.Analysis.ProcType ( ProcType (..), Action (..), SVar, ProcTypeMap, UngroundProcTypeMap (UngroundProcTypeMap, coerce2Grounded) )
 import Data.HashMap.Strict (HashMap)
 
 import qualified Test.HAPI.Util.TypeRepMap as TM
@@ -30,7 +30,7 @@ import Data.List (intercalate, sort)
 
 type ProcCtxMap = IntMap ProcCtx
 
-type ProcCtxQueries = HashMap SVar ProcCtxQuery
+type ProcCtxQueries = IntMap ProcCtxQuery
 
 newtype PCE k = PCE { unPCE :: HashSet (PKey k) }  -- ProcCtxEntry
   deriving (Eq, Show)
@@ -78,7 +78,7 @@ intersectCtx (Finite c1) (Finite c2) = Finite $ TM.intersectionWith intersectPCE
   where
     intersectPCE (PCE s1) (PCE s2) = PCE (s1 `HS.intersection` s2)
 intersectCtx Infinite c2       = c2
-intersectCtx c1       Infinite = Infinite
+intersectCtx c1       Infinite = c1
 
 intersectCtxs :: [ProcCtx] -> ProcCtx
 intersectCtxs []       = Finite TM.empty
@@ -96,7 +96,7 @@ deriveProcCtx ::
             => ProcType
             -> m ProcCtx
 deriveProcCtx t = do
-  (q, qs) <- runState @ProcCtxQueries (\s a -> return (a, s)) HM.empty $ genProcQuery t
+  (q, qs) <- runState @ProcCtxQueries (\s a -> return (a, s)) IM.empty $ genProcQuery t
   -- debug $ printf "%s: Query: %s;    Queries: %s" (show 'deriveProcCtx) (show q) (show qs)
   let st = solveProcQueries qs
   return $ solveProcQuery st q
@@ -113,6 +113,17 @@ deriveProcCtxs ptm = do
     return (n, ctx)
   return $ IM.fromList es
 
+deriveProcCtxsUG ::
+                  ( Alg sig m )
+               => UngroundProcTypeMap
+               -> m ProcCtxMap
+deriveProcCtxsUG (UngroundProcTypeMap uptm) = do
+  queries <- fmap IM.unions $ forM (IM.assocs uptm) $ \(n, t) -> do
+    (q, qs) <- runState @ProcCtxQueries (\s a -> return (a, s)) IM.empty $ genProcQuery t
+    return $ IM.insert n q qs
+  debug $ printf "%s: Queries: %s" (show 'deriveProcCtxsUG) (show queries)
+  return $ IM.fromList [(n, solveProcQueries queries IM.! n)| n <- IM.keys uptm]
+
 -- | Generate ProcCtx queries from the given type, return the query for solving the given type's context
 genProcQuery ::
               ( Eff (State ProcCtxQueries) sig m )
@@ -125,7 +136,7 @@ genProcQuery = \case
   Par  ts                 -> intersectQueries <$> mapM genProcQuery ts
   Mu x t'                 -> do
     q <- genProcQuery t'
-    modify (HM.insert x q)
+    modify (IM.insert x q)
     return (PSVar x)
   Zero                    -> return $ PCtx $ Finite TM.empty
   where
@@ -134,23 +145,23 @@ genProcQuery = \case
     intersectQueries (a : as) = foldr PIntersect a as
 
 -- | Solve a single query using the SVar -> ProcCtx substitution
-solveProcQuery :: HashMap SVar ProcCtx -> ProcCtxQuery -> ProcCtx
+solveProcQuery :: ProcCtxMap -> ProcCtxQuery -> ProcCtx
 solveProcQuery st = \case
   PCtx       c   -> c
-  PSVar      x   -> st HM.! x
+  PSVar      x   -> st IM.! x
   PIntersect a b -> intersectCtx (solveProcQuery st a) (solveProcQuery st b)
   PUnion     a b -> unionCtx     (solveProcQuery st a) (solveProcQuery st b)
 
--- | Solve multiple queries to generate the SVar -> ProcCtx mapping, via an iterative algorithm.
+-- | Solve multiple queries to generate the SVar -> ProcCtx mapping, via an iterative algoritIM.
 --   TODO: Optimization (Worklist?)
-solveProcQueries :: ProcCtxQueries -> HashMap SVar ProcCtx
-solveProcQueries qs = iter (HM.map (const Infinite) qs)
+solveProcQueries :: ProcCtxQueries -> ProcCtxMap
+solveProcQueries qs = iter (IM.map (const Infinite) qs)
   where
     iter st
       | st == st' = st
       | otherwise = iter st'
       where
-        st' = HM.map (solveProcQuery st) qs
+        st' = IM.map (solveProcQuery st) qs
 
 
 instance Show ProcCtx where

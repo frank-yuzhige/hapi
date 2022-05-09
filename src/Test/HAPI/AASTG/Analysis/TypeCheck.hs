@@ -14,7 +14,7 @@ import Test.HAPI.AASTG.Core (AASTG (AASTG), NodeID, Edge (Update, APICall, Asser
 import Test.HAPI.PState (PKey(getPKeyID, PKey))
 import Test.HAPI.Args (Attributes, Attribute (..))
 import Test.HAPI.Common (Fuzzable)
-import Test.HAPI.Effect.Eff (Eff, type (:+:), Alg)
+import Test.HAPI.Effect.Eff (Eff, type (:+:), Alg, debug)
 
 import Data.Map (Map)
 import Data.Data
@@ -37,14 +37,15 @@ import qualified Data.Map.Strict as M
 import qualified Data.TypeRepMap as TM
 import qualified Data.IntMap     as IM
 import qualified Data.Set        as S
-import Test.HAPI.AASTG.Analysis.ProcType (inferProcType, ProcTypeMap)
-import Test.HAPI.AASTG.Analysis.ProcCtx (ProcCtxMap, ProcCtx, deriveProcCtxs, memberCtx)
+import Test.HAPI.AASTG.Analysis.ProcType (inferProcType, ProcTypeMap, inferProcTypeUG, UngroundProcTypeMap)
+import Test.HAPI.AASTG.Analysis.ProcCtx (ProcCtxMap, ProcCtx, deriveProcCtxs, memberCtx, deriveProcCtxsUG)
 import Test.HAPI.Api (ApiName)
+import Text.Printf (printf)
 
 type EdgeRep = String
 type PKeyRep = String
 
-data TypeCheckCtx = TypeCheckCtx { procTypes :: ProcTypeMap, procCtxs :: ProcCtxMap } deriving Show
+data TypeCheckCtx = TypeCheckCtx { procTypes :: UngroundProcTypeMap, procCtxs :: ProcCtxMap } deriving Show
 
 data TypeCheckError = TypeCheckError NodeID EdgeRep TypeErrorCause
   deriving (Show)
@@ -60,8 +61,9 @@ typeCheck :: forall api c sig m.
         => AASTG api c
         -> m TypeCheckCtx
 typeCheck aastg = do
-  pts  <- inferProcType aastg
-  ctxs <- deriveProcCtxs pts
+  pts  <- inferProcTypeUG aastg
+  debug $ printf "%s: pts = %s" (show 'typeCheck) (show pts)
+  ctxs <- deriveProcCtxsUG pts
   forM_ (allNodes aastg) (check ctxs)
   return $ TypeCheckCtx pts ctxs
   where

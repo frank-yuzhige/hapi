@@ -38,7 +38,7 @@ import Type.Reflection (typeOf)
 import qualified Data.HashMap.Strict as HM
 import Text.Printf (printf)
 import Data.IntMap (IntMap)
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, fromMaybe)
 import Data.IntSet (IntSet)
 import Test.HAPI.AASTG.Core (NodeID, Edge (..), allNodes, AASTG (..), startNode, edgesTo, getTerminators)
 import Control.Monad (forM_, forM, join)
@@ -143,13 +143,16 @@ simplifyMu (Par ts)  = Par (map simplifyMu ts)
 simplifyMu (SVar x)  = SVar x
 simplifyMu Zero      = Zero
 
+(!*) :: UngroundProcTypeMap -> NodeID -> ProcType
+UngroundProcTypeMap m !* n = m IM.! n
+
 -- | Infer unground procedure types for all nodes in the given AASTG using iterative algorithm.
-inferUngroundProcType :: forall sig m api c.
+inferProcTypeUG :: forall sig m api c.
                        ( Alg sig m
                        , ApiName api )
                     => AASTG api c
                     -> m UngroundProcTypeMap
-inferUngroundProcType aastg
+inferProcTypeUG aastg
   = return $ UngroundProcTypeMap $ foldr inferUnground IM.empty (allNodes aastg)
   where
     inferUnground i = IM.insert i (par ts)
@@ -178,7 +181,7 @@ inferProcType :: forall sig m api c.
             -> m ProcTypeMap
 inferProcType aastg = do
   -- debug $ printf "%s: Terminator Nodes %s" (show 'inferProcType) (show $ getTerminators aastg)
-  ground . coerce2Grounded <$> inferUngroundProcType aastg
+  ground . coerce2Grounded <$> inferProcTypeUG aastg
   where
     ground m = foldr groundOn m (IM.elems m >>= IS.toList . freeSVar)
     groundOn s m = IM.map (simplifyMu . subSVar s t') $ IM.insert s t' m
@@ -209,18 +212,73 @@ isSubType' sub sup = runEnv
 -- | Check if the given @sub@ type is a sub-type of the given @sup@ type
 --   Return the variable substitution that instantiates such sub-type relation.
 isSubType :: forall sig m. (Eff (NonDet :+: State SubTypeCtx) sig m) => ProcType -> ProcType -> m VarSubstitution
-isSubType sub sup
-  = do
+isSubType = isSubTypeUG (UngroundProcTypeMap IM.empty)
   -- debug $ printf "%s: Checking ... \n>>  %s\n>>  %s" (show 'isSubType) (show sub) (show sup)
+  -- sub ~<=~ sup
+  -- where
+  --   a ~<=~ b = do
+  --     checked <- gets (HS.member (a, b) . view checkedPairs)
+  --     if checked then return emptyVarSub else do
+  --       modify $ over checkedPairs $ HS.insert (a, b)
+  --       case (a, b) of
+  --         (Zero, Zero) ->
+  --           return emptyVarSub
+  --         (Mu {}, _) ->
+  --           unroll a ~<=~ b
+  --         (_, Mu {}) ->
+  --           a ~<=~ unroll b
+  --         (Par as, _) -> do
+  --           vs <- mapM (~<=~ b) as
+  --           liftMaybe $ foldr (\v a -> a >>= unifyVarSubstitution v) (Just emptyVarSub) vs
+  --         (_, Par bs) -> checkAny bs
+  --           where
+  --             checkAny []         = empty
+  --             checkAny (b' : bs') = a ~<=~ b' <|> checkAny bs'
+  --         -- Ignoring variable from attributes and external-pure functions (e.g. Anything)
+  --         (Act (ActGen _ _) ta, _)
+  --           -> ta ~<=~ b
+  --         (_, Act (ActGen _ _) tb)
+  --           -> a ~<=~ tb
+  --         (Act (ActCall _ a _) ta, _) | isExternalPure a
+  --           -> ta ~<=~ b
+  --         (_, Act (ActCall _ b _) tb) | isExternalPure b
+  --           -> a ~<=~ tb
+  --         (Act a'@(ActCall xa a as) ta, Act b'@(ActCall xb b bs) tb) -> do
+  --           (papi, pp, pa) <- liftMaybe $ apiEqProofs a b
+  --           let as' = castWith (apply Refl pp) as
+  --           let s0  = singletonVarSub xb (castWith (apply Refl pa) xa)
+  --           s1 <- getVarSubFromArgs sub sup as' bs
+  --           s1' <- liftMaybe $ s0 `unifyVarSubstitution` s1
+  --           s2 <- ta ~<=~ tb
+  --           liftMaybe $ s1' `unifyVarSubstitution` s2
+  --         _ -> empty
+
+-- | Check if the given @sub@ type is a sub-type of the given @sup@ type
+--   Return the variable substitution that instantiates such sub-type relation.
+isSubTypeUG :: forall sig m.
+             ( Eff (NonDet :+: State SubTypeCtx) sig m )
+          => UngroundProcTypeMap
+          -> ProcType
+          -> ProcType
+          -> m VarSubstitution
+isSubTypeUG (UngroundProcTypeMap uptm) sub sup
+  = do
+  -- debug $ printf "%s: Checking ... \n>>  %s\n>>  %s" (show 'isSubTypeUG) (show sub) (show sup)
   sub ~<=~ sup
   where
+    look x = fromMaybe Zero $ IM.lookup x uptm
     a ~<=~ b = do
+      -- debug $ printf "%s: Checking ... \n>>  %s\n>>  %s" (show 'isSubTypeUG <> ":~<=~") (show a) (show b)
       checked <- gets (HS.member (a, b) . view checkedPairs)
       if checked then return emptyVarSub else do
         modify $ over checkedPairs $ HS.insert (a, b)
         case (a, b) of
           (Zero, Zero) ->
             return emptyVarSub
+          (SVar x, _) ->
+            look x ~<=~ b
+          (_, SVar y) ->
+            a ~<=~ look y
           (Mu {}, _) ->
             unroll a ~<=~ b
           (_, Mu {}) ->
@@ -242,91 +300,37 @@ isSubType sub sup
           (_, Act (ActCall _ b _) tb) | isExternalPure b
             -> a ~<=~ tb
           (Act a'@(ActCall xa a as) ta, Act b'@(ActCall xb b bs) tb) -> do
-            (papi, pp, pa) <- liftMaybe $ apiEqProofs a b
+            (_, pp, pa) <- liftMaybe $ apiEqProofs a b
             let as' = castWith (apply Refl pp) as
-            let s0  = singletonVarSub xb (castWith (apply Refl pa) xa)
-            s1 <- getVarSubFromArgs sub sup as' bs
+                xa' = castWith (apply Refl pa) xa
+                s0  = singletonVarSub xb xa'
+            s1 <- getVarSubFromArgs look sub sup as' bs
             s1' <- liftMaybe $ s0 `unifyVarSubstitution` s1
             s2 <- ta ~<=~ tb
             liftMaybe $ s1' `unifyVarSubstitution` s2
           _ -> empty
-
--- -- | Check if the given @sub@ type is a sub-type of the given @sup@ type
--- --   Return the variable substitution that instantiates such sub-type relation.
--- isSubTypeUG :: forall sig m.
---              ( Eff (NonDet :+: State SubTypeCtx) sig m )
---           => UngroundProcTypeMap
---           -> ProcType
---           -> ProcType
---           -> m VarSubstitution
--- isSubTypeUG (UngroundProcTypeMap uptm) sub sup
---   = do
---   -- debug $ printf "%s: Checking ... \n>>  %s\n>>  %s" (show 'isSubType) (show sub) (show sup)
---   sub ~<=~ sup
---   where
---     look x = uptm IM.! x
---     a ~<=~ b = do
---       checked <- gets (HS.member (a, b) . view checkedPairs)
---       if checked then return emptyVarSub else do
---         modify $ over checkedPairs $ HS.insert (a, b)
---         case (a, b) of
---           (Zero, Zero) ->
---             return emptyVarSub
---           (SVar x, _) ->
---             look x ~<=~ sup
---           (_, SVar y) ->
---             sub ~<=~ look y
---           (Mu {}, _) ->
---             unroll a ~<=~ b
---           (_, Mu {}) ->
---             a ~<=~ unroll b
---           (Par as, _) -> do
---             vs <- mapM (~<=~ b) as
---             liftMaybe $ foldr (\v a -> a >>= unifyVarSubstitution v) (Just emptyVarSub) vs
---           (_, Par bs) -> checkAny bs
---             where
---               checkAny []         = empty
---               checkAny (b' : bs') = a ~<=~ b' <|> checkAny bs'
---           -- Ignoring variable from attributes and external-pure functions (e.g. Anything)
---           (Act (ActGen _ _) ta, _)
---             -> ta ~<=~ b
---           (_, Act (ActGen _ _) tb)
---             -> a ~<=~ tb
---           (Act (ActCall _ a _) ta, _) | isExternalPure a
---             -> ta ~<=~ b
---           (_, Act (ActCall _ b _) tb) | isExternalPure b
---             -> a ~<=~ tb
---           (Act a'@(ActCall xa a as) ta, Act b'@(ActCall xb b bs) tb) -> do
---             (papi, pp, pa) <- liftMaybe $ apiEqProofs a b
---             let as' = castWith (apply Refl pp) as
---             let s0  = singletonVarSub xb (castWith (apply Refl pa) xa)
---             s1 <- getVarSubFromArgs sub sup as' bs
---             s1' <- liftMaybe $ s0 `unifyVarSubstitution` s1
---             s2 <- ta ~<=~ tb
---             liftMaybe $ s1' `unifyVarSubstitution` s2
---           _ -> empty
-
 
 -- | Given 2 different procedure types and 2 attribute lists, attempt to find a unification (i.e. SVar substitution scheme)
 -- that makes all corresponding attributes in each list `effectively the same`.
 getVarSubFromArgs :: forall p sig m.
                    ( All Fuzzable p
                    , Eff NonDet sig m)
-                => ProcType
+                => (SVar -> ProcType)
+                -> ProcType
                 -> ProcType
                 -> Attributes p
                 -> Attributes p
                 -> m VarSubstitution
-getVarSubFromArgs d1 d2 Nil       Nil       = return emptyVarSub
-getVarSubFromArgs d1 d2 (a :* as) (b :* bs) = do
+getVarSubFromArgs look d1 d2 Nil       Nil       = return emptyVarSub
+getVarSubFromArgs look d1 d2 (a :* as) (b :* bs) = do
   u  <- unify (DepAttr a) (DepAttr b)
-  us <- getVarSubFromArgs d1 d2 as bs
+  us <- getVarSubFromArgs look d1 d2 as bs
   liftMaybe $ unifyVarSubstitution u us
   where
     -- 2 variables are effectively the same, iff they point to some non-variable attribute that is the same.
     unify (DepAttr (Get x1)) (DepAttr (Get x2)) = do
-      (_, dx1) <- unaliasVar d1 x1
-      (_, dx2) <- unaliasVar d2 x2
+      (_, dx1) <- unaliasVar look d1 x1
+      (_, dx2) <- unaliasVar look d2 x2
       TM.adjust (SE . HM.insert x2 x1 . unSE) <$> unify dx1 dx2
     -- Non-variable attributes are effectively the same, iff they are the same. (lol)
     unify (DepAttr a) (DepAttr b)
@@ -336,34 +340,37 @@ getVarSubFromArgs d1 d2 (a :* as) (b :* bs) = do
     -- TODO: Same api call, different location?
     unify (DepCall f fa) (DepCall g ga) = do
       (_, proof, _) <- liftMaybe $ f `apiEqProofs` g
-      getVarSubFromArgs d1 d2 (castWith (apply Refl proof) fa) ga
+      getVarSubFromArgs look d1 d2 (castWith (apply Refl proof) fa) ga
     -- Otherwise, not unifiable (e.g. x <-> some attr, not unifiable since x could be used in later context)
     unify _ _ = empty
 
-unaliasVar :: (Typeable p, Eff NonDet sig m) => ProcType -> PKey p -> m (PKey p, Dep p)
-unaliasVar dep x = do
-  n <- lookupPKInType x dep
+unaliasVar :: (Typeable p, Eff NonDet sig m) => (SVar -> ProcType) -> ProcType -> PKey p -> m (PKey p, Dep p)
+unaliasVar look t x = do
+  n <- lookupPKInType look x t
   case n of
-    (DepAttr (Get y)) -> unaliasVar dep y
+    (DepAttr (Get y)) -> unaliasVar look t y
     other             -> return (x, other)
 
-lookupPKInType :: (Typeable t, Eff NonDet sig m) => PKey t -> ProcType -> m (Dep t)
-lookupPKInType k = \case
-  SVar x   -> empty
-  Act a t  -> case a of
-    ActGen  x at -> do
-      proof <- liftMaybe $ inner <$> testEquality (typeOf x) (typeOf k)
-      if castWith (apply Refl proof) x == k
-        then return $ castWith (apply Refl proof) $ DepAttr at
-        else lookupPKInType k t
-    ActCall x api as -> do
-      proof <- liftMaybe $ inner <$> testEquality (typeOf x) (typeOf k)
-      if castWith (apply Refl proof) x == k
-        then return $ castWith (apply Refl proof) $ DepCall api as
-        else lookupPKInType k t
-  Par ts -> foldr ((<|>) . lookupPKInType k) empty ts
-  Mu s t -> lookupPKInType k t
-  Zero   -> empty
+lookupPKInType :: (Typeable t, Eff NonDet sig m) => (SVar -> ProcType) -> PKey t -> ProcType -> m (Dep t)
+lookupPKInType look k = go IS.empty
+  where
+    go history = \case
+      SVar x | IS.member x history -> empty
+             | otherwise           -> go (IS.insert x history) (look x)
+      Act a t  -> case a of
+        ActGen  x at -> do
+          proof <- liftMaybe $ inner <$> testEquality (typeOf x) (typeOf k)
+          if castWith (apply Refl proof) x == k
+            then return $ castWith (apply Refl proof) $ DepAttr at
+            else go history t
+        ActCall x api as -> do
+          proof <- liftMaybe $ inner <$> testEquality (typeOf x) (typeOf k)
+          if castWith (apply Refl proof) x == k
+            then return $ castWith (apply Refl proof) $ DepCall api as
+            else go history t
+      Par ts -> foldr ((<|>) . go history) empty ts
+      Mu s t -> go history t
+      Zero   -> empty
 
 instance Eq Action where
   ActCall m f as == ActCall n g bs = case apiEqProofs f g of

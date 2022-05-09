@@ -31,7 +31,7 @@ import qualified Data.IntSet as IS
 import Test.HAPI.Util.Empty (liftMaybe)
 import qualified Data.TypeRepMap as TM
 import qualified Data.HashMap.Strict as HS
-import Test.HAPI.AASTG.Analysis.ProcType (ProcTypeMap, isSubType, inferProcType, emptySubTypeCtx)
+import Test.HAPI.AASTG.Analysis.ProcType (ProcTypeMap, isSubType, inferProcType, emptySubTypeCtx, UngroundProcTypeMap (coerce2Grounded), isSubTypeUG, inferProcTypeUG, (!*))
 import Control.Carrier.NonDet.Church (runNonDet)
 import Control.Applicative (Applicative(liftA2))
 import Test.HAPI.Api (ApiName)
@@ -130,27 +130,28 @@ coalesceOneStep aastg = do
   -- debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: num of paths = %d" (length paths)
   -- debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: candidates count = %d" (length candidates)
   -- debugIO $ previewAASTG aastg
-  ptm <- inferProcType aastg
+  ptm <- inferProcTypeUG aastg
+  debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: ptm = %s" (show ptm)
   go ptm candidates
   where
     go ptm []           = return (Nothing, aastg)
     go ptm ((b, r): xs) = do
       debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: checking: %s" (show (b, r))
-      debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: type of b = %s" (show (ptm IM.! b))
-      debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: type of r = %s" (show (ptm IM.! r))
+      debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: type of b = %s" (show (ptm !* b))
+      debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: type of r = %s" (show (ptm !* r))
       r' <- r ~<=~ b
       case r' of
         Just vsb -> do
-          debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: type of er = %s" (show (ptm IM.! b))
-          debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: type of ee = %s" (show (ptm IM.! r))
+          debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: type of er = %s" (show (ptm !* b))
+          debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: type of ee = %s" (show (ptm !* r))
           ans <- directCoalesceNode b r vsb unrelatedMap aastg
           return (Just (b, r), ans)
         Nothing  -> do
           b' <- b ~<=~ r
           case b' of
             Just vsb -> do
-              debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: type of er = %s" (show (ptm IM.! r))
-              debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: type of ee = %s" (show (ptm IM.! b))
+              debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: type of er = %s" (show (ptm !* r))
+              debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: type of ee = %s" (show (ptm !* b))
               ans <- directCoalesceNode r b vsb unrelatedMap aastg
               return (Just (r, b), ans)
             Nothing  -> go ptm xs
@@ -163,14 +164,14 @@ coalesceOneStep aastg = do
                              ]
 
 upperSubNode :: Alg sig m
-             => ProcTypeMap
+             => UngroundProcTypeMap
              -> NodeID
              -> NodeID
              -> m (Maybe VarSubstitution)
 upperSubNode ptm n1 n2 = do
   ans <- runState (\s a -> return a) emptySubTypeCtx
        $ runNonDet (liftA2 (A.<|>)) (return . Just) (return Nothing)
-       $ isSubType (ptm IM.! n1) (ptm IM.! n2)
+       $ isSubTypeUG ptm (ptm !* n1) (ptm !* n2)
   when (isJust ans) $ debug $ printf "%s: %d <= %d, %s" (show 'upperSubNode) n1 n2 (show ans)
   return ans
 

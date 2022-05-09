@@ -9,6 +9,7 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Redundant $" #-}
 {-# LANGUAGE TypeOperators #-}
+{-# HLINT ignore "Use let" #-}
 
 module HAPIExample.SimpleArith where
 
@@ -230,6 +231,7 @@ previewD = do
   previewAASTG =<< op' 4 a b
 
 q = do
+  test <- runEnvIO $ coalesceAASTGs 500 [cyc @Fuzzable, cyc2, cyc3]
   previewAASTG test
   -- n <- runEnvIO @IO $ inferUngroundProcType test
   -- print n
@@ -237,8 +239,6 @@ q = do
   print x
   -- y <- runEnvIO @IO $ deriveProcCtxs x
   -- print y
-  where
-    test = runEnv $ coalesceAASTGs 10 [cyc @Fuzzable, cyc2, cyc3]
 -- test = do
 --   previewAASTG graph6
 --   c4 >>= previewAASTG
