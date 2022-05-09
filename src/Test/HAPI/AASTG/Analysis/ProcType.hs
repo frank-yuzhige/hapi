@@ -2,7 +2,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE DeriveGeneric #-}
@@ -98,8 +97,8 @@ emptySubTypeCtx = SubTypeCtx HS.empty ""
 
 -- | Unwind Recursion construct (μ) once.
 --   For any other constructs, remain what it was.
-unwind :: ProcType -> ProcType
-unwind t@(Mu x t') = go t'
+unroll :: ProcType -> ProcType
+unroll t@(Mu x t') = go t'
   where
     go (SVar y)
       | x == y    = t
@@ -110,7 +109,7 @@ unwind t@(Mu x t') = go t'
       | x == y    = Mu y t'
       | otherwise = Mu y (go t')
     go Zero       = Zero
-unwind t = t
+unroll t = t
 
 -- | Get a set of free SVars
 freeSVar :: ProcType -> IntSet
@@ -150,7 +149,8 @@ inferUngroundProcType :: forall sig m api c.
                        , ApiName api )
                     => AASTG api c
                     -> m UngroundProcTypeMap
-inferUngroundProcType aastg = return $ UngroundProcTypeMap $ foldr inferUnground IM.empty (allNodes aastg)
+inferUngroundProcType aastg
+  = return $ UngroundProcTypeMap $ foldr inferUnground IM.empty (allNodes aastg)
   where
     inferUnground i = IM.insert i (par ts)
       where
@@ -177,7 +177,7 @@ inferProcType :: forall sig m api c.
             => AASTG api c
             -> m ProcTypeMap
 inferProcType aastg = do
-  debug $ printf "%s: Terminator Nodes %s" (show 'inferProcType) (show $ getTerminators aastg)
+  -- debug $ printf "%s: Terminator Nodes %s" (show 'inferProcType) (show $ getTerminators aastg)
   ground . coerce2Grounded <$> inferUngroundProcType aastg
   where
     ground m = foldr groundOn m (IM.elems m >>= IS.toList . freeSVar)
@@ -215,7 +215,6 @@ isSubType sub sup
   sub ~<=~ sup
   where
     a ~<=~ b = do
-      -- debugctx
       checked <- gets (HS.member (a, b) . view checkedPairs)
       if checked then return emptyVarSub else do
         modify $ over checkedPairs $ HS.insert (a, b)
@@ -223,9 +222,9 @@ isSubType sub sup
           (Zero, Zero) ->
             return emptyVarSub
           (Mu {}, _) ->
-            unwind a ~<=~ b
+            unroll a ~<=~ b
           (_, Mu {}) ->
-            a ~<=~ unwind b
+            a ~<=~ unroll b
           (Par as, _) -> do
             vs <- mapM (~<=~ b) as
             liftMaybe $ foldr (\v a -> a >>= unifyVarSubstitution v) (Just emptyVarSub) vs
@@ -251,6 +250,62 @@ isSubType sub sup
             s2 <- ta ~<=~ tb
             liftMaybe $ s1' `unifyVarSubstitution` s2
           _ -> empty
+
+-- -- | Check if the given @sub@ type is a sub-type of the given @sup@ type
+-- --   Return the variable substitution that instantiates such sub-type relation.
+-- isSubTypeUG :: forall sig m.
+--              ( Eff (NonDet :+: State SubTypeCtx) sig m )
+--           => UngroundProcTypeMap
+--           -> ProcType
+--           -> ProcType
+--           -> m VarSubstitution
+-- isSubTypeUG (UngroundProcTypeMap uptm) sub sup
+--   = do
+--   -- debug $ printf "%s: Checking ... \n>>  %s\n>>  %s" (show 'isSubType) (show sub) (show sup)
+--   sub ~<=~ sup
+--   where
+--     look x = uptm IM.! x
+--     a ~<=~ b = do
+--       checked <- gets (HS.member (a, b) . view checkedPairs)
+--       if checked then return emptyVarSub else do
+--         modify $ over checkedPairs $ HS.insert (a, b)
+--         case (a, b) of
+--           (Zero, Zero) ->
+--             return emptyVarSub
+--           (SVar x, _) ->
+--             look x ~<=~ sup
+--           (_, SVar y) ->
+--             sub ~<=~ look y
+--           (Mu {}, _) ->
+--             unroll a ~<=~ b
+--           (_, Mu {}) ->
+--             a ~<=~ unroll b
+--           (Par as, _) -> do
+--             vs <- mapM (~<=~ b) as
+--             liftMaybe $ foldr (\v a -> a >>= unifyVarSubstitution v) (Just emptyVarSub) vs
+--           (_, Par bs) -> checkAny bs
+--             where
+--               checkAny []         = empty
+--               checkAny (b' : bs') = a ~<=~ b' <|> checkAny bs'
+--           -- Ignoring variable from attributes and external-pure functions (e.g. Anything)
+--           (Act (ActGen _ _) ta, _)
+--             -> ta ~<=~ b
+--           (_, Act (ActGen _ _) tb)
+--             -> a ~<=~ tb
+--           (Act (ActCall _ a _) ta, _) | isExternalPure a
+--             -> ta ~<=~ b
+--           (_, Act (ActCall _ b _) tb) | isExternalPure b
+--             -> a ~<=~ tb
+--           (Act a'@(ActCall xa a as) ta, Act b'@(ActCall xb b bs) tb) -> do
+--             (papi, pp, pa) <- liftMaybe $ apiEqProofs a b
+--             let as' = castWith (apply Refl pp) as
+--             let s0  = singletonVarSub xb (castWith (apply Refl pa) xa)
+--             s1 <- getVarSubFromArgs sub sup as' bs
+--             s1' <- liftMaybe $ s0 `unifyVarSubstitution` s1
+--             s2 <- ta ~<=~ tb
+--             liftMaybe $ s1' `unifyVarSubstitution` s2
+--           _ -> empty
+
 
 -- | Given 2 different procedure types and 2 attribute lists, attempt to find a unification (i.e. SVar substitution scheme)
 -- that makes all corresponding attributes in each list `effectively the same`.
@@ -352,3 +407,6 @@ deriving instance Generic ProcType
 instance Hashable ProcType
 
 deriving instance Show SubTypeCtx
+
+deriving instance Show UngroundProcTypeMap
+deriving instance Eq   UngroundProcTypeMap

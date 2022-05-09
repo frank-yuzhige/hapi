@@ -1,13 +1,14 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TemplateHaskell #-}
+
 module Test.HAPI.AASTG.Analysis.ProcCtx where
 
 import Data.HashSet (HashSet)
 
 
-import Test.HAPI.PState (PKey)
-import Test.HAPI.AASTG.Analysis.ProcType ( ProcType (..), Action (..), unwind, SVar, ProcTypeMap )
+import Test.HAPI.PState (PKey (getPKeyID))
+import Test.HAPI.AASTG.Analysis.ProcType ( ProcType (..), Action (..), SVar, ProcTypeMap )
 import Data.HashMap.Strict (HashMap)
 
 import qualified Test.HAPI.Util.TypeRepMap as TM
@@ -21,13 +22,13 @@ import Control.Monad (forM)
 import qualified Data.IntMap as IM
 import Data.IntMap (IntMap)
 import Text.Printf (printf)
-import Data.List (intercalate)
+import Data.List (intercalate, sort)
 
 
 -- | The context of a procedure type is the set of variables that is safe to be used in the subsequent procedure.
 
 
--- type ProcCtxMemo = HashMap ProcType ProcCtx
+type ProcCtxMap = IntMap ProcCtx
 
 type ProcCtxQueries = HashMap SVar ProcCtxQuery
 
@@ -96,7 +97,7 @@ deriveProcCtx ::
             -> m ProcCtx
 deriveProcCtx t = do
   (q, qs) <- runState @ProcCtxQueries (\s a -> return (a, s)) HM.empty $ genProcQuery t
-  debug $ printf "%s: Query: %s;    Queries: %s" (show 'deriveProcCtx) (show q) (show qs)
+  -- debug $ printf "%s: Query: %s;    Queries: %s" (show 'deriveProcCtx) (show q) (show qs)
   let st = solveProcQueries qs
   return $ solveProcQuery st q
 
@@ -105,7 +106,7 @@ deriveProcCtx t = do
 deriveProcCtxs ::
                 ( Alg sig m )
              => ProcTypeMap
-             -> m (IntMap ProcCtx)
+             -> m ProcCtxMap
 deriveProcCtxs ptm = do
   es <- forM (IM.assocs ptm) $ \(n, t) -> do
     ctx <- deriveProcCtx t
@@ -154,4 +155,4 @@ solveProcQueries qs = iter (HM.map (const Infinite) qs)
 
 instance Show ProcCtx where
   show Infinite   = "Infinite"
-  show (Finite m) = "{" <> intercalate ", " (TM.toListWith (\(PCE pce) -> intercalate ", " (map show $ HS.toList pce)) m) <> "}"
+  show (Finite m) = "{" <> intercalate ", " (TM.toListWith (\(PCE pce) -> intercalate ", " (sort $ map getPKeyID $ HS.toList pce)) m) <> "}"

@@ -53,12 +53,11 @@ coalesceAASTG n a1 a2 = do
 
 coalesceAASTGs :: (Alg sig m, ApiName api) => Int -> [AASTG api c] -> m (AASTG api c)
 coalesceAASTGs n = \case
-  []     -> error "Empty list of AASTGs to coalesce"
-  [a]    -> return a
-  a : as -> do
-    x      <- coalesceAASTGs n as
-    (_, r) <- coalesceAASTG  n a  x
-    return r
+  []         -> error "Empty list of AASTGs to coalesce"
+  [a]        -> return a
+  a : b : as -> do
+    (_, r) <- coalesceAASTG  n a  b
+    coalesceAASTGs n (r : as)
 
 directCoalesceState :: NodeID -> NodeID -> AASTG api c -> AASTG api c
 directCoalesceState er ee aastg@(AASTG s fs bs) = AASTG 0 fs' (edgesFrom2EdgesTo fs')

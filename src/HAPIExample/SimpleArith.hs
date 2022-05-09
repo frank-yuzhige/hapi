@@ -32,6 +32,7 @@ import Control.Carrier.NonDet.Church (runNonDet)
 import Control.Applicative (liftA2)
 import Data.Hashable (hash)
 import Test.HAPI.AASTG.Analysis.ProcCtx (deriveProcCtxs)
+import Control.Carrier.Error.Church (runError)
 
 foreign import ccall "broken_add"
   add :: CInt -> CInt -> IO CInt
@@ -184,6 +185,15 @@ cyc4 = runEnv $ runBuildAASTG $ do
   p <%(n3,n2)%> call Sub (Get x, Value 2)
   where p = Building @A @c
 
+invalid :: forall c. BasicSpec c => AASTG A c
+invalid = runEnv $ runBuildAASTG $ do
+  n1 <- currNode @A @c
+  n2 <- newNode @A @c
+  n3 <- newNode @A @c
+  x <- p <%(n1,n2)%> var Anything
+  y <- p <%(n3,n2)%> vcall Sub (Get x, Value 2)
+  p <%(n2,n3)%> call Add (Get x, Get y)
+  where p = Building @A @c
 
 op :: ApiName api => AASTG api c -> AASTG api c -> IO (AASTG api c)
 op = op' 1000
@@ -220,13 +230,15 @@ previewD = do
   previewAASTG =<< op' 4 a b
 
 q = do
-  x <- runEnvIO @IO (inferProcType test)
-  print x
-  y <- runEnvIO @IO $ deriveProcCtxs x
-  print y
   previewAASTG test
+  -- n <- runEnvIO @IO $ inferUngroundProcType test
+  -- print n
+  x <- runEnvIO @IO $ runError @TypeCheckError (return . Left) (return . Right) (typeCheck test)
+  print x
+  -- y <- runEnvIO @IO $ deriveProcCtxs x
+  -- print y
   where
-    test = cyc3 @Fuzzable
+    test = runEnv $ coalesceAASTGs 10 [cyc @Fuzzable, cyc2, cyc3]
 -- test = do
 --   previewAASTG graph6
 --   c4 >>= previewAASTG

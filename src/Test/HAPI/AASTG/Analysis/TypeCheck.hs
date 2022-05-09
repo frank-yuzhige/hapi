@@ -8,14 +8,11 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
-module Test.HAPI.AASTG.Analysis.TypeCheck (
-  typeCheck,
-  typeCheckEither
-) where
+module Test.HAPI.AASTG.Analysis.TypeCheck where
 
-import Test.HAPI.AASTG.Core (AASTG (AASTG), NodeID, Edge (Update, APICall, Assert, Forget, Redirect), edgesFrom, endNode)
+import Test.HAPI.AASTG.Core (AASTG (AASTG), NodeID, Edge (Update, APICall, Assert, Forget, Redirect), edgesFrom, endNode, allNodes)
 import Test.HAPI.PState (PKey(getPKeyID, PKey))
-import Test.HAPI.Args (Attributes, Attribute (AnyOf, Get))
+import Test.HAPI.Args (Attributes, Attribute (..))
 import Test.HAPI.Common (Fuzzable)
 import Test.HAPI.Effect.Eff (Eff, type (:+:), Alg)
 
@@ -40,75 +37,54 @@ import qualified Data.Map.Strict as M
 import qualified Data.TypeRepMap as TM
 import qualified Data.IntMap     as IM
 import qualified Data.Set        as S
+import Test.HAPI.AASTG.Analysis.ProcType (inferProcType, ProcTypeMap)
+import Test.HAPI.AASTG.Analysis.ProcCtx (ProcCtxMap, ProcCtx, deriveProcCtxs, memberCtx)
+import Test.HAPI.Api (ApiName)
 
-type StateType = Map String TypeRep
-type EdgeRep = Text
+type EdgeRep = String
+type PKeyRep = String
 
-data TypeCheckCtx = TypeCheckCtx { _states :: IntMap StateType, _checkedNodes :: Set NodeID } deriving Show
-
-$(makeLenses ''TypeCheckCtx)
+data TypeCheckCtx = TypeCheckCtx { procTypes :: ProcTypeMap, procCtxs :: ProcCtxMap } deriving Show
 
 data TypeCheckError = TypeCheckError NodeID EdgeRep TypeErrorCause
   deriving (Show)
 
-data TypeErrorCause = DoubleTypeAssignedToOneNode StateType StateType | CantInferNextStateType
+data TypeErrorCause
+  = UseVariableNotInContext String ProcCtx
+  -- | ReassignVariable        String ProcCtx
   deriving (Show)
 
-typeCheck :: Eff (Error TypeCheckError) sig m => AASTG api c -> m TypeCheckCtx
-typeCheck aastg@(AASTG start fs ts) =
-    runState (\s a -> return s) (TypeCheckCtx IM.empty S.empty)
-  $ checking start
+typeCheck :: forall api c sig m.
+           ( Eff (Error TypeCheckError) sig m
+           , ApiName api)
+        => AASTG api c
+        -> m TypeCheckCtx
+typeCheck aastg = do
+  pts  <- inferProcType aastg
+  ctxs <- deriveProcCtxs pts
+  forM_ (allNodes aastg) (check ctxs)
+  return $ TypeCheckCtx pts ctxs
   where
-    checking :: forall sig m. (Eff (State TypeCheckCtx :+: Error TypeCheckError) sig m) => NodeID -> m ()
-    checking i = do
-      checked <- gets (S.member i . view checkedNodes)
-      unless checked $ do
-        st <- gets (fromMaybe M.empty . (IM.!? i) . view states)
-        forM_ (edgesFrom i aastg) $ \edge -> do
-          let throwErr x = throwError . TypeCheckError x (fromString $ show edge)
-          case checkEdgeAndUpdate edge st of
-            Nothing -> throwErr i CantInferNextStateType
-            Just nt -> do
-              let e = endNode edge
-              oldNT <- gets ((IM.!? e) . view states)
-              case oldNT of
-                Nothing              -> modify $ over states $ IM.insert e nt
-                Just nt' | nt /= nt' -> throwErr e (DoubleTypeAssignedToOneNode nt nt')
-                _                    -> return ()
-              checking e
+    check ctxs i = do
+      forM_ (edgesFrom i aastg) $ \edge -> case edge of
+        Update   _ _ k a      -> checkAttr edge a
+        Forget   _ _ k        -> return ()
+        Assert   _ _ x y      -> mapM_ (checkAttr edge) [Get x, Get y]
+        APICall  _ _ k f args -> checkArgs edge args
+        Redirect _ _          -> return ()
+      where
+        ctx            = ctxs IM.! i
 
-typeCheckEither :: Alg sig m => AASTG api c -> m (Either TypeCheckError TypeCheckCtx)
-typeCheckEither = runError (return . Left) (return . Right) . typeCheck
+        checkArgs :: forall p. Edge api c -> Attributes p -> m ()
+        checkArgs edge Nil       = return ()
+        checkArgs edge (a :* as) = checkAttr edge a >> checkArgs edge as
 
--- | Given the edge and its outgoing state's type, check if the edge can indeed go from the outgoing state, and generate the next state's type.
-checkEdgeAndUpdate :: Edge sig c -> StateType -> Maybe StateType
-checkEdgeAndUpdate = \case
-  Update s e k a ->
-    Just . M.insert (getPKeyID k) (typeRep k)   -- Haskell type system guarantees a to be the same in (k :: PKey a) and (a :: Attribute a)
-  Forget s e k   ->
-    Just . M.delete (getPKeyID k)
-  Assert s e x y -> \st -> do
-    tx <- st M.!? getPKeyID x
-    ty <- st M.!? getPKeyID y
-    if tx == ty then return st else Nothing
-  APICall s e x api args -> \st ->
-    if not (attrsCheck args st)
-      then Nothing
-      else return (M.insert (getPKeyID x) (typeRep x) st)
-    where
-      attrsCheck :: (All Fuzzable a) => Attributes a -> StateType -> Bool
-      attrsCheck Nil       _  = True
-      attrsCheck (a :* as) st = attrCheck a st && attrsCheck as st
+        checkAttr :: forall a. Edge api c -> Attribute a -> m ()
+        checkAttr edge = \case
+          Get   x  ->
+            if x `memberCtx` ctx
+              then return ()
+              else throwError $ TypeCheckError i (show edge) $ UseVariableNotInContext (getPKeyID x) ctx
+          AnyOf as -> mapM_ (checkAttr edge) as
+          _        -> return ()
 
-      attrCheck :: forall a. (Fuzzable a) => Attribute a -> StateType -> Bool
-      attrCheck = \case
-        Get k -> \st -> fromMaybe False $ do
-          tk <- st M.!? getPKeyID k
-          return (tk == typeRep k)
-        AnyOf attrs -> \st -> all (`attrCheck` st) attrs
-        _ -> const True
-
-      args2TR :: (All Fuzzable a) => Attributes a -> [TypeRep]
-      args2TR Nil = []
-      args2TR (a :* as) = typeRep a : args2TR as
-  Redirect s e -> return
