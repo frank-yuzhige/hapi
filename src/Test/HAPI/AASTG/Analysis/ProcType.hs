@@ -53,7 +53,7 @@ type SVar = NodeID
 
 type ProcTypeMap = IntMap ProcType
 
-newtype UngroundProcTypeMap = UngroundProcTypeMap { coerce2Grounded :: ProcTypeMap }
+newtype UnboundedProcTypeMap = UnboundedProcTypeMap { coerce2Grounded :: ProcTypeMap }
 
 data Action where
   ActCall :: forall api p a.
@@ -143,19 +143,19 @@ simplifyMu (Par ts)  = Par (map simplifyMu ts)
 simplifyMu (SVar x)  = SVar x
 simplifyMu Zero      = Zero
 
-(!*) :: UngroundProcTypeMap -> NodeID -> ProcType
-UngroundProcTypeMap m !* n = m IM.! n
+(!*) :: UnboundedProcTypeMap -> NodeID -> ProcType
+UnboundedProcTypeMap m !* n = m IM.! n
 
--- | Infer unground procedure types for all nodes in the given AASTG using iterative algorithm.
+-- | Infer Unbounded procedure types for all nodes in the given AASTG using iterative algorithm.
 inferProcTypeUG :: forall sig m api c.
                        ( Alg sig m
                        , ApiName api )
                     => AASTG api c
-                    -> m UngroundProcTypeMap
+                    -> m UnboundedProcTypeMap
 inferProcTypeUG aastg
-  = return $ UngroundProcTypeMap $ foldr inferUnground IM.empty (allNodes aastg)
+  = return $ UnboundedProcTypeMap $ foldr inferUnbounded IM.empty (allNodes aastg)
   where
-    inferUnground i = IM.insert i (par ts)
+    inferUnbounded i = IM.insert i (par ts)
       where
         ts = [ tau' | edge <- edgesTo i aastg
                     , let tau  = SVar (startNode edge)
@@ -212,7 +212,7 @@ isSubType' sub sup = runEnv
 -- | Check if the given @sub@ type is a sub-type of the given @sup@ type
 --   Return the variable substitution that instantiates such sub-type relation.
 isSubType :: forall sig m. (Eff (NonDet :+: State SubTypeCtx) sig m) => ProcType -> ProcType -> m VarSubstitution
-isSubType = isSubTypeUG (UngroundProcTypeMap IM.empty)
+isSubType = isSubTypeUG (UnboundedProcTypeMap IM.empty)
   -- debug $ printf "%s: Checking ... \n>>  %s\n>>  %s" (show 'isSubType) (show sub) (show sup)
   -- sub ~<=~ sup
   -- where
@@ -257,11 +257,11 @@ isSubType = isSubTypeUG (UngroundProcTypeMap IM.empty)
 --   Return the variable substitution that instantiates such sub-type relation.
 isSubTypeUG :: forall sig m.
              ( Eff (NonDet :+: State SubTypeCtx) sig m )
-          => UngroundProcTypeMap
+          => UnboundedProcTypeMap
           -> ProcType
           -> ProcType
           -> m VarSubstitution
-isSubTypeUG (UngroundProcTypeMap uptm) sub sup
+isSubTypeUG (UnboundedProcTypeMap uptm) sub sup
   = do
   -- debug $ printf "%s: Checking ... \n>>  %s\n>>  %s" (show 'isSubTypeUG) (show sub) (show sup)
   sub ~<=~ sup
@@ -415,5 +415,5 @@ instance Hashable ProcType
 
 deriving instance Show SubTypeCtx
 
-deriving instance Show UngroundProcTypeMap
-deriving instance Eq   UngroundProcTypeMap
+deriving instance Show UnboundedProcTypeMap
+deriving instance Eq   UnboundedProcTypeMap

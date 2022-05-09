@@ -8,7 +8,7 @@ import Data.HashSet (HashSet)
 
 
 import Test.HAPI.PState (PKey (getPKeyID))
-import Test.HAPI.AASTG.Analysis.ProcType ( ProcType (..), Action (..), SVar, ProcTypeMap, UngroundProcTypeMap (UngroundProcTypeMap, coerce2Grounded) )
+import Test.HAPI.AASTG.Analysis.ProcType ( ProcType (..), Action (..), SVar, ProcTypeMap, UnboundedProcTypeMap (..) )
 import Data.HashMap.Strict (HashMap)
 
 import qualified Test.HAPI.Util.TypeRepMap as TM
@@ -102,7 +102,7 @@ deriveProcCtx t = do
   return $ solveProcQuery st q
 
 -- | Derive all ProcCtx from the given (well-formed) ProcType map
---   TODO: Optimization (Ungrounded type to simply calculation?) (Memoize query results?)
+--   TODO: Optimization (Unboundeded type to simply calculation?) (Memoize query results?)
 deriveProcCtxs ::
                 ( Alg sig m )
              => ProcTypeMap
@@ -115,9 +115,9 @@ deriveProcCtxs ptm = do
 
 deriveProcCtxsUG ::
                   ( Alg sig m )
-               => UngroundProcTypeMap
+               => UnboundedProcTypeMap
                -> m ProcCtxMap
-deriveProcCtxsUG (UngroundProcTypeMap uptm) = do
+deriveProcCtxsUG (UnboundedProcTypeMap uptm) = do
   queries <- fmap IM.unions $ forM (IM.assocs uptm) $ \(n, t) -> do
     (q, qs) <- runState @ProcCtxQueries (\s a -> return (a, s)) IM.empty $ genProcQuery t
     return $ IM.insert n q qs

@@ -37,7 +37,7 @@ import qualified Data.Map.Strict as M
 import qualified Data.TypeRepMap as TM
 import qualified Data.IntMap     as IM
 import qualified Data.Set        as S
-import Test.HAPI.AASTG.Analysis.ProcType (inferProcType, ProcTypeMap, inferProcTypeUG, UngroundProcTypeMap)
+import Test.HAPI.AASTG.Analysis.ProcType (inferProcType, ProcTypeMap, inferProcTypeUG, UnboundedProcTypeMap)
 import Test.HAPI.AASTG.Analysis.ProcCtx (ProcCtxMap, ProcCtx, deriveProcCtxs, memberCtx, deriveProcCtxsUG)
 import Test.HAPI.Api (ApiName)
 import Text.Printf (printf)
@@ -45,7 +45,7 @@ import Text.Printf (printf)
 type EdgeRep = String
 type PKeyRep = String
 
-data TypeCheckCtx = TypeCheckCtx { procTypes :: UngroundProcTypeMap, procCtxs :: ProcCtxMap } deriving Show
+data TypeCheckCtx = TypeCheckCtx { procTypes :: UnboundedProcTypeMap, procCtxs :: ProcCtxMap } deriving Show
 
 data TypeCheckError = TypeCheckError NodeID EdgeRep TypeErrorCause
   deriving (Show)
@@ -54,6 +54,14 @@ data TypeErrorCause
   = UseVariableNotInContext String ProcCtx
   -- | ReassignVariable        String ProcCtx
   deriving (Show)
+
+typeCheckEither :: forall api c sig m.
+                 ( Alg sig m
+                 , ApiName api)
+              => AASTG api c
+              -> m (Either TypeCheckError TypeCheckCtx)
+typeCheckEither = runError (return . Left) (return . Right) . typeCheck
+{-# INLINE typeCheckEither #-}
 
 typeCheck :: forall api c sig m.
            ( Eff (Error TypeCheckError) sig m

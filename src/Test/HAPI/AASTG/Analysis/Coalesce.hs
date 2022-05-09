@@ -31,7 +31,7 @@ import qualified Data.IntSet as IS
 import Test.HAPI.Util.Empty (liftMaybe)
 import qualified Data.TypeRepMap as TM
 import qualified Data.HashMap.Strict as HS
-import Test.HAPI.AASTG.Analysis.ProcType (ProcTypeMap, isSubType, inferProcType, emptySubTypeCtx, UngroundProcTypeMap (coerce2Grounded), isSubTypeUG, inferProcTypeUG, (!*))
+import Test.HAPI.AASTG.Analysis.ProcType (ProcTypeMap, isSubType, inferProcType, emptySubTypeCtx, UnboundedProcTypeMap (coerce2Grounded), isSubTypeUG, inferProcTypeUG, (!*))
 import Control.Carrier.NonDet.Church (runNonDet)
 import Control.Applicative (Applicative(liftA2))
 import Test.HAPI.Api (ApiName)
@@ -164,7 +164,7 @@ coalesceOneStep aastg = do
                              ]
 
 upperSubNode :: Alg sig m
-             => UngroundProcTypeMap
+             => UnboundedProcTypeMap
              -> NodeID
              -> NodeID
              -> m (Maybe VarSubstitution)

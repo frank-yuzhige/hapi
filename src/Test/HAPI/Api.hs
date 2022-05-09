@@ -130,6 +130,7 @@ showApiFromPatDefault f args = apiName f <> "(" <> showArgs args <> ")"
     showArgs Nil          = ""
     showArgs (K s :* Nil) = s
     showArgs (K s :* as)  = s <> ", " <> showArgs as
+    {-# INLINE showArgs #-}
 
 newVPtr :: forall t m sig. (Typeable t, HasForeign sig m) => Ptr t -> m (VPtr t)
 newVPtr p = do
