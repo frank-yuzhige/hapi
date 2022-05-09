@@ -54,6 +54,8 @@ type SVar = NodeID
 
 type ProcTypeMap = IntMap ProcType
 
+newtype UngroundProcTypeMap = UngroundProcTypeMap { coerce2Grounded :: ProcTypeMap }
+
 data Action where
   ActCall :: forall api p a.
            ( ApiName api
@@ -142,15 +144,13 @@ simplifyMu (Par ts)  = Par (map simplifyMu ts)
 simplifyMu (SVar x)  = SVar x
 simplifyMu Zero      = Zero
 
--- | Infer procedure types for all nodes in the given AASTG using iterative algorithm.
-inferProcType :: forall sig m api c.
-               ( Alg sig m
-               , ApiName api )
-            => AASTG api c
-            -> m ProcTypeMap
-inferProcType aastg = do
-  debug $ printf "%s: Terminator Nodes %s" (show 'inferProcType) (show $ getTerminators aastg)
-  return $ ground $ foldr inferUnground IM.empty (allNodes aastg)
+-- | Infer unground procedure types for all nodes in the given AASTG using iterative algorithm.
+inferUngroundProcType :: forall sig m api c.
+                       ( Alg sig m
+                       , ApiName api )
+                    => AASTG api c
+                    -> m UngroundProcTypeMap
+inferUngroundProcType aastg = return $ UngroundProcTypeMap $ foldr inferUnground IM.empty (allNodes aastg)
   where
     inferUnground i = IM.insert i (par ts)
       where
@@ -169,6 +169,17 @@ inferProcType aastg = do
                               tau
                     ]
 
+
+-- | Infer procedure types for all nodes in the given AASTG using iterative algorithm.
+inferProcType :: forall sig m api c.
+               ( Alg sig m
+               , ApiName api )
+            => AASTG api c
+            -> m ProcTypeMap
+inferProcType aastg = do
+  debug $ printf "%s: Terminator Nodes %s" (show 'inferProcType) (show $ getTerminators aastg)
+  ground . coerce2Grounded <$> inferUngroundProcType aastg
+  where
     ground m = foldr groundOn m (IM.elems m >>= IS.toList . freeSVar)
     groundOn s m = IM.map (simplifyMu . subSVar s t') $ IM.insert s t' m
       where

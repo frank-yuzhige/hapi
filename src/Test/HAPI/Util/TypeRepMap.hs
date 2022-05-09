@@ -29,7 +29,7 @@ module Test.HAPI.Util.TypeRepMap (
   toListWith,
 ) where
 
-import qualified Data.TypeRepMap as TM
+import Data.TypeRepMap as TM
 import qualified Data.TypeRepMap.Internal as TM
 import Data.TypeRepMap (TypeRepMap)
 import qualified Data.Map.Strict as Map
