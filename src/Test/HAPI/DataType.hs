@@ -59,4 +59,4 @@ type BasicSpec c = (TySpec c BasicTypes, TySpec Fuzzable BasicTypes)
 
 -- '[LLVMInt, LLVMDouble, LLVMFloat,]   --- Also want LLVMPtr LLVMInt, ...
 -- some :: forall c a. () => Attribute a
--- some = apicall i j API (Value @LLVMInt 10 ::* Value @(LLVMPtr LLVMPtr LLVMI8) 0xdeadbeef)
+-- some = apicall i j API (Value @LLVMInt 10 ::* Value @(LLVMPtr LLVMPtr LLVMChar) 0xdeadbeef)

@@ -37,8 +37,8 @@ import qualified Data.Map.Strict as M
 import qualified Data.TypeRepMap as TM
 import qualified Data.IntMap     as IM
 import qualified Data.Set        as S
-import Test.HAPI.AASTG.Analysis.ProcType (inferProcType, ProcTypeMap, inferProcTypeUG, UnboundedProcTypeMap)
-import Test.HAPI.AASTG.Analysis.ProcCtx (ProcCtxMap, ProcCtx, deriveProcCtxs, memberCtx, deriveProcCtxsUG)
+import Test.HAPI.AASTG.Analysis.ProcType (inferProcType, ProcTypeMap, inferProcTypeUB, UnboundedProcTypeMap)
+import Test.HAPI.AASTG.Analysis.ProcCtx (ProcCtxMap, ProcCtx, deriveProcCtxs, memberCtx, deriveProcCtxsUB)
 import Test.HAPI.Api (ApiName)
 import Text.Printf (printf)
 
@@ -69,9 +69,9 @@ typeCheck :: forall api c sig m.
         => AASTG api c
         -> m TypeCheckCtx
 typeCheck aastg = do
-  pts  <- inferProcTypeUG aastg
+  pts  <- inferProcTypeUB aastg
   debug $ printf "%s: pts = %s" (show 'typeCheck) (show pts)
-  ctxs <- deriveProcCtxsUG pts
+  ctxs <- deriveProcCtxsUB pts
   forM_ (allNodes aastg) (check ctxs)
   return $ TypeCheckCtx pts ctxs
   where

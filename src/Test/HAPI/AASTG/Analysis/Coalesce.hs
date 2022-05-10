@@ -31,7 +31,7 @@ import qualified Data.IntSet as IS
 import Test.HAPI.Util.Empty (liftMaybe)
 import qualified Data.TypeRepMap as TM
 import qualified Data.HashMap.Strict as HS
-import Test.HAPI.AASTG.Analysis.ProcType (ProcTypeMap, isSubType, inferProcType, emptySubTypeCtx, UnboundedProcTypeMap (coerce2Grounded), isSubTypeUG, inferProcTypeUG, (!*))
+import Test.HAPI.AASTG.Analysis.ProcType (ProcTypeMap, isSubType, inferProcType, emptySubTypeCtx, UnboundedProcTypeMap (coerce2Grounded), isSubTypeUB, inferProcTypeUB, (!*))
 import Control.Carrier.NonDet.Church (runNonDet)
 import Control.Applicative (Applicative(liftA2))
 import Test.HAPI.Api (ApiName)
@@ -130,7 +130,7 @@ coalesceOneStep aastg = do
   -- debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: num of paths = %d" (length paths)
   -- debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: candidates count = %d" (length candidates)
   -- debugIO $ previewAASTG aastg
-  ptm <- inferProcTypeUG aastg
+  ptm <- inferProcTypeUB aastg
   debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.coalesceOneStep: ptm = %s" (show ptm)
   go ptm candidates
   where
@@ -171,7 +171,7 @@ upperSubNode :: Alg sig m
 upperSubNode ptm n1 n2 = do
   ans <- runState (\s a -> return a) emptySubTypeCtx
        $ runNonDet (liftA2 (A.<|>)) (return . Just) (return Nothing)
-       $ isSubTypeUG ptm (ptm !* n1) (ptm !* n2)
+       $ isSubTypeUB ptm (ptm !* n1) (ptm !* n2)
   when (isJust ans) $ debug $ printf "%s: %d <= %d, %s" (show 'upperSubNode) n1 n2 (show ans)
   return ans
 

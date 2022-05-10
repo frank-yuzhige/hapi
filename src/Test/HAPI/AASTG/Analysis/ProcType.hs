@@ -147,12 +147,12 @@ simplifyMu Zero      = Zero
 UnboundedProcTypeMap m !* n = m IM.! n
 
 -- | Infer Unbounded procedure types for all nodes in the given AASTG using iterative algorithm.
-inferProcTypeUG :: forall sig m api c.
+inferProcTypeUB :: forall sig m api c.
                        ( Alg sig m
                        , ApiName api )
                     => AASTG api c
                     -> m UnboundedProcTypeMap
-inferProcTypeUG aastg
+inferProcTypeUB aastg
   = return $ UnboundedProcTypeMap $ foldr inferUnbounded IM.empty (allNodes aastg)
   where
     inferUnbounded i = IM.insert i (par ts)
@@ -181,7 +181,7 @@ inferProcType :: forall sig m api c.
             -> m ProcTypeMap
 inferProcType aastg = do
   -- debug $ printf "%s: Terminator Nodes %s" (show 'inferProcType) (show $ getTerminators aastg)
-  ground . coerce2Grounded <$> inferProcTypeUG aastg
+  ground . coerce2Grounded <$> inferProcTypeUB aastg
   where
     ground m = foldr groundOn m (IM.elems m >>= IS.toList . freeSVar)
     groundOn s m = IM.map (simplifyMu . subSVar s t') $ IM.insert s t' m
@@ -212,7 +212,7 @@ isSubType' sub sup = runEnv
 -- | Check if the given @sub@ type is a sub-type of the given @sup@ type
 --   Return the variable substitution that instantiates such sub-type relation.
 isSubType :: forall sig m. (Eff (NonDet :+: State SubTypeCtx) sig m) => ProcType -> ProcType -> m VarSubstitution
-isSubType = isSubTypeUG (UnboundedProcTypeMap IM.empty)
+isSubType = isSubTypeUB (UnboundedProcTypeMap IM.empty)
   -- debug $ printf "%s: Checking ... \n>>  %s\n>>  %s" (show 'isSubType) (show sub) (show sup)
   -- sub ~<=~ sup
   -- where
@@ -255,20 +255,20 @@ isSubType = isSubTypeUG (UnboundedProcTypeMap IM.empty)
 
 -- | Check if the given @sub@ type is a sub-type of the given @sup@ type
 --   Return the variable substitution that instantiates such sub-type relation.
-isSubTypeUG :: forall sig m.
+isSubTypeUB :: forall sig m.
              ( Eff (NonDet :+: State SubTypeCtx) sig m )
           => UnboundedProcTypeMap
           -> ProcType
           -> ProcType
           -> m VarSubstitution
-isSubTypeUG (UnboundedProcTypeMap uptm) sub sup
+isSubTypeUB (UnboundedProcTypeMap uptm) sub sup
   = do
-  -- debug $ printf "%s: Checking ... \n>>  %s\n>>  %s" (show 'isSubTypeUG) (show sub) (show sup)
+  -- debug $ printf "%s: Checking ... \n>>  %s\n>>  %s" (show 'isSubTypeUB) (show sub) (show sup)
   sub ~<=~ sup
   where
     look x = fromMaybe Zero $ IM.lookup x uptm
     a ~<=~ b = do
-      -- debug $ printf "%s: Checking ... \n>>  %s\n>>  %s" (show 'isSubTypeUG <> ":~<=~") (show a) (show b)
+      -- debug $ printf "%s: Checking ... \n>>  %s\n>>  %s" (show 'isSubTypeUB <> ":~<=~") (show a) (show b)
       checked <- gets (HS.member (a, b) . view checkedPairs)
       if checked then return emptyVarSub else do
         modify $ over checkedPairs $ HS.insert (a, b)
