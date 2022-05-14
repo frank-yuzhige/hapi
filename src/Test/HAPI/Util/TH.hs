@@ -15,5 +15,5 @@ fatalError name kind cause = error
   <> cause <> "\n"
   <> "In: " <> show name <> "\n\n"
   <> if kind == HAPI_BUG
-      then "This is a BUG in HAPI."
+      then "This is a BUG in HAPI. Please contact the maintainer."
       else "HAPI terminates with a fatal error. "

@@ -12,7 +12,7 @@ module Test.HAPI.AASTG.Analysis.TypeCheck where
 
 import Test.HAPI.AASTG.Core (AASTG (AASTG), NodeID, Edge (Update, APICall, Assert, Forget, Redirect), edgesFrom, endNode, allNodes)
 import Test.HAPI.PState (PKey(getPKeyID, PKey))
-import Test.HAPI.Args (Attributes, Attribute (..))
+import Test.HAPI.Args (Attributes, Attribute (..), DirectAttribute (Get))
 import Test.HAPI.Common (Fuzzable)
 import Test.HAPI.Effect.Eff (Eff, type (:+:), Alg, debug)
 
@@ -79,7 +79,7 @@ typeCheck aastg = do
       forM_ (edgesFrom i aastg) $ \edge -> case edge of
         Update   _ _ k a      -> checkAttr edge a
         Forget   _ _ k        -> return ()
-        Assert   _ _ x y      -> mapM_ (checkAttr edge) [Get x, Get y]
+        Assert   _ _ x y      -> mapM_ (checkAttr edge) [Direct (Get x), Direct (Get y)]
         APICall  _ _ k f args -> checkArgs edge args
         Redirect _ _          -> return ()
       where
@@ -91,7 +91,7 @@ typeCheck aastg = do
 
         checkAttr :: forall a. Edge api c -> Attribute a -> m ()
         checkAttr edge = \case
-          Get   x  ->
+          Direct (Get x) ->
             if x `memberCtx` ctx
               then return ()
               else throwError $ TypeCheckError i (show edge) $ UseVariableNotInContext (getPKeyID x) ctx

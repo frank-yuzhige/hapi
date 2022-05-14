@@ -29,6 +29,7 @@ import qualified Data.Map.Strict as M
 import qualified Data.TypeRepMap as TM
 import Data.Hashable (Hashable)
 import GHC.Generics (Generic)
+
 newtype PKey t = PKey { getPKeyID :: String }
   deriving (Eq, Ord)
 
@@ -54,7 +55,7 @@ instance (Typeable t) => PStateSupports PState t where
   lookUp k (PState ts) = TM.lookup @t ts >>= (M.lookup k . getMap)
 
 instance Show (PKey t) where
-  show = show . getPKeyID
+  show = getPKeyID
 
 instance IsString (PKey t) where
   fromString = PKey

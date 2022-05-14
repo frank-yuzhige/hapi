@@ -277,17 +277,3 @@ instance {-# OVERLAPPABLE #-}
 class (ApiName api) => HaskellIOCall (api :: ApiDefinition) where
   readOut  :: api p a -> String -> Maybe a
 
-data ApiTraceEntry (api :: ApiDefinition) where
-  CallOf :: All Fuzzable p => api p a -> Args p -> ApiTraceEntry api
-
-instance ApiName api => Show (ApiTraceEntry api) where
-  show (CallOf api args) = apiName api <> showApiFromPat api (args2Pat args)
-
-newtype ApiTrace (api :: ApiDefinition) = ApiTrace { apiTrace2List :: DList (ApiTraceEntry api) }
-  deriving (Semigroup, Monoid)
-
-apiTrace :: ApiTraceEntry api -> ApiTrace api
-apiTrace = ApiTrace . DL.singleton
-
-instance Show (ApiTraceEntry api) => Show (ApiTrace api) where
-  show (ApiTrace xs) = "ApiTrace " <> show xs

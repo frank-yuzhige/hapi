@@ -35,7 +35,7 @@ import Test.HAPI.Common (Fuzzable)
 import Data.Maybe (fromJust)
 import Data.HList (HList (HNil), HMap,type  (:~:) (Refl))
 import Data.SOP ( Proxy(Proxy), NP(..), All, hcmap )
-import Test.HAPI.Args (Args, pattern (::*), Attribute (Value, Anything, IntRange, Range, Get, AnyOf), validate)
+import Test.HAPI.Args (Args, pattern (::*), Attribute (..), validate, DirectAttribute (..))
 import Data.SOP.Dict (mapAll, Dict (Dict))
 import Data.Serialize (Serialize)
 import Test.HAPI.Effect.Orchestration (Orchestration, nextInstruction)
@@ -60,6 +60,20 @@ qvs2m (qvs :* q) = do
   s <- qvs2m q
   return (a ::* s)
 
+qvs2Direct :: (Has (QVS c :+: State PState) sig m) => NP (QVS c m) p -> m (NP DirectAttribute p)
+qvs2Direct Nil = return Nil
+qvs2Direct (qvs@(QVS a) :* q) = do
+  d <- case a of
+    Direct (Get x) -> do
+      r <- gets @PState (lookUp x)
+      case r of
+        Nothing -> return (Get x)
+        Just v  -> return (Value v)
+    _              -> Value <$> send qvs
+  s <- qvs2Direct q
+  return (d :* s)
+
+
 newtype QVSFuzzArbitraryAC m a = QVSFuzzArbitraryAC { runQVSFuzzArbitraryAC :: m a }
   deriving (Functor, Applicative, Monad, MonadFail, MonadIO)
 
@@ -69,7 +83,10 @@ instance (Algebra sig m, Members (State PState :+: GenA) sig) => Algebra (QVS Ar
     R other -> alg (runQVSFuzzArbitraryAC . hdl) other ctx
     where
       resolveQVS (QVS attr) = case attr of
-        Value v      -> do
+        Direct (Get k)   -> do
+          v <- gets @PState (lookUp k)
+          return (ctx $> fromJust v)   -- TODO Exception
+        Direct (Value v) -> do
           return (ctx $> v)
         Anything     -> do
           v <- liftGenA arbitrary
@@ -80,9 +97,6 @@ instance (Algebra sig m, Members (State PState :+: GenA) sig) => Algebra (QVS Ar
         Range    l r -> do
           v <- liftGenA (chooseEnum (l, r))
           return (ctx $> v)
-        Get k        -> do
-          v <- gets @PState (lookUp k)
-          return (ctx $> fromJust v)   -- TODO Exception
         AnyOf xs     -> do
           a <- oneof' (return <$> xs)
           resolveQVS (QVS a)
@@ -113,7 +127,10 @@ instance (Has (Orchestration QVSSupply :+: State PState) sig m) => Algebra (QVS 
     R other -> alg (runQVSFromOrchestrationAC . hdl) other ctx
     where
       resolveQVS (QVS attr) = case attr of
-        Value v      -> do
+        Direct (Get k)   -> do
+          v <- gets @PState (lookUp k)
+          return (ctx $> fromJust v)   -- TODO Exception
+        Direct (Value v) -> do
           return (ctx $> v)
         Anything     -> do
           v <- nextInstruction @QVSSupply
@@ -124,9 +141,6 @@ instance (Has (Orchestration QVSSupply :+: State PState) sig m) => Algebra (QVS 
         Range    l r -> do
           v <- nextInstruction @QVSSupply   -- FIXME
           return (ctx $> v)
-        Get k        -> do
-          v <- gets @PState (lookUp k)
-          return (ctx $> fromJust v)   -- TODO Exception
         AnyOf xs     -> do
           v <- nextInstruction @QVSSupply
           let a = xs !! (v `mod` length xs)

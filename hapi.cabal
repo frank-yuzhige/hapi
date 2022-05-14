@@ -47,8 +47,11 @@ library
       Test.HAPI.AASTG.LLVM.Extract
       Test.HAPI.AASTG.Synth
       Test.HAPI.Api
+      Test.HAPI.ApiTrace
       Test.HAPI.Args
       Test.HAPI.Common
+      Test.HAPI.Conduct
+      Test.HAPI.Conduct.LibFuzzer
       Test.HAPI.DataType
       Test.HAPI.Effect
       Test.HAPI.Effect.Api
@@ -66,6 +69,7 @@ library
       Test.HAPI.PrimApi
       Test.HAPI.PState
       Test.HAPI.Run
+      Test.HAPI.Util.ByteSupplier
       Test.HAPI.Util.Empty
       Test.HAPI.Util.SOP
       Test.HAPI.Util.TH
@@ -92,6 +96,7 @@ library
     , containers >=0.6.5.1
     , data-fix >=0.3.2
     , dlist >=1.0
+    , either >=5.0.2
     , fgl >=5.7.0.3
     , fused-effects >=1.1.1.1
     , graphviz >=299.20.1.0
@@ -100,6 +105,7 @@ library
     , lens >=5.1
     , llvm-hs-pure ==9.0.0
     , megaparsec >=0.9.2.0
+    , optparse-applicative >=0.17.0.0
     , quickcheck-transformer >=0.3.1.1
     , random >=1.2.0
     , sop-core >=0.5.0.1
@@ -132,6 +138,7 @@ executable hapi-exe
     , containers >=0.6.5.1
     , data-fix >=0.3.2
     , dlist >=1.0
+    , either >=5.0.2
     , fgl >=5.7.0.3
     , fused-effects >=1.1.1.1
     , graphviz >=299.20.1.0
@@ -141,6 +148,7 @@ executable hapi-exe
     , lens >=5.1
     , llvm-hs-pure ==9.0.0
     , megaparsec >=0.9.2.0
+    , optparse-applicative >=0.17.0.0
     , quickcheck-transformer >=0.3.1.1
     , random >=1.2.0
     , sop-core >=0.5.0.1
@@ -174,6 +182,7 @@ test-suite hapi-test
     , containers >=0.6.5.1
     , data-fix >=0.3.2
     , dlist >=1.0
+    , either >=5.0.2
     , fgl >=5.7.0.3
     , fused-effects >=1.1.1.1
     , graphviz >=299.20.1.0
@@ -183,6 +192,7 @@ test-suite hapi-test
     , lens >=5.1
     , llvm-hs-pure ==9.0.0
     , megaparsec >=0.9.2.0
+    , optparse-applicative >=0.17.0.0
     , quickcheck-transformer >=0.3.1.1
     , random >=1.2.0
     , sop-core >=0.5.0.1

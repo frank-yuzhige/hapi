@@ -16,7 +16,7 @@
 
 module Test.HAPI.AASTG.Effect.Build where
 import Data.Kind (Type, Constraint)
-import Test.HAPI.Args (Attribute (Value), Attributes)
+import Test.HAPI.Args (Attribute (..), Attributes, DirectAttribute (Value))
 import Test.HAPI.PState (PKey(PKey))
 import Test.HAPI.Effect.Eff (Algebra(alg), type (:+:) (..), Alg, send, runEnv, Eff)
 import Test.HAPI.AASTG.Core (AASTG, Edge (Update, APICall), newAASTG, NodeID, IsValidCall)
@@ -107,7 +107,7 @@ p <%> ec = do
 
 val :: forall t api c sig m proxy. (Has (BuildAASTG api c) sig m, Fuzzable t, c t)
     => t -> EdgeCon proxy api c m (PKey t)
-val v = var (Value v)
+val v = var (Direct $ Value v)
 
 var :: forall t api c sig m proxy. (Has (BuildAASTG api c) sig m, Fuzzable t, c t)
     => Attribute t -> EdgeCon proxy api c m (PKey t)

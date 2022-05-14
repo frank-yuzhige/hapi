@@ -23,7 +23,7 @@ import Test.HAPI.AASTG.Core (AASTG (getStart), startNode, NodeID, Edge (Update, 
 import Test.HAPI.AASTG.Effect.Trav (TravHandler (TravHandler), TravEvent (OnEdge, OnNode), TravCA (runTravCA), travPath, runTrav)
 import Control.Algebra (Has, run, type (:+:))
 import Control.Carrier.State.Church (State, runState)
-import Test.HAPI.Args (Attribute (Get, Value), eqAttributes, Attributes, attrs2Pat)
+import Test.HAPI.Args (Attribute (..), eqAttributes, Attributes, attrs2Pat)
 import Control.Effect.State (gets, modify)
 import Test.HAPI.AASTG.Analysis.Rename (maxNodeID, minNodeID, SubEntry (SE, unSE), VarSubstitution)
 import Data.Data (Typeable,type  (:~:) (Refl))

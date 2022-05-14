@@ -23,7 +23,7 @@ import Test.HAPI.AASTG.Effect.Build
     ( BuildAASTG, newEdge, newNode, currNode, setNode, runBuildAASTG, newVar )
 import Test.HAPI.PState ( PKey(PKey) )
 import Data.Char (chr)
-import Test.HAPI.Args (Attributes, Attribute (Get, Value, Anything), attrInt2Bool)
+import Test.HAPI.Args (Attributes, Attribute (..), attrInt2Bool)
 import Test.HAPI.Common ( Fuzzable )
 import Data.Either (fromRight)
 import Test.HAPI.Util.TH (moduleOf, fatalError, FatalErrorKind (FATAL_ERROR))
@@ -50,7 +50,7 @@ import Data.Word (Word32)
 import Control.Carrier.State.Church (runState)
 import Control.Carrier.Reader (runReader)
 import Control.Carrier.Lift (runM)
-import Test.HAPI (NP(..))
+import Test.HAPI (NP(..), DirectAttribute (..))
 import LLVM.AST.Float (SomeFloat(Single, Double))
 
 
@@ -224,9 +224,9 @@ opInteger :: forall api apis c sig m i.
        -> LLVM.Operand
        -> m (Attribute i)
 opInteger bits = \case
-  LocalReference ty x -> return $ Get @i (name2Var x)
+  LocalReference ty x -> return $ Direct $ Get @i (name2Var x)
   ConstantOperand con -> case con of
-    LLVMC.Int b n | b == bits -> return $ Value (fromIntegral n)
+    LLVMC.Int b n | b == bits -> return $ Direct $ Value (fromIntegral n)
     -- TODO: Support other operands
     other              -> do
       debug $ printf "[WARNING] %s: Unsupported operand %s, replace with Anything" (show 'opInteger) (show other)
@@ -256,9 +256,9 @@ opFloat :: forall api apis c sig m.
         ( Translator api apis c sig m )
      => AttrParse api apis c Float
 opFloat = AttrParse $ \case
-  LocalReference ty x -> return $ Get (name2Var x)
+  LocalReference ty x -> return $ Direct $ Get (name2Var x)
   ConstantOperand con -> case con of
-    LLVMC.Float (Single f) -> return $ Value f
+    LLVMC.Float (Single f) -> return $ Direct $ Value f
     -- TODO: Support other operands
     other             -> do
       debug $ printf "[WARNING] %s: Unsupported operand %s, replace with Anything" (show 'opFloat) (show other)
@@ -271,9 +271,9 @@ opDouble :: forall api apis c sig m.
          ( Translator api apis c sig m )
       => AttrParse api apis c Double
 opDouble = AttrParse $ \case
-  LocalReference ty x -> return $ Get (name2Var x)
+  LocalReference ty x -> return $ Direct $ Get (name2Var x)
   ConstantOperand con -> case con of
-    LLVMC.Float (Double f) -> return $ Value f
+    LLVMC.Float (Double f) -> return $ Direct $ Value f
     -- TODO: Support other operands
     other             -> do
       debug $ printf "[WARNING] %s: Unsupported operand %s, replace with Anything" (show 'opDouble) (show other)

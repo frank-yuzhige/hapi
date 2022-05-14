@@ -20,7 +20,7 @@ import Test.HAPI.Common (Fuzzable)
 import qualified Data.IntMap.Strict  as IM
 import qualified Data.TypeRepMap     as TM
 import qualified Data.HashMap.Strict as HM
-import Test.HAPI.Args (Attribute (..), Attributes)
+import Test.HAPI.Args (Attribute (..), Attributes, DirectAttribute (..))
 import Data.SOP.NP (NP(Nil, (:*)))
 import qualified Test.HAPI.Util.TypeRepMap as TM
 import Data.Data (typeRep, Data, Typeable)
@@ -128,9 +128,9 @@ renameVarsInEdge vsb = \case
 
 renameVarsInAttr :: VarSubstitution -> Attribute t -> Attribute t
 renameVarsInAttr vsb = \case
-  Get   k  -> Get (lookVar' k vsb)
-  AnyOf xs -> AnyOf (map (renameVarsInAttr vsb) xs)
-  other    -> other
+  Direct (Get k) -> Direct (Get (lookVar' k vsb))
+  AnyOf xs       -> AnyOf (map (renameVarsInAttr vsb) xs)
+  other          -> other
 
 renameVarsInAttrs :: VarSubstitution -> Attributes t -> Attributes t
 renameVarsInAttrs _   Nil       = Nil

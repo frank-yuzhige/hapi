@@ -9,7 +9,7 @@
 {-# LANGUAGE TypeOperators #-}
 module Test.HAPI.AASTG.Analysis.ProcType where
 
-import Test.HAPI.Args (Attributes, Attribute (..), eqAttributes, attrs2Pat)
+import Test.HAPI.Args (Attributes, Attribute (..), eqAttributes, attrs2Pat, DirectAttribute (..))
 import Test.HAPI.Common (Fuzzable)
 import Test.HAPI.PState (PKey(..))
 import Test.HAPI.Api (ApiName (..), apiEqProofs, isExternalPure)
@@ -328,7 +328,7 @@ getVarSubFromArgs look d1 d2 (a :* as) (b :* bs) = do
   liftMaybe $ unifyVarSubstitution u us
   where
     -- 2 variables are effectively the same, iff they point to some non-variable attribute that is the same.
-    unify (DepAttr (Get x1)) (DepAttr (Get x2)) = do
+    unify (DepAttr (Direct (Get x1))) (DepAttr (Direct (Get x2))) = do
       (_, dx1) <- unaliasVar look d1 x1
       (_, dx2) <- unaliasVar look d2 x2
       TM.adjust (SE . HM.insert x2 x1 . unSE) <$> unify dx1 dx2
@@ -348,8 +348,8 @@ unaliasVar :: (Typeable p, Eff NonDet sig m) => (SVar -> ProcType) -> ProcType -
 unaliasVar look t x = do
   n <- lookupPKInType look x t
   case n of
-    (DepAttr (Get y)) -> unaliasVar look t y
-    other             -> return (x, other)
+    (DepAttr (Direct (Get y))) -> unaliasVar look t y
+    other                      -> return (x, other)
 
 lookupPKInType :: (Typeable t, Eff NonDet sig m) => (SVar -> ProcType) -> PKey t -> ProcType -> m (Dep t)
 lookupPKInType look k = go IS.empty

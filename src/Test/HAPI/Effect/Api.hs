@@ -11,9 +11,10 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Test.HAPI.Effect.Api where
-import Test.HAPI.Api (ApiDefinition, HasHaskellDef (evalHaskell), HaskellIOCall (readOut), HasForeignDef (evalForeign), ApiName (apiName, showApiFromPat), ApiTrace (ApiTrace), ApiTraceEntry (CallOf), ApiError, apiTrace, HasForeign)
+import Test.HAPI.Api (ApiDefinition, HasHaskellDef (evalHaskell), HaskellIOCall (readOut), HasForeignDef (evalForeign), ApiName (apiName, showApiFromPat), ApiError, HasForeign, runForeign)
 import Data.Kind (Type)
 import Test.HAPI.Args (Args, args2Pat)
 import Test.HAPI.Common (Fuzzable)
@@ -29,7 +30,11 @@ import Control.Carrier.State.Strict (State, StateC, get, runState, execState, ev
 import Test.HAPI.VPtr (VPtrTable)
 import qualified Test.HAPI.VPtr as VP
 import Control.Effect.Fresh ( Fresh )
-import Control.Effect.Error ( Error )
+import Control.Effect.Error ( Error, throwError )
+import Test.HAPI.ApiTrace (ApiTrace, apiTrace, ApiTraceEntry (..))
+import Control.Concurrent (newEmptyMVar, forkOS, putMVar, readMVar, takeMVar, newMVar)
+import Test.HAPI.Util.TH (fatalError, FatalErrorKind (FATAL_ERROR, HAPI_BUG))
+import Text.Printf (printf)
 
 -- | Wrapper to the original Api
 data Api (api :: ApiDefinition) (m :: Type -> Type) a where
@@ -83,14 +88,29 @@ runApiFFI = runApiFFIAC
 instance ( Algebra sig m
          , HasForeignDef api
          , HasForeign sig m
-         , Members (Writer (ApiTrace api) :+: Trace) sig
          , MonadIO m)
          => Algebra (Api api :+: sig) (ApiFFIAC api m) where
   alg hdl sig ctx = ApiFFIAC $ case sig of
     L (MkCall call args) -> do
-      tell $ apiTrace $ CallOf call args
-      trace $ showApiFromPat call (args2Pat args)
       r <- evalForeign call args
       return (ctx $> r)
     R other -> alg (runApiFFIAC . hdl) other ctx
 
+-- | Trace
+
+newtype ApiTraceAC (api :: ApiDefinition) m a = ApiTraceAC { runApiTraceAC :: m a }
+  deriving (Functor, Applicative, Monad, MonadIO, MonadFail)
+
+runApiTrace :: forall api m a . Monad m => ApiTraceAC api m a -> m a
+runApiTrace = runApiTraceAC
+
+instance ( Algebra sig m
+         , HasForeignDef api
+         , Members (Writer (ApiTrace api) :+: Trace) sig
+         , MonadIO m
+         , MonadFail m)
+         => Algebra (Api api :+: sig) (ApiTraceAC api m) where
+  alg hdl sig ctx = ApiTraceAC $ case sig of
+    L (MkCall call args) -> do
+      fatalError 'alg HAPI_BUG $ printf "HAPI is trying to call an API via its foreign definition during trace mode!"
+    R other -> alg (runApiTraceAC . hdl) other ctx
