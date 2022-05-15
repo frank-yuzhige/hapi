@@ -14,6 +14,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FunctionalDependencies #-}
 
 module Test.HAPI.DataType where
 import Data.Constraint (Constraint, type (:-) (Sub), Dict (Dict), HasDict (evidence), type (:=>))
@@ -60,3 +61,11 @@ type BasicSpec c = (TySpec c BasicTypes, TySpec Fuzzable BasicTypes)
 -- '[LLVMInt, LLVMDouble, LLVMFloat,]   --- Also want LLVMPtr LLVMInt, ...
 -- some :: forall c a. () => Attribute a
 -- some = apicall i j API (Value @LLVMInt 10 ::* Value @(LLVMPtr LLVMPtr LLVMChar) 0xdeadbeef)
+
+
+class TyIso c t p | c t -> p where
+  toC   :: t -> p
+  fromC :: p -> t
+
+class TyConst c e t where
+  toConst :: t -> e

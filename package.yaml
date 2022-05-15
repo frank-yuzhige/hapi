@@ -65,6 +65,7 @@ dependencies:
 - llvm-hs-pure == 9.0.0
 - optparse-applicative >= 0.17.0.0
 - either >= 5.0.2
+- language-c >= 0.9.1
 # - llvm-hs == 9.0.1
 
 # ghc-options:
