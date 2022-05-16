@@ -10,7 +10,7 @@ import Control.Algebra (Has, type (:+:), send)
 import Test.HAPI.Effect.Api (Api, mkCall)
 import Test.HAPI.Effect.QVS (QVS(QVS), attributes2QVSs, qvs2m, qvs2Direct)
 import Control.Effect.State (State, modify)
-import Test.HAPI.PState (PState, PStateSupports (record, forget))
+import Test.HAPI.PState (PState, PStateSupports (record, forget), PKey (PKey))
 import Test.HAPI.Effect.Property (PropertyA, shouldBe)
 import Test.HAPI.AASTG.Core (AASTG (AASTG, getStart), Edge (Update, Forget, Assert, APICall, Redirect), endNode, NodeID, edgesFrom)
 import Test.HAPI.Args (Attribute(..), getVar)
@@ -27,9 +27,10 @@ import Test.HAPI.Effect.Entropy (getEntropy)
 import Test.HAPI.AASTG.Effect.Trav (TravHandler (..), TravEvent (..), onEvent)
 import Control.Effect.Writer (tell)
 import Test.HAPI.ApiTrace (ApiTraceEntry(TraceCall), traceCall)
+import Data.Constraint ((\\), Dict (..))
 
 -- | Synthesize fuzzer stubs
-synthStub :: forall api sig c m. (Has (Fuzzer api c) sig m) => AASTG api c -> [m ()]
+synthStub :: forall api c sig m. (Has (Fuzzer api c) sig m) => AASTG api c -> [m ()]
 synthStub (AASTG start edges _) = synth start
   where
     synth i = case edges IM.!? i of
@@ -37,7 +38,7 @@ synthStub (AASTG start edges _) = synth start
       Just [] -> [return ()]
       Just es -> concat [(synthOneStep edge >>) <$> synth (endNode edge) | edge <- es]
 
-synthOneStep :: forall api sig c m. (Has (Fuzzer api c) sig m) => Edge api c -> m ()
+synthOneStep :: forall api c sig m. (Has (Fuzzer api c) sig m) => Edge api c -> m ()
 synthOneStep (Update s e k a) = do
   v <- send (QVS @c a)
   modify @PState (record k v)
@@ -56,7 +57,7 @@ synthOneStep (APICall s e x api args) = do
   modify @PState (record x r)
 synthOneStep (Redirect s e) = return ()
 
-traceOneStep :: forall api sig c m. (Has (EntropyTracer api c) sig m) => Edge api c -> m ()
+traceOneStep :: forall api c sig m. (Has (EntropyTracer api c) sig m) => Edge api c -> m ()
 traceOneStep (Update s e k a) = do
   v <- send (QVS @c a)
   modify @PState (record k v)
@@ -66,9 +67,9 @@ traceOneStep (Assert s e x y) = do
   x' <- send (QVS @c (getVar x))
   y' <- send (QVS @c (getVar y))
   x' `shouldBe` y'
-traceOneStep (APICall s e x api args) = do
+traceOneStep (APICall s e (x :: PKey a) api args) = do
   args <- qvs2Direct @c (attributes2QVSs args)
-  tell (traceCall x api args)
+  tell (traceCall @api @c x api args)
 traceOneStep (Redirect s e) = do
   return ()
 

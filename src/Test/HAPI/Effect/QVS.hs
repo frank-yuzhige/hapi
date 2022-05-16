@@ -36,12 +36,14 @@ import Data.Maybe (fromJust)
 import Data.HList (HList (HNil), HMap,type  (:~:) (Refl))
 import Data.SOP ( Proxy(Proxy), NP(..), All, hcmap )
 import Test.HAPI.Args (Args, pattern (::*), Attribute (..), validate, DirectAttribute (..))
-import Data.SOP.Dict (mapAll, Dict (Dict))
+import Data.SOP.Dict (mapAll)
 import Data.Serialize (Serialize)
 import Test.HAPI.Effect.Orchestration (Orchestration, nextInstruction)
 import Test.HAPI.Effect.Orchestration.Labels (QVSSupply)
 import Data.Type.Equality (castWith, TestEquality (testEquality), apply)
 import Type.Reflection ( TypeRep, typeOf, Typeable )
+import Test.HAPI.Constraint (type (:>>>:), castC)
+import Data.Constraint ((\\), mapDict, Dict (..))
 
 
 -- Quantified Value Supplier
@@ -74,22 +76,22 @@ qvs2Direct (qvs@(QVS a) :* q) = do
   return (d :* s)
 
 
-newtype QVSFuzzArbitraryAC m a = QVSFuzzArbitraryAC { runQVSFuzzArbitraryAC :: m a }
+newtype QVSFuzzArbitraryAC (c :: Type -> Constraint) m a = QVSFuzzArbitraryAC { runQVSFuzzArbitraryAC :: m a }
   deriving (Functor, Applicative, Monad, MonadFail, MonadIO)
 
-instance (Algebra sig m, Members (State PState :+: GenA) sig) => Algebra (QVS Arbitrary :+: sig) (QVSFuzzArbitraryAC m) where
+instance (Algebra sig m, Members (State PState :+: GenA) sig, c :>>>: Arbitrary) => Algebra (QVS c :+: sig) (QVSFuzzArbitraryAC c m) where
   alg hdl sig ctx = QVSFuzzArbitraryAC $ case sig of
     L qvs   -> resolveQVS qvs
     R other -> alg (runQVSFuzzArbitraryAC . hdl) other ctx
     where
-      resolveQVS (QVS attr) = case attr of
+      resolveQVS (QVS (attr :: Attribute a)) = case attr of
         Direct (Get k)   -> do
           v <- gets @PState (lookUp k)
           return (ctx $> fromJust v)   -- TODO Exception
         Direct (Value v) -> do
           return (ctx $> v)
         Anything     -> do
-          v <- liftGenA arbitrary
+          v <- liftGenA (arbitrary \\ castC @Arbitrary (Dict @(c a)))
           return (ctx $> v)
         IntRange l r -> do
           v <- liftGenA (chooseInt (l, r))
@@ -101,14 +103,14 @@ instance (Algebra sig m, Members (State PState :+: GenA) sig) => Algebra (QVS Ar
           a <- oneof' (return <$> xs)
           resolveQVS (QVS a)
 
-newtype QVSFromStdinAC m a = QVSFromStdinAC { runQVSFromStdinAC :: m a }
+newtype QVSFromStdinAC (c :: Type -> Constraint) m a = QVSFromStdinAC { runQVSFromStdinAC :: m a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadFail)
 
-instance (Algebra sig m, MonadIO m) => Algebra (QVS Read :+: sig) (QVSFromStdinAC m) where
+instance (Algebra sig m, MonadIO m, c :>>>: Read) => Algebra (QVS c :+: sig) (QVSFromStdinAC c m) where
   alg hdl sig ctx = QVSFromStdinAC $ case sig of
     L qvs -> do
       liftIO $ putStrLn "Please provide input: "
-      input <- liftIO $ case qvs of QVS attr -> readAndValidate attr
+      input <- liftIO $ case qvs of QVS (attr :: Attribute a) -> readAndValidate attr \\ castC @Read (Dict @(c a))
       return (ctx $> input)
     R other -> alg (runQVSFromStdinAC . hdl) other ctx
     where
@@ -118,10 +120,12 @@ instance (Algebra sig m, MonadIO m) => Algebra (QVS Read :+: sig) (QVSFromStdinA
           then return a
           else fail "Not in range"
 
-newtype QVSFromOrchestrationAC m a = QVSFromOrchestrationAC { runQVSFromOrchestrationAC :: m a }
+newtype QVSFromOrchestrationAC (c :: Type -> Constraint) m a = QVSFromOrchestrationAC { runQVSFromOrchestrationAC :: m a }
   deriving (Functor, Applicative, Monad, MonadFail)
 
-instance (Has (Orchestration QVSSupply :+: State PState) sig m) => Algebra (QVS Fuzzable :+: sig) (QVSFromOrchestrationAC m) where
+instance ( Has (Orchestration QVSSupply :+: State PState) sig m
+         , c :>>>: Fuzzable)
+      => Algebra (QVS c :+: sig) (QVSFromOrchestrationAC c m) where
   alg hdl sig ctx = QVSFromOrchestrationAC $ case sig of
     L qvs   -> resolveQVS qvs
     R other -> alg (runQVSFromOrchestrationAC . hdl) other ctx

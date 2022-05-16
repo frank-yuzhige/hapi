@@ -106,7 +106,6 @@ runApiTrace = runApiTraceAC
 
 instance ( Algebra sig m
          , HasForeignDef api
-         , Members (Writer (ApiTrace api) :+: Trace) sig
          , MonadIO m
          , MonadFail m)
          => Algebra (Api api :+: sig) (ApiTraceAC api m) where

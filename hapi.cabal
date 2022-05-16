@@ -49,12 +49,15 @@ library
       Test.HAPI.Api
       Test.HAPI.ApiTrace
       Test.HAPI.ApiTrace.CodeGen.C.Data
+      Test.HAPI.ApiTrace.CodeGen.C.DataType
       Test.HAPI.ApiTrace.CodeGen.C.Util
       Test.HAPI.ApiTrace.Core
+      Test.HAPI.ApiTrace.TyConst
       Test.HAPI.Args
       Test.HAPI.Common
       Test.HAPI.Conduct
       Test.HAPI.Conduct.LibFuzzer
+      Test.HAPI.Constraint
       Test.HAPI.DataType
       Test.HAPI.DataType.C
       Test.HAPI.Effect

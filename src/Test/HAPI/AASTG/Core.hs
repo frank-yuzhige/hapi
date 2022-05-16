@@ -61,7 +61,7 @@ data Edge apis c where
            -> PKey a            -- Variable x
            -> PKey a            -- Variable y
            -> Edge api c
-  APICall  :: forall a sig api p c. (Fuzzable a, IsValidCall c api p)
+  APICall  :: forall a sig api p c. (Fuzzable a, c a, IsValidCall c api p)
            => NodeID             -- From
            -> NodeID             -- To
            -> PKey a             -- Store result to variable

@@ -16,8 +16,17 @@ ty2Decl x = CDecl [CTypeSpec x] [] undefNode
 cDeclr :: String -> CDeclr
 cDeclr str = CDeclr (Just $ internalIdent str) [] Nothing [] undefNode
 
-cInt :: Integer -> CExpr
-cInt val = CConst (CIntConst (cInteger val) undefNode)
+cIntConst :: Integer -> CExpr
+cIntConst val = CConst (CIntConst (cInteger val) undefNode)
+
+cBoolConst :: Bool -> CExpr
+cBoolConst val = CConst (CIntConst (cInteger $ fromIntegral $ fromEnum val) undefNode)
+
+cCharConst :: Char -> CExpr
+cCharConst val = CConst (CCharConst (Language.C.cChar val) undefNode)
+
+cStrConst :: String -> CExpr
+cStrConst val = CConst (CStrConst (cString val) undefNode)
 
 defTy :: String -> CDeclSpec
 defTy str = CTypeSpec $ CTypeDef (internalIdent str) undefNode
@@ -265,7 +274,7 @@ struct ->: tag = CMember struct (fromString tag) True undefNode
 infixl 8 ->:
 
 (!:) :: String -> Int -> CExpr
-varName !: ind = fromString varName ! cInt (fromIntegral ind)
+varName !: ind = fromString varName ! cIntConst (fromIntegral ind)
 infixl 8 !:
 
 sizeOfDecl :: CDecl -> CExpr

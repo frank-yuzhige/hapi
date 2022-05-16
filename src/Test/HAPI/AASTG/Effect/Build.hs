@@ -121,6 +121,7 @@ call :: forall api apis c sig m a p t proxy.
       ( Has (BuildAASTG apis c) sig m
       , ApiMember api apis
       , IsValidCall c api p
+      , c a
       , InjNP t Attribute p
       , Fuzzable a)
    => api p a
@@ -136,6 +137,7 @@ vcall :: forall api apis c sig m a p t proxy.
        ( Has (BuildAASTG apis c) sig m
        , ApiMember api apis
        , IsValidCall c api p
+       , c a
        , InjNP t Attribute p
        , Fuzzable a)
     => api p a

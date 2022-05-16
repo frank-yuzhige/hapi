@@ -1,6 +1,9 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Test.HAPI.Run where
 import Test.HAPI.AASTG.Core (AASTG(AASTG))
@@ -32,34 +35,42 @@ import Test.HAPI.Util.ByteSupplier (mkBiDirBS, biDirLength, BiDirBS (BiDirBS))
 import qualified Control.Carrier.Trace.Ignoring as IGNORING
 import qualified Control.Carrier.Trace.Printing as PRINTING
 import Test.HAPI.AASTG.Effect.Trav (runTrav)
+import Test.HAPI.Constraint (type (:<>:), type (:>>>:))
+import Test.HAPI.ApiTrace.CodeGen.C.DataType (CCodeGen)
 
-runFuzzTestNonDet :: forall api sig m. (MonadIO m, MonadFail m, Algebra sig m, ValidApiDef api) => AASTG api Arbitrary -> m ()
+runFuzzTestNonDet :: forall api c sig m.
+                   ( MonadIO m
+                   , MonadFail m
+                   , Algebra sig m
+                   , c :>>>: Arbitrary
+                   , ValidApiDef api) => AASTG api c -> m ()
 runFuzzTestNonDet aastg = runEnvIO $ do
-  let s = synthStub aastg
+  let s = synthStub @api @c aastg
   debug $ show (length s)
   debug $ show (length (outPaths 0 aastg))
   forM_ s $ \stub -> do id
     $ runGenIO
     $ runError @PropertyError (fail . show) pure
     $ runProperty @PropertyA
-    $ runWriter @(ApiTrace api) (\w _ -> return w)
+    $ runWriter @(ApiTrace api Arbitrary) (\w _ -> return w)
     $ IGNORING.runTrace
     $ runForeign (fail . show)
     $ runApiFFI @api
     $ runState (\s a -> return a) PS.emptyPState
-    $ runQVSFuzzArbitraryAC stub
+    $ runQVSFuzzArbitraryAC @c stub
 
 
 data TRACE_MODE = IGNORING | PRINTING
   deriving (Eq, Ord, Show, Enum)
 
 
-runFuzzTest :: forall api sig m.
+runFuzzTest :: forall api c sig m.
              ( MonadIO m
              , MonadFail m
              , Algebra sig m
+             , c :>>>: Fuzzable
              , ValidApiDef api)
-          => AASTG api Fuzzable
+          => AASTG api c
           -> ByteString
           -> m ()
 runFuzzTest aastg bs
@@ -74,22 +85,24 @@ runFuzzTest aastg bs
     $ runState (\s a -> return a) PS.emptyPState
     $ runState @BiDirBS (\s a -> return a) supply
     $ runOrchestrationViaBytes @QVSSupply     @BiDirBS (fail . show)
-    $ runQVSFromOrchestrationAC
+    $ runQVSFromOrchestrationAC @c
     $ runOrchestrationViaBytes @EntropySupply @BiDirBS (fail . show)
     $ runEntropyAC
-    $ runTrav @api @Fuzzable execEntropyFuzzerHandler
+    $ runTrav @api @c execEntropyFuzzerHandler
       stub
   where
-    stub           = synthEntropyStub @api @Fuzzable aastg
+    stub           = synthEntropyStub @api @c aastg
     supply         = mkBiDirBS bs
     (qvs, entropy) = biDirLength supply
 
-runFuzzTrace :: forall api sig m.
+runFuzzTrace :: forall api c sig m.
               ( MonadIO m
               , MonadFail m
               , Algebra sig m
+              , c :>>>: Fuzzable
+              , c :>>>: CCodeGen
               , ValidApiDef api)
-           => AASTG api Fuzzable
+           => AASTG api c
            -> ByteString
            -> m ()
 runFuzzTrace aastg bs
@@ -99,21 +112,21 @@ runFuzzTrace aastg bs
       trace <- runEnvIO
         $ runError @PropertyError (fail . show) pure
         $ runProperty @PropertyA
-        $ runWriter @(ApiTrace api) (\w _ -> return w)
+        $ runWriter @(ApiTrace api c) (\w _ -> return w)
         $ PRINTING.runTrace
         $ runForeign (fail . show)
         $ runApiTrace @api
         $ runState (\s a -> return a) PS.emptyPState
         $ runState @BiDirBS (\s a -> return a) supply
         $ runOrchestrationViaBytes @QVSSupply     @BiDirBS (fail . show)
-        $ runQVSFromOrchestrationAC
+        $ runQVSFromOrchestrationAC @c
         $ runOrchestrationViaBytes @EntropySupply @BiDirBS (fail . show)
         $ runEntropyAC
-        $ runTrav @api @Fuzzable execEntropyTraceHandler
+        $ runTrav @api @c execEntropyTraceHandler
         stub
       liftIO $ print trace
       return ()
   where
-    stub           = synthEntropyStub @api @Fuzzable aastg
+    stub           = synthEntropyStub @api @c aastg
     supply         = mkBiDirBS bs
     (qvs, entropy) = biDirLength supply

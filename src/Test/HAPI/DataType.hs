@@ -1,4 +1,3 @@
-{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -14,14 +13,15 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FunctionalDependencies #-}
 
 module Test.HAPI.DataType where
-import Data.Constraint (Constraint, type (:-) (Sub), Dict (Dict), HasDict (evidence), type (:=>))
+import Data.Constraint (Constraint, type (:-) (Sub), Dict (Dict), HasDict (evidence), type (:=>), refl, unmapDict, mapDict, (\\))
 import Data.Kind (Type)
 import Data.Data (Proxy (Proxy), TyCon)
 import Data.Constraint.Forall (Forall)
 import Test.HAPI.Common (Fuzzable)
+import Test.HAPI.VPtr (VPtrTable)
+import Data.SOP (All)
 
 
 
@@ -62,10 +62,14 @@ type BasicSpec c = (TySpec c BasicTypes, TySpec Fuzzable BasicTypes)
 -- some :: forall c a. () => Attribute a
 -- some = apicall i j API (Value @LLVMInt 10 ::* Value @(LLVMPtr LLVMPtr LLVMChar) 0xdeadbeef)
 
+type family TyIso' c t :: Type
 
-class TyIso c t p | c t -> p where
-  toC   :: t -> p
-  fromC :: p -> t
+class Fuzzable t => TyIso c t where
+  convertTo   :: VPtrTable -> t          -> TyIso' c t
+  convertFrom :: VPtrTable -> TyIso' c t -> t
 
-class TyConst c e t where
-  toConst :: t -> e
+
+-- projAllSub :: forall f c p. (f :>>>: c, All f p) :- All c p
+-- projAllSub = Sub projEntailment
+--   where
+--     fc = projEntailment @f @c

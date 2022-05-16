@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeOperators #-}
+
 module Test.HAPI.Conduct.LibFuzzer where
 
 import Test.HAPI.AASTG.Core ( AASTG )
@@ -9,6 +11,9 @@ import Test.HAPI.Common ( Fuzzable )
 import Options.Applicative (Parser, strArgument, help, info, (<**>), helper, fullDesc, progDesc, header, execParser, metavar, switch, long, short, showDefault, value)
 import Control.Monad (when)
 import Test.HAPI.AASTG.GraphViz (previewAASTG)
+import Language.C (CConst, CExpr)
+import Test.HAPI.Constraint (CMembers, type (:<>:))
+import Test.HAPI.ApiTrace.CodeGen.C.DataType (CCodeGen)
 
 data LibFuzzerConduct = LibFuzzerConduct
   { llvmFuzzerTestOneInputM :: CString -> CSize -> IO CInt
@@ -16,19 +21,21 @@ data LibFuzzerConduct = LibFuzzerConduct
   }
 
 
-libFuzzerConductViaAASTG :: (ValidApiDef api) => AASTG api Fuzzable -> LibFuzzerConduct
+libFuzzerConductViaAASTG :: (ValidApiDef api) => AASTG api (Fuzzable :<>: CCodeGen) -> LibFuzzerConduct
 libFuzzerConductViaAASTG aastg = LibFuzzerConduct
   { llvmFuzzerTestOneInputM = _llvmFuzzerTestOneInputM aastg
   , mainM                   = _traceMainM aastg
   }
 
-_llvmFuzzerTestOneInputM :: (ValidApiDef api) => AASTG api Fuzzable -> CString -> CSize -> IO CInt
+_llvmFuzzerTestOneInputM :: ( ValidApiDef api
+                            , CMembers Fuzzable c) => AASTG api c -> CString -> CSize -> IO CInt
 _llvmFuzzerTestOneInputM aastg str size = do
   bs <- BS.packCStringLen (str, fromIntegral size)
   runFuzzTest aastg bs
   return 0
 
-_traceMainM :: (ValidApiDef api) => AASTG api Fuzzable -> IO ()
+_traceMainM :: ( ValidApiDef api
+               , CMembers (CCodeGen :<>: Fuzzable) c) => AASTG api c -> IO ()
 _traceMainM aastg = do
   opt <- execParser opts
   let path = crashPath opt
@@ -49,4 +56,4 @@ data TraceOpt = TraceOpt
 traceOpt :: Parser TraceOpt
 traceOpt = TraceOpt
   <$> strArgument (metavar "PATH" <> help "LibFuzzer generated crash file location")
-  <*> switch (long "preview" <> short 'p' <> help "To preview AASTG" <> showDefault)
+  <*> switch      (long "preview" <> short 'p' <> help "To preview AASTG" <> showDefault)
