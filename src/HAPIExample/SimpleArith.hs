@@ -53,7 +53,12 @@ data ArithApi :: ApiDefinition where
 deriving instance Typeable (ArithApi p a)
 deriving instance Show     (ArithApi p a)
 deriving instance Eq       (ArithApi p a)
-instance ApiName  ArithApi
+instance ApiName  ArithApi where
+  apiNameUnder "C" Add = "broken_add"
+  apiNameUnder "C" Sub = "segfault_minus"
+  apiNameUnder "C" Mul = "stateful_multiply"
+  apiNameUnder "C" Neg = "limited_input_range_negate"
+  apiNameUnder _   a   = apiName a
 
 instance HasForeignDef ArithApi where
   -- evalForeign Add [args|a b|] = fromIntegral <$> liftIO (add (fromIntegral a) (fromIntegral b))

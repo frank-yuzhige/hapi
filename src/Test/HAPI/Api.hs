@@ -95,10 +95,14 @@ class (forall p a. Eq (api p a), Typeable api) => ApiName (api :: ApiDefinition)
   apiName           :: api p a -> String
   showApiFromPat    :: api p a -> ArgPattern p -> String
   apiMetaAttributes :: api p a -> [ApiMetaAttribute]
+  apiNameUnder      :: String -> api p a -> String
 
   default apiName :: (forall p a. Show (api p a)) => api p a -> String
   apiName = quietSnake . show
   {-# inline apiName #-}
+
+  apiNameUnder _ = apiName
+  {-# inline apiNameUnder #-}
 
   showApiFromPat = showApiFromPatDefault
   {-# inline showApiFromPat #-}

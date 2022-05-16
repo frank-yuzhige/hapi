@@ -12,7 +12,7 @@ import Test.HAPI.ApiTrace.Core (ApiTraceEntry(..), ApiTrace (..), trace2List)
 import Language.C
 import Test.HAPI.ApiTrace.CodeGen.C.Util
 import Test.HAPI.PState ( PKey(getPKeyID, PKey) )
-import Test.HAPI.Api (ApiName (apiName))
+import Test.HAPI.Api (ApiName (..))
 import Data.SOP (All, NP (..))
 import Test.HAPI.Constraint (type (:>>>:), castC)
 import Data.Constraint ((\\), Dict (..), mapDict)
@@ -44,7 +44,7 @@ pk2CVar :: PKey a -> CExpr
 pk2CVar = cVar . getPKeyID
 
 api2CVar :: ApiName api => api p a -> CExpr
-api2CVar = cVar . apiName
+api2CVar = cVar . apiNameUnder "C"
 
 dirAttr2CExpr :: (Fuzzable a, CCodeGen a) => DirectAttribute a -> CExpr
 dirAttr2CExpr (Value a) = toConst a

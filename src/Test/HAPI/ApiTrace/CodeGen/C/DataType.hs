@@ -3,7 +3,6 @@
 {-# LANGUAGE ConstraintKinds #-}
 module Test.HAPI.ApiTrace.CodeGen.C.DataType where
 import Test.HAPI.ApiTrace.TyConst (TyConst(..))
-import Test.HAPI.DataType.C (C)
 import Language.C (CExpr, CDeclSpec, CDerivedDeclr, CDeclr)
 import Test.HAPI.ApiTrace.CodeGen.C.Util
 

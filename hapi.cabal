@@ -60,7 +60,6 @@ library
       Test.HAPI.Conduct.LibFuzzer
       Test.HAPI.Constraint
       Test.HAPI.DataType
-      Test.HAPI.DataType.C
       Test.HAPI.Effect
       Test.HAPI.Effect.Api
       Test.HAPI.Effect.Eff
