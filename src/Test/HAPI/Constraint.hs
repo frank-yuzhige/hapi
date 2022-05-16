@@ -12,8 +12,14 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Test.HAPI.Constraint where
-import Data.Kind
+import Data.Kind ( Type, Constraint )
 import Data.Constraint
+    ( (\\),
+      mapDict,
+      refl,
+      unmapDict,
+      type (:-)(..),
+      Dict(..) )
 
 type Constraint1 = Type -> Constraint
 

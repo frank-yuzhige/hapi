@@ -48,6 +48,7 @@ library
       Test.HAPI.AASTG.Synth
       Test.HAPI.Api
       Test.HAPI.ApiTrace
+      Test.HAPI.ApiTrace.CodeGen.C
       Test.HAPI.ApiTrace.CodeGen.C.Data
       Test.HAPI.ApiTrace.CodeGen.C.DataType
       Test.HAPI.ApiTrace.CodeGen.C.Util

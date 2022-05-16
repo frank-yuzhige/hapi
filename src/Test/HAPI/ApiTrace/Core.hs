@@ -33,5 +33,8 @@ apiTrace = ApiTrace . DL.singleton
 traceCall :: forall api c p a. (ApiName api, All Fuzzable p, All c p, c a) => PKey a -> api p a -> NP DirectAttribute p -> ApiTrace api c
 traceCall k api args = apiTrace $ TraceCall k api args
 
+trace2List :: ApiTrace api c -> [ApiTraceEntry api c]
+trace2List (ApiTrace dl) = DL.toList dl
+
 instance Show (ApiTraceEntry api c) => Show (ApiTrace api c) where
   show (ApiTrace xs) = "ApiTrace " <> show xs

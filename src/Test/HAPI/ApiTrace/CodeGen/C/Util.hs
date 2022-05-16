@@ -40,6 +40,12 @@ floatTy = CTypeSpec $ CFloatType undefNode
 doubleTy :: CDeclSpec
 doubleTy = CTypeSpec $ CDoubleType undefNode
 
+charTy :: CDeclSpec
+charTy = CTypeSpec $ CCharType undefNode
+
+boolTy :: CDeclSpec
+boolTy = CTypeSpec $ CBoolType undefNode
+
 voidTy :: CDeclSpec
 voidTy = CTypeSpec $ CVoidType undefNode
 
