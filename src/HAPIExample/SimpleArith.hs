@@ -88,7 +88,7 @@ graph3 :: forall c. BasicSpec c => AASTG A c
 graph3 = runEnv $ runBuildAASTG $ do
   a <- p <%> var (Anything @Int)
   b <- p <%> var (Anything @Int)
-  c <- p <%> vcall Add (getVar b, getVar a)
+  c <- p <%> call Add (getVar b, getVar a)
   p <%> call Add (getVar a, getVar c)
   where p = Building @A @c
 
@@ -96,8 +96,8 @@ graph4 :: forall c. BasicSpec c => AASTG A c
 graph4 = runEnv $ runBuildAASTG $ do
   a <- p <%> var (Anything @Int)
   b <- p <%> var (Anything @Int)
-  c <- p <%> vcall Add (getVar a, getVar b)
-  d <- p <%> vcall Add (getVar a, getVar c)
+  c <- p <%> call Add (getVar a, getVar b)
+  d <- p <%> call Add (getVar a, getVar c)
   p <%> call Add (getVar c, getVar d)
   where p = Building @A @c
 
@@ -105,8 +105,8 @@ graph5 :: forall c. BasicSpec c => AASTG A c
 graph5 = runEnv $ runBuildAASTG $ do
   a <- p <%> var (Anything @Int)
   b <- p <%> var (Anything @Int)
-  c <- p <%> vcall Add (getVar a, getVar b)
-  d <- p <%> vcall Sub (getVar a, getVar c)
+  c <- p <%> call Add (getVar a, getVar b)
+  d <- p <%> call Sub (getVar a, getVar c)
   p <%> call Add (getVar c, getVar d)
   where p = Building @A @c
 
@@ -114,8 +114,8 @@ graph6 :: forall c. BasicSpec c => AASTG A c
 graph6 = runEnv $ runBuildAASTG $ do
   a <- p <%> var (Anything @Int)
   b <- p <%> var (Anything @Int)
-  c <- p <%> vcall Add (getVar a, getVar b)
-  d <- p <%> vcall Add (getVar a, getVar c)
+  c <- p <%> call Add (getVar a, getVar b)
+  d <- p <%> call Add (getVar a, getVar c)
   fork p $ p <%> call Neg (getVar c)
   fork p $ p <%> call (HLib.+) (getVar c, getVar c)
   p <%> call Mul (getVar a, getVar d)
@@ -146,11 +146,14 @@ cyc = runEnv $ runBuildAASTG $ do
   n3 <- newNode @A @c
   n4 <- newNode @A @c
   n5 <- newNode @A @c
+  n6 <- newNode @A @c
   x  <- p <%(n1,n2)%> var Anything
   p <%(n4,n3)%> call Add (getVar x, value 4)
   p <%(n3,n4)%> call Add (getVar x, value 2)
   p <%(n4,n2)%> call Add (getVar x, value 3)
   p <%(n2,n3)%> call Add (getVar x, value 1)
+  b  <- p <%(n4, n5)%> call (HLib.==) (getVar x, value 10)
+  p <%(n5, n6)%> assert b
   where p = Building @A @c
 
   -- newEdge @A @c (Redirect n2 n5)
@@ -196,9 +199,11 @@ invalid = runEnv $ runBuildAASTG $ do
   n1 <- currNode @A @c
   n2 <- newNode @A @c
   n3 <- newNode @A @c
+  n4 <- newNode @A @c
   x <- p <%(n1,n2)%> var Anything
-  y <- p <%(n3,n2)%> vcall Sub (getVar x, value 2)
+  y <- p <%(n3,n2)%> call Sub (getVar x, value 2)
   p <%(n2,n3)%> call Add (getVar x, getVar y)
+  p <%(n2,n4)%> assertTrue (HLib.==) (getVar x, getVar y)
   where p = Building @A @c
 
 op :: ApiName api => AASTG api c -> AASTG api c -> IO (AASTG api c)
@@ -236,7 +241,7 @@ previewD = do
   previewAASTG =<< op' 4 a b
 
 q = do
-  test <- runEnvIO $ coalesceAASTGs 500 [cyc @Fuzzable, cyc2, cyc3]
+  test <- runEnvIO $ return (invalid @Fuzzable) -- coalesceAASTGs 500 [cyc @Fuzzable, cyc2, cyc3]
   previewAASTG test
   -- n <- runEnvIO @IO $ inferUngroundProcType test
   -- print n

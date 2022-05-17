@@ -15,7 +15,7 @@
 module Test.HAPI.AASTG.Core where
 import Test.HAPI.Effect.QVS (QVS (QVS), attributes2QVSs, qvs2m)
 import Test.HAPI.Api (ApiDefinition, ApiName (apiName, showApiFromPat), apiEq)
-import Test.HAPI.Args (Args, Attribute (..), attributesEq, repEq, attrs2Pat)
+import Test.HAPI.Args (Args, Attribute (..), attributesEq, repEq, attrs2Pat, DirectAttribute)
 import Test.HAPI.PState (PKey (PKey, getPKeyID), PState (PState), PStateSupports (record, forget))
 import Test.HAPI.Common (Fuzzable)
 import Data.SOP (All, NP)
@@ -55,11 +55,10 @@ data Edge apis c where
            -> PKey a            -- Variable
            -> Edge api c
   -- TODO better assertion
-  Assert   :: forall a api c. (Fuzzable a, c a, Eq a)
-           => NodeID            -- From
-           -> NodeID            -- To
-           -> PKey a            -- Variable x
-           -> PKey a            -- Variable y
+  Assert   :: forall a api c. (Fuzzable Bool, c Bool)
+           => NodeID               -- From
+           -> NodeID               -- To
+           -> DirectAttribute Bool
            -> Edge api c
   APICall  :: forall a sig api p c. (Fuzzable a, c a, IsValidCall c api p)
            => NodeID             -- From
@@ -91,14 +90,14 @@ newAASTG es = AASTG 0 (groupEdgesOn startNode es) (groupEdgesOn endNode es)
 startNode :: Edge api c -> NodeID
 startNode (Update s _ _ _) = s
 startNode (Forget s _ _)   = s
-startNode (Assert s _ _ _) = s
+startNode (Assert s _ _) = s
 startNode (APICall s _ _ _ _) = s
 startNode (Redirect s _ ) = s
 
 endNode :: Edge api c -> NodeID
 endNode (Update _ e _ _) = e
 endNode (Forget _ e _)   = e
-endNode (Assert _ e _ _) = e
+endNode (Assert _ e _) = e
 endNode (APICall _ e _ _ _) = e
 endNode (Redirect _ e) = e
 
@@ -131,7 +130,7 @@ changeEdgeNode :: NodeID -> NodeID -> Edge api c -> Edge api c
 changeEdgeNode i j = \case
   Update   _ _ k  a        -> Update   i j k  a
   Forget   _ _ k           -> Forget   i j k
-  Assert   _ _ x  y        -> Assert   i j x  y
+  Assert   _ _ p           -> Assert   i j p
   APICall  _ _ mx api args -> APICall  i j mx api args
   Redirect _ _             -> Redirect i j
 
@@ -139,7 +138,7 @@ showEdgeLabel :: Edge api c -> String
 showEdgeLabel = \case
   Update   s e k  a        -> "update " <> getPKeyID k <> " = " <> show a
   Forget   s e k           -> "forget " <> getPKeyID k
-  Assert   s e x  y        -> "assert " <> getPKeyID x <> " = " <> show y
+  Assert   s e p           -> "assert " <> show p
   APICall  s e mx api args -> ""        <> getPKeyID mx <> " = " <> showApiFromPat api (attrs2Pat args) -- apiName api <> "(" <> intercalate ", " (showAttributes args) <> ")"
   Redirect s e             -> "redir "
 
@@ -154,8 +153,8 @@ instance Show (Edge api c) where
 instance Eq (Edge api c) where
   Update s e k a == Update s' e' k' a' =
     s == s' && e == e' && repEq k k' && repEq a a'
-  Assert s e x y == Assert s' e' x' y' =
-    s == s' && e == e' && repEq x x' && repEq y y'
+  Assert s e p == Assert s' e' p' =
+    s == s' && e == e' && p == p'
   APICall s e mx api args == APICall s' e' mx' api' args' =
     s == s' && e == e' && repEq mx mx' && apiEq api api' && attributesEq args args'
   _ == _ = False
@@ -172,12 +171,11 @@ instance Hashable (Edge api c) where
     `hashWithSalt` s
     `hashWithSalt` e
     `hashWithSalt` x
-  hashWithSalt salt (Assert  s e x y) = salt
+  hashWithSalt salt (Assert  s e p) = salt
     `hashWithSalt` "a"
     `hashWithSalt` s
     `hashWithSalt` e
-    `hashWithSalt` x
-    `hashWithSalt` y
+    `hashWithSalt` p
   hashWithSalt salt (APICall s e mx api args) = salt
     `hashWithSalt` "c"
     `hashWithSalt` s

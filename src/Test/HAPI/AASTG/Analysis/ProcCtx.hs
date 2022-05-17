@@ -133,6 +133,7 @@ genProcQuery = \case
   SVar x                  -> return (PSVar x)
   Act  (ActGen  k _)   t' -> PUnion (PCtx (singletonCtx k)) <$> genProcQuery t'
   Act  (ActCall k _ _) t' -> PUnion (PCtx (singletonCtx k)) <$> genProcQuery t'
+  Act  (ActAssert _)   t' -> genProcQuery t'
   Par  ts                 -> intersectQueries <$> mapM genProcQuery ts
   Mu x t'                 -> do
     q <- genProcQuery t'

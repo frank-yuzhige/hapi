@@ -70,7 +70,9 @@ data Action where
         => PKey a
         -> Attribute a
         -> Action
-
+  ActAssert :: (Fuzzable Bool)
+        => DirectAttribute Bool
+        -> Action
 
 data SubTypeCtx = SubTypeCtx {
   _checkedPairs :: HashSet (ProcType, ProcType),
@@ -157,20 +159,20 @@ inferProcTypeUB aastg
   where
     inferUnbounded i = IM.insert i (par ts)
       where
-        ts = [ tau' | edge <- edgesTo i aastg
-                    , let tau  = SVar (startNode edge)
-                    , let tau' = case edge of
-                            Update s e k a ->
-                              Act (ActGen k a) tau
-                            Forget s e x   ->
-                              fatalError 'inferProcType FATAL_ERROR "Unsupported construct 'forget'"
-                            Assert n j pk pk' ->
-                              fatalError 'inferProcType FATAL_ERROR "Unsupported construct 'assert'"
-                            APICall s e mx api args ->
-                              Act (ActCall mx api args) tau
-                            Redirect n j ->
-                              tau
-                    ]
+        ts = [ t' | edge <- edgesTo i aastg
+                  , let t  = SVar (startNode edge)
+                  , let t' = case edge of
+                          Update s e k a ->
+                            Act (ActGen k a) t
+                          Forget s e x   ->
+                            fatalError 'inferProcType FATAL_ERROR "Unsupported construct 'forget'"
+                          Assert n j p ->
+                            Act (ActAssert p) t
+                          APICall s e mx api args ->
+                            Act (ActCall mx api args) t
+                          Redirect n j ->
+                            t
+                  ]
 
 
 -- | Infer procedure types for all nodes in the given AASTG using iterative algorithm.
@@ -308,6 +310,12 @@ isSubTypeUB (UnboundedProcTypeMap uptm) sub sup
             s1' <- liftMaybe $ s0 `unifyVarSubstitution` s1
             s2 <- ta ~<=~ tb
             liftMaybe $ s1' `unifyVarSubstitution` s2
+          (Act a'@(ActAssert (Value a)) ta, Act b'@(ActAssert (Value b)) tb) -> do
+            if a == b then ta ~<=~ tb else empty
+          (Act a'@(ActAssert (Get xa)) ta, Act b'@(ActAssert (Get xb)) tb) -> do
+            let s0 = singletonVarSub xb xa
+            s1 <- ta ~<=~ tb
+            liftMaybe $ s0 `unifyVarSubstitution` s1
           _ -> empty
 
 -- | Given 2 different procedure types and 2 attribute lists, attempt to find a unification (i.e. SVar substitution scheme)
@@ -368,6 +376,8 @@ lookupPKInType look k = go IS.empty
           if castWith (apply Refl proof) x == k
             then return $ castWith (apply Refl proof) $ DepCall api as
             else go history t
+        ActAssert p -> do
+          go history t
       Par ts -> foldr ((<|>) . go history) empty ts
       Mu s t -> go history t
       Zero   -> empty
@@ -388,6 +398,8 @@ instance Show Action where
     = printf "%s=%s" (getPKeyID x) (showApiFromPat api (attrs2Pat args))
   show (ActGen x a)
     = printf "%s=%s" (getPKeyID x) (show a)
+  show (ActAssert p)
+    = printf "?%s" (show p)
 
 deriving instance Eq ProcType
 
@@ -409,6 +421,9 @@ instance Hashable Action where
     `hashWithSalt` "Gen"
     `hashWithSalt` x
     `hashWithSalt` a
+  hashWithSalt salt (ActAssert p) = salt
+    `hashWithSalt` "Assert"
+    `hashWithSalt` p
 
 deriving instance Generic ProcType
 instance Hashable ProcType

@@ -44,10 +44,9 @@ synthOneStep (Update s e k a) = do
   modify @PState (record k v)
 synthOneStep (Forget s e k) = do
   modify @PState (forget k)
-synthOneStep (Assert s e x y) = do
-  x' <- send (QVS @c (getVar x))
-  y' <- send (QVS @c (getVar y))
-  x' `shouldBe` y'
+synthOneStep (Assert s e p) = do
+  v <- send (QVS @c (Direct p))
+  v `shouldBe` True
 synthOneStep (APICall s e x api args) = do
   -- 1. Resolve Attributes (Into QVS)
   args <- qvs2m @c (attributes2QVSs args)
@@ -63,10 +62,9 @@ traceOneStep (Update s e k a) = do
   modify @PState (record k v)
 traceOneStep (Forget s e k) = do
   modify @PState (forget k)
-traceOneStep (Assert s e x y) = do
-  x' <- send (QVS @c (getVar x))
-  y' <- send (QVS @c (getVar y))
-  x' `shouldBe` y'
+traceOneStep (Assert s e p) = do
+  v <- send (QVS @c (Direct p))
+  v `shouldBe` True
 traceOneStep (APICall s e (x :: PKey a) api args) = do
   args <- qvs2Direct @c (attributes2QVSs args)
   tell (traceCall @api @c x api args)

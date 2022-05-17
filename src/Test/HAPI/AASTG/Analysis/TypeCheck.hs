@@ -79,7 +79,7 @@ typeCheck aastg = do
       forM_ (edgesFrom i aastg) $ \edge -> case edge of
         Update   _ _ k a      -> checkAttr edge a
         Forget   _ _ k        -> return ()
-        Assert   _ _ x y      -> mapM_ (checkAttr edge) [Direct (Get x), Direct (Get y)]
+        Assert   _ _ p        -> checkAttr edge (Direct p)
         APICall  _ _ k f args -> checkArgs edge args
         Redirect _ _          -> return ()
       where
