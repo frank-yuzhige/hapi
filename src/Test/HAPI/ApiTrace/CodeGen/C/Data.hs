@@ -28,6 +28,7 @@ entry2Block (TraceCall (x :: PKey a) api args) = CBlockDecl $ decl
   (Just $ api2CVar api # dirAttrs2CExprs @c args)
   where
     (ty, f) = toType @CExpr x \\ castC @CCodeGen (Dict @(c a))
+entry2Block (TraceAssert p) = liftEToB $ cAssert (dirAttr2CExpr p)
 
 entryFun :: forall api c.
           ( c :>>>: CCodeGen)

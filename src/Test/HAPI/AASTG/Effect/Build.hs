@@ -19,7 +19,7 @@ import Data.Kind (Type, Constraint)
 import Test.HAPI.Args (Attribute (..), Attributes, DirectAttribute (Value, Get))
 import Test.HAPI.PState (PKey(PKey))
 import Test.HAPI.Effect.Eff (Algebra(alg), type (:+:) (..), Alg, send, runEnv, Eff)
-import Test.HAPI.AASTG.Core (AASTG, Edge (Update, APICall, Assert), newAASTG, NodeID, IsValidCall)
+import Test.HAPI.AASTG.Core (AASTG, Edge (Update, APICall, Assert, Redirect), newAASTG, NodeID, IsValidCall)
 import Test.HAPI.Api (ApiName, ApiDefinition, ApiMember (injApi), newVPtr)
 import Test.HAPI.Common (Fuzzable)
 import Control.Effect.Sum (Members, Member)
@@ -37,8 +37,8 @@ import Data.Char (toLower)
 
 {-
 do
-  x <- newVar (Value 10)
-  y <- newVar Anything
+  x <- sNewVar (Value 10)
+  y <- sNewVar Anything
   fork cont1 cont2 cont3
 
 -}
@@ -73,20 +73,29 @@ runBuildAASTG = runState         (\s _ -> return $ newAASTG s) []
               . runBuildAASTGCA @api @c
 -- | Sender
 
-newVar :: forall api c a sig m. (Has (BuildAASTG api c) sig m, Fuzzable a) => m (PKey a)
-newVar = send (NewVarB @_ @_ @api @c (Proxy @a))
+sNewVar :: forall api c a sig m. (Has (BuildAASTG api c) sig m, Fuzzable a) => m (PKey a)
+sNewVar = send (NewVarB @_ @_ @api @c (Proxy @a))
 
-newNode :: forall api c sig m. Has (BuildAASTG api c) sig m => m NodeID
-newNode = send (NewNodeB @api @c)
+sNewNode :: forall api c sig m. Has (BuildAASTG api c) sig m => m NodeID
+sNewNode = send (NewNodeB @api @c)
 
-currNode :: forall api c sig m. Has (BuildAASTG api c) sig m => m NodeID
-currNode = send (CurrNodeB @api @c)
+sCurrNode :: forall api c sig m. Has (BuildAASTG api c) sig m => m NodeID
+sCurrNode = send (CurrNodeB @api @c)
 
-setNode :: forall api c sig m. Has (BuildAASTG api c) sig m => NodeID -> m ()
-setNode = send . SetNodeB @api @c
+sSetNode :: forall api c sig m. Has (BuildAASTG api c) sig m => NodeID -> m ()
+sSetNode = send . SetNodeB @api @c
 
-newEdge :: forall api c sig m. Has (BuildAASTG api c) sig m => Edge api c -> m ()
-newEdge = send . NewEdgeB
+sNewEdge :: forall api c sig m. Has (BuildAASTG api c) sig m => Edge api c -> m ()
+sNewEdge = send . NewEdgeB
+
+
+-- | Lift to EdgeCon to make it more handy (User can write Builder <%> newNode)
+
+newNode :: forall api c proxy sig m. Has (BuildAASTG api c) sig m => EdgeCon proxy api c m NodeID
+newNode _ _ = send (NewNodeB @api @c)
+
+currNode :: forall api c proxy sig m. Has (BuildAASTG api c) sig m => EdgeCon proxy api c m NodeID
+currNode _ _ = send (CurrNodeB @api @c)
 
 -- | Build Function
 
@@ -103,8 +112,8 @@ infixr 4 <%
 (<%>) :: forall api c proxy sig m a. (Has (BuildAASTG api c) sig m)
       => proxy api c -> EdgeCon proxy api c m a -> m a
 p <%> ec = do
-  s <- currNode @api @c
-  e <- newNode  @api @c
+  s <- sCurrNode @api @c
+  e <- sNewNode  @api @c
   p <% (s, e) %> ec
 
 val :: forall t api c sig m proxy. (Has (BuildAASTG api c) sig m, Fuzzable t, c t)
@@ -114,9 +123,9 @@ val v = var (Direct $ Value v)
 var :: forall t api c sig m proxy. (Has (BuildAASTG api c) sig m, Fuzzable t, c t)
     => Attribute t -> EdgeCon proxy api c m (PKey t)
 var attr (s, e) _ = do
-  x <- newVar @api @c
-  newEdge @api @c (Update s e x attr)
-  setNode @api @c e
+  x <- sNewVar @api @c
+  sNewEdge @api @c (Update s e x attr)
+  sSetNode @api @c e
   return x
 
 call_ :: forall api apis c sig m a p args proxy.
@@ -130,10 +139,6 @@ call_ :: forall api apis c sig m a p args proxy.
    -> args
    -> EdgeCon proxy apis c m ()
 call_ f args e p = void $ call @_ @apis f args e p
-  -- s <- currNode @apis @c
-  -- e <- newNode @apis @c
-  -- newEdge @apis @c (APICall s e Nothing (injApi f) args)
-  -- setNode @apis @c e
 
 call :: forall api apis c sig m a p args proxy.
        ( Has (BuildAASTG apis c) sig m
@@ -146,9 +151,9 @@ call :: forall api apis c sig m a p args proxy.
     -> args
     -> EdgeCon proxy apis c m (PKey a)
 call f args (s, e) _ = do
-  x <- newVar @apis @c
-  newEdge @apis @c (APICall s e x (injApi f) (injNP args))
-  setNode @apis @c e
+  x <- sNewVar @apis @c
+  sNewEdge @apis @c (APICall s e x (injApi f) (injNP args))
+  sSetNode @apis @c e
   return x
 
 assert :: forall apis c sig m proxy.
@@ -158,23 +163,32 @@ assert :: forall apis c sig m proxy.
     => PKey Bool
     -> EdgeCon proxy apis c m ()
 assert k (s, e) _ = do
-  newEdge @apis @c (Assert s e (Get k))
-  setNode @apis @c e
+  sNewEdge @apis @c (Assert s e (Get k))
+  sSetNode @apis @c e
+
+redirect :: forall apis c sig m proxy.
+       ( Has (BuildAASTG apis c) sig m
+       , Fuzzable Bool
+       , c Bool)
+    => EdgeCon proxy apis c m ()
+redirect (s, e) _ = do
+  sNewEdge @apis @c (Redirect s e)
+  sSetNode @apis @c e
 
 (<+>) :: forall api c sig m a b. (Has (BuildAASTG api c) sig m) => m () -> m () -> m ()
 ma <+> mb = do
-  s <- currNode @api @c
+  s <- sCurrNode @api @c
   ma
-  setNode @api @c s
+  sSetNode @api @c s
   mb
-  setNode @api @c s
+  sSetNode @api @c s
   return ()
 
 fork :: forall api c sig m a proxy. (Has (BuildAASTG api c) sig m) => proxy api c -> m a -> m a
 fork _ f = do
-  s <- currNode @api @c
+  s <- sCurrNode @api @c
   a <- f
-  setNode @api @c s
+  sSetNode @api @c s
   return a
 
 -- | Higher-level constructs
@@ -190,10 +204,12 @@ assertTrue :: forall api apis c sig m p args proxy.
           -> args
           -> EdgeCon proxy apis c m (PKey Bool)
 assertTrue f args (s, e) p = do
-  i <- newNode @apis @c
+  i <- sNewNode @apis @c
   b <- p <%(s, i)%> call f args
   p <%(i, e)%> assert b
   return b
+
+
 
 
 instance ( Has (State [Edge api c]) sig m

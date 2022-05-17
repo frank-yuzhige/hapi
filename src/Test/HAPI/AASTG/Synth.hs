@@ -8,7 +8,7 @@
 module Test.HAPI.AASTG.Synth where
 import Control.Algebra (Has, type (:+:), send)
 import Test.HAPI.Effect.Api (Api, mkCall)
-import Test.HAPI.Effect.QVS (QVS(QVS), attributes2QVSs, qvs2m, qvs2Direct)
+import Test.HAPI.Effect.QVS (QVS(QVS), attributes2QVSs, qvs2m, qvs2Direct, qvs2Directs)
 import Control.Effect.State (State, modify)
 import Test.HAPI.PState (PState, PStateSupports (record, forget), PKey (PKey))
 import Test.HAPI.Effect.Property (PropertyA, shouldBe)
@@ -26,8 +26,9 @@ import Test.HAPI.Effect.Eff ( send, debug, Alg )
 import Test.HAPI.Effect.Entropy (getEntropy)
 import Test.HAPI.AASTG.Effect.Trav (TravHandler (..), TravEvent (..), onEvent)
 import Control.Effect.Writer (tell)
-import Test.HAPI.ApiTrace (ApiTraceEntry(TraceCall), traceCall)
+import Test.HAPI.ApiTrace (ApiTraceEntry(TraceCall), traceCall, traceAssert)
 import Data.Constraint ((\\), Dict (..))
+import Text.Printf (printf)
 
 -- | Synthesize fuzzer stubs
 synthStub :: forall api c sig m. (Has (Fuzzer api c) sig m) => AASTG api c -> [m ()]
@@ -66,10 +67,10 @@ traceOneStep (ContIf s e k) = do
   return ()
   -- modify @PState (forget k)
 traceOneStep (Assert s e p) = do
-  v <- send (QVS @c (Direct p))
-  v `shouldBe` True
+  v <- qvs2Direct (QVS @c (Direct p))
+  tell (traceAssert @api @c v)
 traceOneStep (APICall s e (x :: PKey a) api args) = do
-  args <- qvs2Direct @c (attributes2QVSs args)
+  args <- qvs2Directs @c (attributes2QVSs args)
   tell (traceCall @api @c x api args)
 traceOneStep (Redirect s e) = do
   return ()
@@ -108,6 +109,7 @@ synthEntropyStub aastg = go (getStart aastg)
       let choice = edgesFrom i aastg
       if null choice then return () else do
         mw <- getEntropy (length choice)
+        debug $ printf "mw = %s" (show mw)
         case mw of
           Nothing -> do
             debug "[HAPI]: Entropy Exhausted."
@@ -116,5 +118,6 @@ synthEntropyStub aastg = go (getStart aastg)
               debug "[HAPI]: Entropy hits an invalid path."
               return ()
             Just e  -> do
+              debug "[HAPI]: Entropy hits a valid path."
               onEvent (OnEdge e)
               go (endNode e)

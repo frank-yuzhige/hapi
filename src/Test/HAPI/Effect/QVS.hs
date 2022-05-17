@@ -68,17 +68,20 @@ qvs2m (qvs :* q) = do
   s <- qvs2m q
   return (a ::* s)
 
-qvs2Direct :: (Has (QVS c :+: State PState) sig m) => NP (QVS c m) p -> m (NP DirectAttribute p)
-qvs2Direct Nil = return Nil
-qvs2Direct (qvs@(QVS a) :* q) = do
-  d <- case a of
+qvs2Direct :: (Has (QVS c :+: State PState) sig m) => QVS c m a -> m (DirectAttribute a)
+qvs2Direct qvs@(QVS a) = case a of
     Direct (Get x) -> do
       r <- gets @PState (lookUp x)
       case r of
         Nothing -> return (Get x)
         Just v  -> return (Value v)
     _              -> Value <$> send qvs
-  s <- qvs2Direct q
+
+qvs2Directs :: (Has (QVS c :+: State PState) sig m) => NP (QVS c m) p -> m (NP DirectAttribute p)
+qvs2Directs Nil = return Nil
+qvs2Directs (qvs :* q) = do
+  d <- qvs2Direct qvs
+  s <- qvs2Directs q
   return (d :* s)
 
 
@@ -148,18 +151,26 @@ instance ( Has (Orchestration QVSSupply) sig m
         Direct (Value v) -> do
           return (ctx $> v)
         Anything     -> do
-          v <- next attr
+          v <- next (show attr)
           return (ctx $> v)
         IntRange l r -> do
-          v <- next attr
-          return (ctx $> (l + v `mod` (r - l + 1)))
+          v <- next (show attr)
+          return (ctx $> sampleRange l r v)
         Range    l r -> do
-          v <- next attr  -- FIXME
-          return (ctx $> v)
+          v <- next (show attr)
+          return (ctx $> sampleRange l r v)
         AnyOf xs     -> do
-          v <- next (Anything @Int)
+          v <- next (show attr)
           let a = xs !! (v `mod` length xs)
           resolveQVS (QVS a)
         where
-          next :: Fuzzable a => Attribute a -> m a
-          next attr = runError @OrchestrationError (nextInstruction @QVSSupply) >>= liftEither . mapLeft (QVSError (show attr) . show)
+          next attr = do
+            x <- nextInstruction @QVSSupply
+            case x of
+              Nothing -> throwError (QVSError attr "QVS supplier exhausted")
+              Just  a -> return a
+
+          sampleRange l r v = toEnum $ l' + (v `mod` (r' - l' + 1))
+            where
+              l' = fromEnum l
+              r' = fromEnum r

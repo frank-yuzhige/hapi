@@ -31,7 +31,6 @@ import qualified Data.ByteString as BS
 import Data.Word (Word8)
 import Test.HAPI.Common (Fuzzable)
 import Test.HAPI.ApiTrace (ApiTrace)
-import Test.HAPI.Util.ByteSupplier (mkBiDirBS, biDirLength, BiDirBS (BiDirBS))
 import qualified Control.Carrier.Trace.Ignoring as IGNORING
 import qualified Control.Carrier.Trace.Printing as PRINTING
 import Test.HAPI.AASTG.Effect.Trav (runTrav)

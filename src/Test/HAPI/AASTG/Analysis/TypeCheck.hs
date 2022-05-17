@@ -83,7 +83,7 @@ typeCheck aastg = do
         APICall  _ _ k f args -> checkArgs edge args
         Redirect _ _          -> return ()
       where
-        ctx            = ctxs IM.! i
+        ctx = ctxs IM.! i
 
         checkArgs :: forall p. Edge api c -> Attributes p -> m ()
         checkArgs edge Nil       = return ()

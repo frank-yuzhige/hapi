@@ -12,7 +12,7 @@ import Control.Carrier.State.Church (runState, run)
 import Control.Effect.State (gets, State, modify)
 import Control.Algebra (Has)
 import Control.Monad (forM, forM_)
-import Test.HAPI.AASTG.Effect.Build (BuildAASTG, newNode, setNode, currNode, newEdge, runBuildAASTG)
+import Test.HAPI.AASTG.Effect.Build (BuildAASTG, newNode, currNode, runBuildAASTG, sSetNode, sNewEdge, sNewNode, sCurrNode)
 import Data.Functor.Contravariant (phantom)
 import Control.Effect.Labelled (HasLabelled, runLabelled)
 import Data.IntMap (IntMap)
@@ -46,11 +46,11 @@ unrollCycle maxDepth aastg
       where
         trav 0 _ _ = return ()
         trav d i h = do
-          i' <- currNode @api @c
+          i' <- sCurrNode @api @c
           forM_ (edgesFrom i aastg) $ \edge -> do
             let e = endNode edge
-            e' <- newNode @api @c
-            setNode @api @c e'
-            newEdge (changeEdgeNode i' e' edge)
+            e' <- sNewNode @api @c
+            sSetNode @api @c e'
+            sNewEdge (changeEdgeNode i' e' edge)
             trav (d - 1) e h
-            setNode @api @c i'
+            sSetNode @api @c i'

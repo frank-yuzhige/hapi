@@ -32,7 +32,6 @@ library
       Test.HAPI.AASTG.Analysis.Add
       Test.HAPI.AASTG.Analysis.Coalesce
       Test.HAPI.AASTG.Analysis.Cycle
-      Test.HAPI.AASTG.Analysis.Dependence
       Test.HAPI.AASTG.Analysis.Nodes
       Test.HAPI.AASTG.Analysis.Path
       Test.HAPI.AASTG.Analysis.ProcCtx
@@ -72,7 +71,6 @@ library
       Test.HAPI.Effect.QVS
       Test.HAPI.HLib.HLibPrelude
       Test.HAPI.HLib.HLibPtr
-      Test.HAPI.Lib
       Test.HAPI.PrimApi
       Test.HAPI.PState
       Test.HAPI.Run

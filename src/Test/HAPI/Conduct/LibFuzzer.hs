@@ -24,7 +24,7 @@ import Data.ByteString (ByteString)
 import Test.HAPI.Effect (PropertyError, PropertyA, runEnvIO, runProperty, runApiFFI, runOrchestrationViaBytes, QVSFromOrchestrationAC (runQVSFromOrchestrationAC), EntropyAC (runEntropyAC), runApiTrace, QVSError (QVSError))
 import Test.HAPI.ApiTrace (ApiTrace)
 import qualified Control.Carrier.Trace.Printing as PRINTING
-import Test.HAPI.Util.ByteSupplier (BiDirBS(..), mkBiDirBS, biDirLength)
+import Test.HAPI.Util.ByteSupplier (EQSupplier (EQSupplier), mkEQBS, BiDir (..), ByteSupplier (remainLen))
 import qualified Test.HAPI.PState as PS
 import Test.HAPI.Effect.Orchestration.Labels (QVSSupply, EntropySupply)
 import Control.Carrier.Error.Church (runError)
@@ -89,7 +89,7 @@ runFuzzTest :: forall api c sig m.
           -> ByteString
           -> m ()
 runFuzzTest aastg bs
-  | entropy < 128 || qvs < 128 = return ()
+  | entropy < 64 || qvs < 32 = return ()
   | otherwise
     = runEnvIO
     $ void
@@ -99,17 +99,17 @@ runFuzzTest aastg bs
     $ runForeign (fail . show)
     $ runApiFFI @api
     $ runState (\s a -> return a) PS.emptyPState
-    $ runState @BiDirBS (\s a -> return a) supply
-    $ runOrchestrationViaBytes @QVSSupply     @BiDirBS (fail . show)
+    $ runState @EQSupplier (\s a -> return a) supply
+    $ runOrchestrationViaBytes @QVSSupply     @EQSupplier
     $ runQVSFromOrchestrationAC @c
-    $ runOrchestrationViaBytes @EntropySupply @BiDirBS (fail . show)
+    $ runOrchestrationViaBytes @EntropySupply @EQSupplier
     $ runEntropyAC
     $ runTrav @api @c execEntropyFuzzerHandler
       stub
   where
     stub           = synthEntropyStub @api @c aastg
-    supply         = mkBiDirBS bs
-    (qvs, entropy) = biDirLength supply
+    supply         = mkEQBS bs
+    [entropy, qvs] = map (`remainLen` supply) [FW, BW]
 
 runFuzzTrace :: forall api c sig m.
               ( MonadIO m
@@ -122,7 +122,7 @@ runFuzzTrace :: forall api c sig m.
            -> ByteString
            -> m ()
 runFuzzTrace aastg bs
-  | entropy < 128 || qvs < 128 = return ()
+  | entropy < 64 || qvs < 32 = return ()
   | otherwise
     = do
       trace <- runEnvIO
@@ -134,10 +134,10 @@ runFuzzTrace aastg bs
         $ runForeign (fail . show)
         $ runApiTrace @api
         $ runState (\s a -> return a) PS.emptyPState
-        $ runState @BiDirBS (\s a -> return a) supply
-        $ runOrchestrationViaBytes @QVSSupply     @BiDirBS (fail . show)
+        $ runState @EQSupplier (\s a -> return a) supply
+        $ runOrchestrationViaBytes @QVSSupply     @EQSupplier
         $ runQVSFromOrchestrationAC @c
-        $ runOrchestrationViaBytes @EntropySupply @BiDirBS (fail . show)
+        $ runOrchestrationViaBytes @EntropySupply @EQSupplier
         $ runEntropyAC
         $ runTrav @api @c execEntropyTraceHandler
         stub
@@ -147,5 +147,5 @@ runFuzzTrace aastg bs
       return ()
   where
     stub           = synthEntropyStub @api @c aastg
-    supply         = mkBiDirBS bs
-    (qvs, entropy) = biDirLength supply
+    supply         = mkEQBS bs
+    [entropy, qvs] = map (`remainLen` supply) [FW, BW]

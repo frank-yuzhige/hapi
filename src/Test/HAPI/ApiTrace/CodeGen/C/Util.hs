@@ -289,6 +289,9 @@ sizeOfDecl decl = CSizeofType decl undefNode
 malloc :: CExpr -> CExpr
 malloc expr = fromString "malloc" # [expr]
 
+cAssert :: CExpr -> CExpr
+cAssert expr = fromString "assert" # [expr]
+
 castTo :: CExpr -> CDecl -> CExpr
 exp `castTo` ty = CCast ty exp undefNode
 

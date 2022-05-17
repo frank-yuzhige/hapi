@@ -92,6 +92,7 @@ instance ( Algebra sig m
          => Algebra (Api api :+: sig) (ApiFFIAC api m) where
   alg hdl sig ctx = ApiFFIAC $ case sig of
     L (MkCall call args) -> do
+      liftIO $ putStrLn $ showApiFromPat call (args2Pat args)
       r <- evalForeign call args
       return (ctx $> r)
     R other -> alg (runApiFFIAC . hdl) other ctx

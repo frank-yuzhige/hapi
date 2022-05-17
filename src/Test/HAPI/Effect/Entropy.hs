@@ -28,6 +28,8 @@ import Data.ByteString (ByteString)
 import Test.HAPI.Util.TH (fatalError, FatalErrorKind (..))
 import Control.Carrier.Error.Either (runError, liftEither)
 import Data.Either.Combinators (mapLeft)
+import Data.Word (Word8)
+import Test.HAPI.Effect.Eff
 
 data EntropySupplier (m :: Type -> Type) a where
   GetEntropy :: Int -> EntropySupplier m (Maybe Int)
@@ -38,18 +40,17 @@ getEntropy = send . GetEntropy
 newtype EntropyAC m a = EntropyAC { runEntropyAC :: m a }
   deriving (Functor, Applicative, Monad, MonadFail)
 
-instance ( Algebra sig m
-         , MonadFail m
+instance ( Alg sig m
          , Members (Orchestration EntropySupply) sig)
          => Algebra (EntropySupplier :+: sig) (EntropyAC m) where
   alg hdl sig ctx = EntropyAC $ case sig of
     L (GetEntropy r)
       | r <= 0    -> fatalError 'alg FATAL_ERROR
         "Attempt to get an negative entropy value. If you are not using the internal EntropySupplier API, please file this as a BUG."
-      | r == 1    -> return (ctx $> Just 0)
+      -- We use entropy bytestring's length to indicate how long the traversal is.
+      -- So even if we only have one out edge, we still eat a byte to avoid infinite loop.
       | otherwise -> do
-        mi <- runError @OrchestrationError (nextInstruction @EntropySupply @Int)
-        case mi of
-          Left _  -> return (ctx $> Nothing)
-          Right i -> return (ctx $> Just (i `mod` r))
+        mi <- nextInstruction @EntropySupply @Word8
+        debugIO $ print mi
+        return (ctx $> ((\i -> fromIntegral i `mod` r) <$> mi))
     R other -> alg (runEntropyAC . hdl) other ctx

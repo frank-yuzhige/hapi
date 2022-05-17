@@ -10,6 +10,7 @@
 {-# HLINT ignore "Redundant $" #-}
 {-# LANGUAGE TypeOperators #-}
 {-# HLINT ignore "Use let" #-}
+{-# LANGUAGE ConstraintKinds #-}
 
 module HAPIExample.SimpleArith where
 
@@ -70,6 +71,8 @@ instance HasForeignDef ArithApi where
 
 
 type A = ArithApi :$$: HLibPrelude
+type C = Fuzzable :<>: CCodeGen
+
 
 graph1 :: forall c. BasicSpec c => AASTG A c
 graph1 = runEnv $ runBuildAASTG $ do
@@ -127,11 +130,11 @@ cograph = runEnv $ coalesceAASTGs 500 [graph1, graph2, graph3, graph4, graph5, g
 
 diamond :: forall c. BasicSpec c => AASTG A c
 diamond = runEnv $ runBuildAASTG $ do
-  n1 <- currNode @A @c
-  n2 <- newNode @A @c
-  n3 <- newNode @A @c
-  n4 <- newNode @A @c
-  n5 <- newNode @A @c
+  n1 <- p <%> currNode
+  n2 <- p <%> newNode
+  n3 <- p <%> newNode
+  n4 <- p <%> newNode
+  n5 <- p <%> newNode
   x <- p <%(n1,n2)%> var Anything
   p <%(n2,n3)%> call Add (getVar x, value 1)
   p <%(n3,n5)%> call Add (getVar x, value 2)
@@ -142,12 +145,12 @@ diamond = runEnv $ runBuildAASTG $ do
 
 cyc :: forall c. BasicSpec c => AASTG A c
 cyc = runEnv $ runBuildAASTG $ do
-  n1 <- currNode @A @c
-  n2 <- newNode @A @c
-  n3 <- newNode @A @c
-  n4 <- newNode @A @c
-  n5 <- newNode @A @c
-  n6 <- newNode @A @c
+  n1 <- p <%> currNode
+  n2 <- p <%> newNode
+  n3 <- p <%> newNode
+  n4 <- p <%> newNode
+  n5 <- p <%> newNode
+  n6 <- p <%> newNode
   x  <- p <%(n1,n2)%> var Anything
   p <%(n4,n3)%> call Add (getVar x, value 4)
   p <%(n3,n4)%> call Add (getVar x, value 2)
@@ -161,10 +164,10 @@ cyc = runEnv $ runBuildAASTG $ do
 
 cyc2 :: forall c. BasicSpec c => AASTG A c
 cyc2 = runEnv $ runBuildAASTG $ do
-  n1 <- currNode @A @c
-  n2 <- newNode @A @c
-  n3 <- newNode @A @c
-  n4 <- newNode @A @c
+  n1 <- p <%> currNode
+  n2 <- p <%> newNode
+  n3 <- p <%> newNode
+  n4 <- p <%> newNode
   x <- p <%(n1,n2)%> var Anything
   p <%(n2,n3)%> call Add (getVar x, value 1)
   p <%(n3,n4)%> call Add (getVar x, value 2)
@@ -173,10 +176,10 @@ cyc2 = runEnv $ runBuildAASTG $ do
 
 cyc3 :: forall c. BasicSpec c => AASTG A c
 cyc3 = runEnv $ runBuildAASTG $ do
-  n1 <- currNode @A @c
-  n2 <- newNode @A @c
-  n3 <- newNode @A @c
-  n4 <- newNode @A @c
+  n1 <- p <%> currNode
+  n2 <- p <%> newNode
+  n3 <- p <%> newNode
+  n4 <- p <%> newNode
   x <- p <%(n1,n2)%> var Anything
   p <%(n2,n3)%> call Add (getVar x, value 1)
   p <%(n3,n4)%> call Sub (getVar x, value 2)
@@ -187,9 +190,9 @@ cyc3 = runEnv $ runBuildAASTG $ do
 
 cyc4 :: forall c. BasicSpec c => AASTG A c
 cyc4 = runEnv $ runBuildAASTG $ do
-  n1 <- currNode @A @c
-  n2 <- newNode @A @c
-  n3 <- newNode @A @c
+  n1 <- p <%> currNode
+  n2 <- p <%> newNode
+  n3 <- p <%> newNode
   x <- p <%(n1,n2)%> var Anything
   p <%(n2,n3)%> call Add (getVar x, value 1)
   p <%(n3,n2)%> call Sub (getVar x, value 2)
@@ -197,10 +200,10 @@ cyc4 = runEnv $ runBuildAASTG $ do
 
 invalid :: forall c. BasicSpec c => AASTG A c
 invalid = runEnv $ runBuildAASTG $ do
-  n1 <- currNode @A @c
-  n2 <- newNode @A @c
-  n3 <- newNode @A @c
-  n4 <- newNode @A @c
+  n1 <- p <%> currNode
+  n2 <- p <%> newNode
+  n3 <- p <%> newNode
+  n4 <- p <%> newNode
   x <- p <%(n1,n2)%> var Anything
   y <- p <%(n3,n2)%> call Sub (getVar x, value 2)
   p <%(n2,n3)%> call Add (getVar x, getVar y)
@@ -216,6 +219,30 @@ op' n g1 g2 = runEnvIO @IO $ do
   debug   $ show h
   return c2
 
+
+addAssoc :: AASTG A C
+addAssoc = runEnv $ runBuildAASTG $ do
+  s <- p <%> currNode
+  a <- p <%> var @Int Anything
+  b <- p <%> var @Int Anything
+  x <- p <%> call Add (getVar a, getVar b)
+  y <- p <%> call Add (getVar b, getVar a)
+  p <%> assertTrue (HLib.==) (getVar x, getVar y)
+  s' <- p <%> currNode
+  p <%(s', s)%> redirect
+  where p = Building @A @C
+
+mulAssoc :: AASTG A C
+mulAssoc = runEnv $ runBuildAASTG $ do
+  s <- p <%> currNode
+  a <- p <%> var @Int Anything
+  b <- p <%> var @Int Anything
+  x <- p <%> call Mul (getVar a, getVar b)
+  y <- p <%> call Mul (getVar b, getVar a)
+  p <%> assertTrue (HLib.==) (getVar x, getVar y)
+  s' <- p <%> currNode
+  p <%(s', s)%> redirect
+  where p = Building @A @C
 
 -- c1 = op graph1 graph2
 -- c2 = c1 >>= \g -> op g graph3
