@@ -278,7 +278,7 @@ q = do
   -- y <- runEnvIO @IO $ deriveProcCtxs x
   -- print y
 
-shite = pretty $ entryFun @ArithApi @CCodeGen "main" (traceCall (PKey "x") Add (Value 10 :* Value 20 :* Nil))
+shite = pretty $ entryFun @ArithApi @(CCodeGen :<>: Fuzzable) "main" (traceCall (PKey "x") Add (Value 10 :* Value 20 :* Nil))
 
 -- test = do
 --   previewAASTG graph6

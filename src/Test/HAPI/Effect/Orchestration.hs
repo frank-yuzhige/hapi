@@ -64,10 +64,10 @@ instance ( Alg sig m
          , Members (State supply) sig)
       => Algebra (Orchestration label :+: sig) (OrchestrationViaBytesAC label supply m) where
   alg hdl sig ctx = OrchestrationViaBytesAC $ case sig of
-    L (NextInstruction :: Orchestration label n a) -> do
-      e <- gets @supply (eatBytes (labelConsumeDir @label) (S.get @a))
+    L NextInstruction -> do
+      e <- gets @supply (eatBytes (labelConsumeDir @label) S.get)
       debug $ printf "Orc = %s" (show e)
       case e of
         Left err          -> return (ctx $> Nothing)
-        Right (a, supply) -> put supply >> return (ctx $> a)
+        Right (a, supply) -> put supply >> return (ctx $> Just a)
     R other    -> alg (runOrchestrationViaBytesAC . hdl) other ctx

@@ -1,12 +1,16 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE TypeOperators #-}
+
 module Test.HAPI.ApiTrace.CodeGen.C.DataType where
 import Test.HAPI.ApiTrace.TyConst (TyConst(..))
 import Language.C (CExpr, CDeclSpec, CDerivedDeclr, CDeclr)
 import Test.HAPI.ApiTrace.CodeGen.C.Util
+import Data.Data (Typeable)
+import Test.HAPI.Constraint (type (:<>:))
 
-type CCodeGen = TyConst CExpr (CDeclSpec, CDeclr -> CDeclr)
+type CCodeGen = TyConst CExpr (CDeclSpec, CDeclr -> CDeclr) :<>: Typeable
 
 instance TyConst CExpr (CDeclSpec, CDeclr -> CDeclr) Int where
   toConst  = cIntConst . fromIntegral

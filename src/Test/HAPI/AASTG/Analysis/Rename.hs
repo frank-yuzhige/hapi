@@ -6,6 +6,7 @@
 {-# LANGUAGE NoMonoLocalBinds #-}
 {-# OPTIONS_GHC -Wno-simplifiable-class-constraints #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 
 module Test.HAPI.AASTG.Analysis.Rename where

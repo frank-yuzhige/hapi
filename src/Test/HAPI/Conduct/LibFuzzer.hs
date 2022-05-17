@@ -115,8 +115,7 @@ runFuzzTrace :: forall api c sig m.
               ( MonadIO m
               , MonadFail m
               , Algebra sig m
-              , c :>>>: Fuzzable
-              , c :>>>: CCodeGen
+              , CMembers (CCodeGen :<>: Fuzzable) c
               , ValidApiDef api)
            => AASTG api c
            -> ByteString
