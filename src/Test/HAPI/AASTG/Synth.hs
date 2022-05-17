@@ -12,7 +12,7 @@ import Test.HAPI.Effect.QVS (QVS(QVS), attributes2QVSs, qvs2m, qvs2Direct)
 import Control.Effect.State (State, modify)
 import Test.HAPI.PState (PState, PStateSupports (record, forget), PKey (PKey))
 import Test.HAPI.Effect.Property (PropertyA, shouldBe)
-import Test.HAPI.AASTG.Core (AASTG (AASTG, getStart), Edge (Update, Forget, Assert, APICall, Redirect), endNode, NodeID, edgesFrom)
+import Test.HAPI.AASTG.Core (AASTG (AASTG, getStart), Edge (..), endNode, NodeID, edgesFrom)
 import Test.HAPI.Args (Attribute(..), getVar)
 
 import qualified Data.IntMap as IM
@@ -42,8 +42,10 @@ synthOneStep :: forall api c sig m. (Has (Fuzzer api c) sig m) => Edge api c -> 
 synthOneStep (Update s e k a) = do
   v <- send (QVS @c a)
   modify @PState (record k v)
-synthOneStep (Forget s e k) = do
-  modify @PState (forget k)
+synthOneStep (ContIf s e p) = do
+  return ()
+  -- v <- send (QVS @c (Direct p))
+  -- modify @PState (forget k)
 synthOneStep (Assert s e p) = do
   v <- send (QVS @c (Direct p))
   v `shouldBe` True
@@ -60,8 +62,9 @@ traceOneStep :: forall api c sig m. (Has (EntropyTracer api c) sig m) => Edge ap
 traceOneStep (Update s e k a) = do
   v <- send (QVS @c a)
   modify @PState (record k v)
-traceOneStep (Forget s e k) = do
-  modify @PState (forget k)
+traceOneStep (ContIf s e k) = do
+  return ()
+  -- modify @PState (forget k)
 traceOneStep (Assert s e p) = do
   v <- send (QVS @c (Direct p))
   v `shouldBe` True

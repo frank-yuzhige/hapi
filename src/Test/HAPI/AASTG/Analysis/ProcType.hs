@@ -30,7 +30,6 @@ import Test.HAPI.Util.Empty (liftMaybe)
 import Control.Carrier.Cull.Church (NonDet)
 import Control.Effect.Choose ((<|>))
 
-import Test.HAPI.AASTG.Analysis.Dependence (Dep(..))
 import qualified Data.TypeRepMap as TM
 import qualified Data.IntMap.Strict as IM
 import qualified Data.IntSet as IS
@@ -85,6 +84,10 @@ data ProcType
   | Par  [ProcType]
   | Mu   SVar ProcType
   | Zero
+
+data Dep t where
+  DepAttr ::                                              Attribute t               -> Dep t
+  DepCall :: (ApiName api, Typeable p, All Fuzzable p) => PKey t -> api p t -> NP Attribute p -> Dep t
 
 $(makeLenses ''SubTypeCtx)
 
@@ -164,7 +167,7 @@ inferProcTypeUB aastg
                   , let t' = case edge of
                           Update s e k a ->
                             Act (ActGen k a) t
-                          Forget s e x   ->
+                          ContIf s e x   ->
                             fatalError 'inferProcType FATAL_ERROR "Unsupported construct 'forget'"
                           Assert n j p ->
                             Act (ActAssert p) t
@@ -346,9 +349,9 @@ getVarSubFromArgs look d1 d2 (a :* as) (b :* bs) = do
       | otherwise = empty
     -- Api calls are the same, iff the function they calls are the same, and all arguments are pairwise-effectively the same.
     -- TODO: Same api call, different location?
-    unify (DepCall f fa) (DepCall g ga) = do
+    unify (DepCall x1 f fa) (DepCall x2 g ga) = do
       (_, proof, _) <- liftMaybe $ f `apiEqProofs` g
-      getVarSubFromArgs look d1 d2 (castWith (apply Refl proof) fa) ga
+      TM.adjust (SE . HM.insert x2 x1 . unSE) <$> getVarSubFromArgs look d1 d2 (castWith (apply Refl proof) fa) ga
     -- Otherwise, not unifiable (e.g. x <-> some attr, not unifiable since x could be used in later context)
     unify _ _ = empty
 
@@ -374,7 +377,7 @@ lookupPKInType look k = go IS.empty
         ActCall x api as -> do
           proof <- liftMaybe $ inner <$> testEquality (typeOf x) (typeOf k)
           if castWith (apply Refl proof) x == k
-            then return $ castWith (apply Refl proof) $ DepCall api as
+            then return $ castWith (apply Refl proof) $ DepCall x api as
             else go history t
         ActAssert p -> do
           go history t
@@ -432,3 +435,16 @@ deriving instance Show SubTypeCtx
 
 deriving instance Show UnboundedProcTypeMap
 deriving instance Eq   UnboundedProcTypeMap
+
+instance (Show t) => Show (Dep t) where
+  show (DepAttr at)     = "DepAttr(" <> show at  <> ")"
+  show (DepCall x api np) = "DepCall(" <> show x <> "=" <> showApiFromPat api (attrs2Pat np) <> ")"
+
+instance (Eq t, Typeable t) => Eq (Dep t) where
+  (DepAttr a)     == (DepAttr b)     = a == b
+  (DepCall x f a) == (DepCall y g b) = case f `apiEqProofs` g of
+    Nothing            -> False
+    Just (_, proof, _) -> castWith (apply Refl proof) a `eqAttributes` b
+                       && x == y
+  _ == _ = False
+

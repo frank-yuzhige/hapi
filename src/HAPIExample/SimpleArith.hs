@@ -241,7 +241,7 @@ previewD = do
   previewAASTG =<< op' 4 a b
 
 q = do
-  test <- runEnvIO $ return (invalid @Fuzzable) -- coalesceAASTGs 500 [cyc @Fuzzable, cyc2, cyc3]
+  test <- runEnvIO $ coalesceAASTGs 500 [cyc @Fuzzable, cyc2, cyc3]
   previewAASTG test
   -- n <- runEnvIO @IO $ inferUngroundProcType test
   -- print n

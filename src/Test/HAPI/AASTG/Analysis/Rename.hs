@@ -56,7 +56,7 @@ renameNodesInMap nrm = IM.mapKeys (nrm IM.!) . IM.map (renameNodesInEdge nrm <$>
 renameNodesInEdge :: NodeRenameMap -> Edge api c -> Edge api c
 renameNodesInEdge nrm = \case
   Update   s e k a          -> Update   (look s) (look e) k a
-  Forget   s e k            -> Forget   (look s) (look e) k
+  ContIf   s e k            -> ContIf   (look s) (look e) k
   Assert   s e p            -> Assert   (look s) (look e) p
   APICall  s e mx api args  -> APICall  (look s) (look e) mx api args
   Redirect s e              -> Redirect (look s) (look e)
@@ -119,7 +119,8 @@ renameVarsInMap vsb = IM.map (renameVarsInEdge vsb <$>)
 renameVarsInEdge :: VarSubstitution -> Edge api c -> Edge api c
 renameVarsInEdge vsb = \case
   Update   s e k a        -> Update   s e (look k) a
-  Forget   s e k          -> Forget   s e (look k)
+  ContIf   s e (Get x)    -> ContIf   s e (Get (look x))
+  ContIf   s e p          -> ContIf   s e p
   Assert   s e (Get x)    -> Assert   s e (Get (look x))
   Assert   s e p          -> Assert   s e p
   APICall  s e x api args -> APICall  s e (look x) api (renameVarsInAttrs vsb args)

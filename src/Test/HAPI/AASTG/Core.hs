@@ -48,11 +48,10 @@ data Edge apis c where
            -> PKey a            -- Variable
            -> Attribute a       -- Attribute of the value
            -> Edge api c
-  -- | TODO can you forget?
-  Forget   :: forall a api c. (Fuzzable a, c a)
+  ContIf   :: forall a api c. (Fuzzable Bool, c Bool)  -- TODO: Not yet supported
            => NodeID            -- From
            -> NodeID            -- To
-           -> PKey a            -- Variable
+           -> DirectAttribute Bool
            -> Edge api c
   -- TODO better assertion
   Assert   :: forall a api c. (Fuzzable Bool, c Bool)
@@ -89,14 +88,14 @@ newAASTG es = AASTG 0 (groupEdgesOn startNode es) (groupEdgesOn endNode es)
 
 startNode :: Edge api c -> NodeID
 startNode (Update s _ _ _) = s
-startNode (Forget s _ _)   = s
+startNode (ContIf s _ _)   = s
 startNode (Assert s _ _) = s
 startNode (APICall s _ _ _ _) = s
 startNode (Redirect s _ ) = s
 
 endNode :: Edge api c -> NodeID
 endNode (Update _ e _ _) = e
-endNode (Forget _ e _)   = e
+endNode (ContIf _ e _)   = e
 endNode (Assert _ e _) = e
 endNode (APICall _ e _ _ _) = e
 endNode (Redirect _ e) = e
@@ -129,7 +128,7 @@ edgesTo2EdgesFrom = groupEdgesOn startNode . concat . IM.elems
 changeEdgeNode :: NodeID -> NodeID -> Edge api c -> Edge api c
 changeEdgeNode i j = \case
   Update   _ _ k  a        -> Update   i j k  a
-  Forget   _ _ k           -> Forget   i j k
+  ContIf   _ _ k           -> ContIf   i j k
   Assert   _ _ p           -> Assert   i j p
   APICall  _ _ mx api args -> APICall  i j mx api args
   Redirect _ _             -> Redirect i j
@@ -137,7 +136,7 @@ changeEdgeNode i j = \case
 showEdgeLabel :: Edge api c -> String
 showEdgeLabel = \case
   Update   s e k  a        -> "update " <> getPKeyID k <> " = " <> show a
-  Forget   s e k           -> "forget " <> getPKeyID k
+  ContIf   s e p           -> "if "     <> show p
   Assert   s e p           -> "assert " <> show p
   APICall  s e mx api args -> ""        <> getPKeyID mx <> " = " <> showApiFromPat api (attrs2Pat args) -- apiName api <> "(" <> intercalate ", " (showAttributes args) <> ")"
   Redirect s e             -> "redir "
@@ -166,8 +165,8 @@ instance Hashable (Edge api c) where
     `hashWithSalt` e
     `hashWithSalt` k
     `hashWithSalt` a
-  hashWithSalt salt (Forget  s e x) = salt
-    `hashWithSalt` "f"
+  hashWithSalt salt (ContIf  s e x) = salt
+    `hashWithSalt` "i"
     `hashWithSalt` s
     `hashWithSalt` e
     `hashWithSalt` x

@@ -8,9 +8,8 @@
 
 module Test.HAPI.AASTG.Analysis.Coalesce where
 
-import Test.HAPI.AASTG.Core (AASTG (AASTG, getEdgesFrom, getEdgesTo, getStart), NodeID, Edge (Update, Forget, Assert, APICall), allNodes, edgesFrom, edgesTo2EdgesFrom, startNode, edgesFrom2EdgesTo, endNode)
+import Test.HAPI.AASTG.Core (AASTG (AASTG, getEdgesFrom, getEdgesTo, getStart), NodeID, Edge (..), allNodes, edgesFrom, edgesTo2EdgesFrom, startNode, edgesFrom2EdgesTo, endNode)
 import Test.HAPI.AASTG.Analysis.Rename (normalizeNodes, maxNodeID, renameNodesInEdge, VarSubstitution, emptyVarSub, renameNodesViaOffset, renameVars, isIdempotentVarSub, renameVarsInEdge)
-import Test.HAPI.AASTG.Analysis.Dependence (pathDeps, pathDegradedDeps, DependenceMap, DegradedDepMap, applyVarSubstitution)
 import Test.HAPI.AASTG.Analysis.Path (Path(pathCalls, pathEndNode), APath)
 import Data.List ( partition, (\\), sortBy )
 import Data.IntMap (IntMap)

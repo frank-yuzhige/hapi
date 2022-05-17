@@ -10,7 +10,7 @@
 
 module Test.HAPI.AASTG.Analysis.TypeCheck where
 
-import Test.HAPI.AASTG.Core (AASTG (AASTG), NodeID, Edge (Update, APICall, Assert, Forget, Redirect), edgesFrom, endNode, allNodes)
+import Test.HAPI.AASTG.Core (AASTG (AASTG), NodeID, Edge (..), edgesFrom, endNode, allNodes)
 import Test.HAPI.PState (PKey(getPKeyID, PKey))
 import Test.HAPI.Args (Attributes, Attribute (..), DirectAttribute (Get))
 import Test.HAPI.Common (Fuzzable)
@@ -78,7 +78,7 @@ typeCheck aastg = do
     check ctxs i = do
       forM_ (edgesFrom i aastg) $ \edge -> case edge of
         Update   _ _ k a      -> checkAttr edge a
-        Forget   _ _ k        -> return ()
+        ContIf   _ _ p        -> checkAttr edge (Direct p)
         Assert   _ _ p        -> checkAttr edge (Direct p)
         APICall  _ _ k f args -> checkArgs edge args
         Redirect _ _          -> return ()
