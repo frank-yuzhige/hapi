@@ -21,7 +21,7 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Test.HAPI.Constraint (type (:>>>:))
 import Control.Algebra (Algebra)
 import Data.ByteString (ByteString)
-import Test.HAPI.Effect (PropertyError, PropertyA, runEnvIO, runProperty, runApiFFI, runOrchestrationViaBytes, QVSFromOrchestrationAC (runQVSFromOrchestrationAC), EntropyAC (runEntropyAC), runApiTrace)
+import Test.HAPI.Effect (PropertyError, PropertyA, runEnvIO, runProperty, runApiFFI, runOrchestrationViaBytes, QVSFromOrchestrationAC (runQVSFromOrchestrationAC), EntropyAC (runEntropyAC), runApiTrace, QVSError (QVSError))
 import Test.HAPI.ApiTrace (ApiTrace)
 import qualified Control.Carrier.Trace.Printing as PRINTING
 import Test.HAPI.Util.ByteSupplier (BiDirBS(..), mkBiDirBS, biDirLength)
@@ -93,6 +93,7 @@ runFuzzTest aastg bs
   | otherwise
     = runEnvIO
     $ void
+    $ runError @QVSError      (fail . show) pure
     $ runError @PropertyError (fail . show) pure
     $ runProperty @PropertyA
     $ runForeign (fail . show)
@@ -125,6 +126,7 @@ runFuzzTrace aastg bs
   | otherwise
     = do
       trace <- runEnvIO
+        $ runError @QVSError      (fail . show) pure
         $ runError @PropertyError (fail . show) pure
         $ runProperty @PropertyA
         $ runWriter @(ApiTrace api c) (\w _ -> return w)

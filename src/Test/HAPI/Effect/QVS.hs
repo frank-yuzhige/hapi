@@ -38,17 +38,23 @@ import Data.SOP ( Proxy(Proxy), NP(..), All, hcmap )
 import Test.HAPI.Args (Args, pattern (::*), Attribute (..), validate, DirectAttribute (..))
 import Data.SOP.Dict (mapAll)
 import Data.Serialize (Serialize)
-import Test.HAPI.Effect.Orchestration (Orchestration, nextInstruction)
+import Test.HAPI.Effect.Orchestration (Orchestration, nextInstruction, OrchestrationError)
 import Test.HAPI.Effect.Orchestration.Labels (QVSSupply)
 import Data.Type.Equality (castWith, TestEquality (testEquality), apply)
 import Type.Reflection ( TypeRep, typeOf, Typeable )
 import Test.HAPI.Constraint (type (:>>>:), castC)
 import Data.Constraint ((\\), mapDict, Dict (..))
+import Control.Effect.Error (Error, liftEither, throwError)
+import Control.Carrier.Error.Either (runError)
+import Data.Either.Combinators (mapLeft)
 
 
 -- Quantified Value Supplier
 data QVS (c :: Type -> Constraint) (m :: Type -> Type) a where
   QVS :: (c a) => Attribute a -> QVS c m a
+
+data QVSError = QVSError { causedAttribute :: String, errorMessage :: String }
+  deriving Show
 
 -- | Convert attribute to QVS
 attributes2QVSs :: forall c p m. (All c p) => NP Attribute p -> NP (QVS c m) p
@@ -123,7 +129,9 @@ instance (Algebra sig m, MonadIO m, c :>>>: Read) => Algebra (QVS c :+: sig) (QV
 newtype QVSFromOrchestrationAC (c :: Type -> Constraint) m a = QVSFromOrchestrationAC { runQVSFromOrchestrationAC :: m a }
   deriving (Functor, Applicative, Monad, MonadFail)
 
-instance ( Has (Orchestration QVSSupply :+: State PState) sig m
+instance ( Has (Orchestration QVSSupply) sig m
+         , Has (State PState)            sig m
+         , Has (Error QVSError)          sig m
          , c :>>>: Fuzzable)
       => Algebra (QVS c :+: sig) (QVSFromOrchestrationAC c m) where
   alg hdl sig ctx = QVSFromOrchestrationAC $ case sig of
@@ -133,19 +141,25 @@ instance ( Has (Orchestration QVSSupply :+: State PState) sig m
       resolveQVS (QVS attr) = case attr of
         Direct (Get k)   -> do
           v <- gets @PState (lookUp k)
+          case v of
+            Nothing -> throwError (QVSError (show attr) "Variable not in scope!")
+            Just a  -> return (ctx $> a)
           return (ctx $> fromJust v)   -- TODO Exception
         Direct (Value v) -> do
           return (ctx $> v)
         Anything     -> do
-          v <- nextInstruction @QVSSupply
+          v <- next attr
           return (ctx $> v)
         IntRange l r -> do
-          v <- nextInstruction @QVSSupply
+          v <- next attr
           return (ctx $> (l + v `mod` (r - l + 1)))
         Range    l r -> do
-          v <- nextInstruction @QVSSupply   -- FIXME
+          v <- next attr  -- FIXME
           return (ctx $> v)
         AnyOf xs     -> do
-          v <- nextInstruction @QVSSupply
+          v <- next (Anything @Int)
           let a = xs !! (v `mod` length xs)
           resolveQVS (QVS a)
+        where
+          next :: Fuzzable a => Attribute a -> m a
+          next attr = runError @OrchestrationError (nextInstruction @QVSSupply) >>= liftEither . mapLeft (QVSError (show attr) . show)

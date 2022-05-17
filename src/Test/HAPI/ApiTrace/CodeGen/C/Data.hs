@@ -44,7 +44,7 @@ pk2CVar :: PKey a -> CExpr
 pk2CVar = cVar . getPKeyID
 
 api2CVar :: ApiName api => api p a -> CExpr
-api2CVar = cVar . apiNameUnder "C"
+api2CVar a = cVar $ apiNameUnder "C" a
 
 dirAttr2CExpr :: (Fuzzable a, CCodeGen a) => DirectAttribute a -> CExpr
 dirAttr2CExpr (Value a) = toConst a

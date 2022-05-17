@@ -34,6 +34,7 @@ import Control.Applicative (liftA2)
 import Data.Hashable (hash)
 import Test.HAPI.AASTG.Analysis.ProcCtx (deriveProcCtxs)
 import Control.Carrier.Error.Church (runError)
+import Language.C (Pretty(pretty))
 
 foreign import ccall "broken_add"
   add :: CInt -> CInt -> IO CInt
@@ -249,6 +250,9 @@ q = do
   print x
   -- y <- runEnvIO @IO $ deriveProcCtxs x
   -- print y
+
+shite = pretty $ entryFun @ArithApi @CCodeGen "main" (traceCall (PKey "x") Add (Value 10 :* Value 20 :* Nil))
+
 -- test = do
 --   previewAASTG graph6
 --   c4 >>= previewAASTG

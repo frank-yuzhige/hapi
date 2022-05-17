@@ -241,6 +241,9 @@ instance (ApiName f, ApiName g) => ApiName (f :$$: g) where
   apiMetaAttributes (ApiL f) = apiMetaAttributes f
   apiMetaAttributes (ApiR g) = apiMetaAttributes g
 
+  apiNameUnder lang (ApiL f) = apiNameUnder lang f
+  apiNameUnder lang (ApiR g) = apiNameUnder lang g
+
 instance (HasHaskellDef f, HasHaskellDef g) => HasHaskellDef (f :$$: g) where
   evalHaskell (ApiL f) args = evalHaskell f args
   evalHaskell (ApiR g) args = evalHaskell g args

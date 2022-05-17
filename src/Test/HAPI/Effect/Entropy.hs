@@ -13,6 +13,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Test.HAPI.Effect.Entropy where
 import Data.Kind (Type)
@@ -24,11 +25,14 @@ import Control.Effect.Labelled (Algebra(alg))
 import Data.Int (Int8)
 import Data.Functor (($>))
 import Data.ByteString (ByteString)
+import Test.HAPI.Util.TH (fatalError, FatalErrorKind (..))
+import Control.Carrier.Error.Either (runError, liftEither)
+import Data.Either.Combinators (mapLeft)
 
 data EntropySupplier (m :: Type -> Type) a where
-  GetEntropy :: Int -> EntropySupplier m Int
+  GetEntropy :: Int -> EntropySupplier m (Maybe Int)
 
-getEntropy :: Has EntropySupplier sig m => Int -> m Int
+getEntropy :: Has EntropySupplier sig m => Int -> m (Maybe Int)
 getEntropy = send . GetEntropy
 
 newtype EntropyAC m a = EntropyAC { runEntropyAC :: m a }
@@ -40,9 +44,12 @@ instance ( Algebra sig m
          => Algebra (EntropySupplier :+: sig) (EntropyAC m) where
   alg hdl sig ctx = EntropyAC $ case sig of
     L (GetEntropy r)
-      | r <= 0    -> fail "Entropy: r <= 0! This is a HAPI bug!"
-      | r == 1    -> return (ctx $> 0)
+      | r <= 0    -> fatalError 'alg FATAL_ERROR
+        "Attempt to get an negative entropy value. If you are not using the internal EntropySupplier API, please file this as a BUG."
+      | r == 1    -> return (ctx $> Just 0)
       | otherwise -> do
-        i <- nextInstruction @EntropySupply @Int
-        return (ctx $> (i `mod` r))
+        mi <- runError @OrchestrationError (nextInstruction @EntropySupply @Int)
+        case mi of
+          Left _  -> return (ctx $> Nothing)
+          Right i -> return (ctx $> Just (i `mod` r))
     R other -> alg (runEntropyAC . hdl) other ctx
