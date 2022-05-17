@@ -109,7 +109,6 @@ synthEntropyStub aastg = go (getStart aastg)
       let choice = edgesFrom i aastg
       if null choice then return () else do
         mw <- getEntropy (length choice)
-        debug $ printf "mw = %s" (show mw)
         case mw of
           Nothing -> do
             debug "[HAPI]: Entropy Exhausted."
@@ -118,6 +117,5 @@ synthEntropyStub aastg = go (getStart aastg)
               debug "[HAPI]: Entropy hits an invalid path."
               return ()
             Just e  -> do
-              debug "[HAPI]: Entropy hits a valid path."
               onEvent (OnEdge e)
               go (endNode e)

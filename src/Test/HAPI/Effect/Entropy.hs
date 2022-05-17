@@ -51,6 +51,5 @@ instance ( Alg sig m
       -- So even if we only have one out edge, we still eat a byte to avoid infinite loop.
       | otherwise -> do
         mi <- nextInstruction @EntropySupply @Word8
-        debugIO $ print mi
         return (ctx $> ((\i -> fromIntegral i `mod` r) <$> mi))
     R other -> alg (runEntropyAC . hdl) other ctx

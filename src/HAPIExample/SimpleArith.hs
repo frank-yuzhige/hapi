@@ -62,6 +62,8 @@ instance ApiName  ArithApi where
   apiNameUnder "C" Neg = "limited_input_range_negate"
   apiNameUnder _   a   = apiName a
 
+instance Entry2BlockC ArithApi
+
 instance HasForeignDef ArithApi where
   -- evalForeign Add [args|a b|] = fromIntegral <$> liftIO (add (fromIntegral a) (fromIntegral b))
   evalForeign Add = implE $ \a b -> fromIntegral <$> liftIO (add (fromIntegral a) (fromIntegral b))

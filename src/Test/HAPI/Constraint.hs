@@ -82,6 +82,9 @@ productC = Sub $ Dict \\ f1 \\ f2
     f1 = projEntailment @f @g @a
     f2 = projEntailment @f @h @a
 
+dikt :: forall c a. (c a) => Dict (c a)
+dikt = Dict
+
 -- castL :: forall f l1 a l2. (f :>>>: (l1 :<>: l2)) => Dict (f a) -> Dict (l1 a)
 -- castL = mapDict projEntailment
 

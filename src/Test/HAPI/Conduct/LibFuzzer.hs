@@ -22,7 +22,7 @@ import Test.HAPI.Constraint (type (:>>>:))
 import Control.Algebra (Algebra)
 import Data.ByteString (ByteString)
 import Test.HAPI.Effect (PropertyError, PropertyA, runEnvIO, runProperty, runApiFFI, runOrchestrationViaBytes, QVSFromOrchestrationAC (runQVSFromOrchestrationAC), EntropyAC (runEntropyAC), runApiTrace, QVSError (QVSError))
-import Test.HAPI.ApiTrace (ApiTrace)
+import Test.HAPI.ApiTrace (ApiTrace, Entry2BlockC)
 import qualified Control.Carrier.Trace.Printing as PRINTING
 import Test.HAPI.Util.ByteSupplier (EQSupplier (EQSupplier), mkEQBS, BiDir (..), ByteSupplier (remainLen))
 import qualified Test.HAPI.PState as PS
@@ -40,7 +40,7 @@ data LibFuzzerConduct = LibFuzzerConduct
   }
 
 
-libFuzzerConductViaAASTG :: (ValidApiDef api) => AASTG api (Fuzzable :<>: CCodeGen) -> LibFuzzerConduct
+libFuzzerConductViaAASTG :: (ValidApiDef api, Entry2BlockC api) => AASTG api (Fuzzable :<>: CCodeGen) -> LibFuzzerConduct
 libFuzzerConductViaAASTG aastg = LibFuzzerConduct
   { llvmFuzzerTestOneInputM = _llvmFuzzerTestOneInputM aastg
   , mainM                   = _traceMainM aastg
@@ -54,7 +54,8 @@ _llvmFuzzerTestOneInputM aastg str size = do
   return 0
 
 _traceMainM :: ( ValidApiDef api
-               , CMembers (CCodeGen :<>: Fuzzable) c) => AASTG api c -> IO ()
+               , CMembers (CCodeGen :<>: Fuzzable) c
+               , Entry2BlockC api) => AASTG api c -> IO ()
 _traceMainM aastg = do
   opt <- execParser opts
   let path = crashPath opt
@@ -116,7 +117,8 @@ runFuzzTrace :: forall api c sig m.
               , MonadFail m
               , Algebra sig m
               , CMembers (CCodeGen :<>: Fuzzable) c
-              , ValidApiDef api)
+              , ValidApiDef api
+              , Entry2BlockC api)
            => AASTG api c
            -> ByteString
            -> m ()

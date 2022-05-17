@@ -12,10 +12,10 @@
 
 module Test.HAPI.PrimApi where
 
-import Test.HAPI.Api ( ApiDefinition, ApiName (apiName), HasForeignDef (evalForeign), showApiFromPatDefault, HasForeign, implE )
-import Test.HAPI (Attribute, args, ApiName (showApiFromPat), NP (..), Args)
+import Test.HAPI.Api ( ApiDefinition, ApiName (..), HasForeignDef (evalForeign), showApiFromPatDefault, HasForeign, implE )
+import Test.HAPI.Args (Attribute, args, Args)
 import Data.Kind (Type)
-import Data.SOP (K(..))
+import Data.SOP (K(..), NP (..))
 import Control.Algebra (Has)
 import Data.Data (Typeable)
 

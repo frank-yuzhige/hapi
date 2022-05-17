@@ -87,10 +87,10 @@ type family ApiEvalType (p :: [Type]) (a :: Type) :: Type where
 
 -- | Name of an API call
 class (forall p a. Eq (api p a), Typeable api) => ApiName (api :: ApiDefinition) where
-  apiName           :: api p a -> String
-  showApiFromPat    :: api p a -> ArgPattern p -> String
-  apiMetaAttributes :: api p a -> [ApiMetaAttribute]
-  apiNameUnder      :: String -> api p a -> String
+  apiName             :: api p a -> String
+  showApiFromPat      :: api p a -> ArgPattern p -> String
+  apiMetaAttributes   :: api p a -> [ApiMetaAttribute]
+  apiNameUnder        :: String -> api p a -> String
 
   default apiName :: (forall p a. Show (api p a)) => api p a -> String
   apiName = quietSnake . show

@@ -66,7 +66,6 @@ instance ( Alg sig m
   alg hdl sig ctx = OrchestrationViaBytesAC $ case sig of
     L NextInstruction -> do
       e <- gets @supply (eatBytes (labelConsumeDir @label) S.get)
-      debug $ printf "Orc = %s" (show e)
       case e of
         Left err          -> return (ctx $> Nothing)
         Right (a, supply) -> put supply >> return (ctx $> Just a)
