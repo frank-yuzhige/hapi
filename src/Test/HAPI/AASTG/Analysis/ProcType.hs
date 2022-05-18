@@ -309,7 +309,6 @@ getVarSubFromArgs look d1 d2 (a :* as) (b :* bs) = do
       | a == b    = return TM.empty
       | otherwise = empty
     -- Api calls are the same, iff the function they calls are the same, and all arguments are pairwise-effectively the same.
-    -- TODO: Same api call, different location?
     unify (DepCall x1 f fa) (DepCall x2 g ga) = do
       (_, proof, _) <- liftMaybe $ f `apiEqProofs` g
       TM.adjust (SE . HM.insert x2 x1 . unSE) <$> getVarSubFromArgs look d1 d2 (castWith (apply Refl proof) fa) ga

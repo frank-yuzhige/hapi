@@ -212,6 +212,22 @@ invalid = runEnv $ runBuildAASTG $ do
   p <%(n2,n4)%> assertTrue (HLib.==) (getVar x, getVar y)
   where p = Building @A @c
 
+
+addComp :: AASTG A C
+addComp = runEnv $ runBuildAASTG $ do
+  -- p <%> redirect
+
+  s <- p <%> currNode
+  a <- p <%> var @Int Anything
+  b <- p <%> var @Int Anything
+  x <- p <%> call Add (getVar a, getVar b)
+  y <- p <%> call (HLib.+) (getVar a, getVar b)
+  p <%> assertTrue (HLib.==) (getVar x, getVar y)
+  -- s' <- p <%> currNode
+  -- p <%(s', s)%> redirect
+  where p = Building @A @C
+
+
 op :: ApiName api => AASTG api c -> AASTG api c -> IO (AASTG api c)
 op = op' 1000
 
@@ -224,18 +240,33 @@ op' n g1 g2 = runEnvIO @IO $ do
 
 addAssoc :: AASTG A C
 addAssoc = runEnv $ runBuildAASTG $ do
+  -- p <%> redirect
   s <- p <%> currNode
   a <- p <%> var @Int Anything
   b <- p <%> var @Int Anything
   x <- p <%> call Add (getVar a, getVar b)
   y <- p <%> call Add (getVar b, getVar a)
   p <%> assertTrue (HLib.==) (getVar x, getVar y)
-  s' <- p <%> currNode
-  p <%(s', s)%> redirect
+  -- s' <- p <%> currNode
+  -- p <%(s', s)%> redirect
+  where p = Building @A @C
+
+addAssoc2 :: AASTG A C
+addAssoc2 = runEnv $ runBuildAASTG $ do
+  -- p <%> redirect
+  s <- p <%> currNode
+  a <- p <%> var @Int Anything
+  b <- p <%> var @Int Anything
+  x <- p <%> call Add (getVar b, getVar a)
+  y <- p <%> call Add (getVar a, getVar b)
+  p <%> assertTrue (HLib.==) (getVar x, getVar y)
+  -- s' <- p <%> currNode
+  -- p <%(s', s)%> redirect
   where p = Building @A @C
 
 mulAssoc :: AASTG A C
 mulAssoc = runEnv $ runBuildAASTG $ do
+  p <%> redirect
   s <- p <%> currNode
   a <- p <%> var @Int Anything
   b <- p <%> var @Int Anything
@@ -271,12 +302,15 @@ previewD = do
   previewAASTG =<< op' 4 a b
 
 q = do
-  test <- runEnvIO $ coalesceAASTGs 500 [cyc @Fuzzable, cyc2, cyc3]
+  test <- return (cyc3 @C) -- runEnvIO $ coalesceAASTGs 500 [addAssoc, addComp, addAssoc2, mulAssoc]
   previewAASTG test
-  -- n <- runEnvIO @IO $ inferUngroundProcType test
-  -- print n
+  n <- runEnvIO @IO $ inferProcTypeUB test
   x <- runEnvIO @IO $ runError @TypeCheckError (return . Left) (return . Right) (typeCheck test)
+  let v = acyclicNodes n
+  print n
+  print v
   print x
+  -- print v
   -- y <- runEnvIO @IO $ deriveProcCtxs x
   -- print y
 

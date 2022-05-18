@@ -2,6 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Test.HAPI.AASTG.Analysis.Cycle where
 
@@ -20,6 +21,7 @@ import Data.IntMap (IntMap)
 import qualified Control.Effect.State.Labelled as LS
 import qualified Data.IntMap as IM
 import qualified Data.IntSet as IS
+import Test.HAPI.AASTG.Analysis.ProcType (ProcType (..), UnboundedProcTypeMap (coerce2Grounded), (!*))
 
 
 isCyclicAASTG :: AASTG api c -> [NodeID]
@@ -54,3 +56,25 @@ unrollCycle maxDepth aastg
             sNewEdge (changeEdgeNode i' e' edge)
             trav (d - 1) e h
             sSetNode @api @c i'
+
+isAcyclicType :: ProcType -> Bool
+isAcyclicType = \case
+  Mu x t  -> isAcyclicType t
+  SVar x  -> False
+  Act _ t -> isAcyclicType t
+  Par ts  -> all isAcyclicType ts
+  Zero    -> True
+
+isAcyclicTypeUB :: UnboundedProcTypeMap -> ProcType -> Bool
+isAcyclicTypeUB uptm = go IS.empty
+  where
+    go history = \case
+      Mu x t  -> go (IS.insert x history) t
+      SVar x | x `IS.member` history -> False
+             | otherwise             -> go (IS.insert x history) (uptm !* x)
+      Act _ t -> go history t
+      Par ts  -> all (go history) ts
+      Zero    -> True
+
+acyclicNodes :: UnboundedProcTypeMap -> [NodeID]
+acyclicNodes uptm = [k | k <- IM.keys (coerce2Grounded uptm), isAcyclicTypeUB uptm (uptm !* k) ]
