@@ -42,6 +42,9 @@ instance Hashable (SubEntry t) where
 
 -- Node Sub
 
+lookNode :: NodeID -> NodeRenameMap -> NodeID
+lookNode n vsb = fromMaybe n $ vsb IM.!? n
+
 maxNodeID :: AASTG api c -> NodeID
 maxNodeID (AASTG start fs bs) = maximum (start : IM.keys fs <> IM.keys bs)
 
@@ -49,10 +52,10 @@ minNodeID :: AASTG api c -> NodeID
 minNodeID (AASTG start fs bs) = minimum (start : IM.keys fs <> IM.keys bs)
 
 renameNodes :: NodeRenameMap -> AASTG api c -> AASTG api c
-renameNodes nrm aastg@(AASTG start fs bs) = AASTG (nrm IM.! start) (renameNodesInMap nrm fs) (renameNodesInMap nrm bs)
+renameNodes nrm aastg@(AASTG start fs bs) = AASTG (lookNode start nrm) (renameNodesInMap nrm fs) (renameNodesInMap nrm bs)
 
 renameNodesInMap :: NodeRenameMap -> IntMap [Edge api c] -> IntMap [Edge api c]
-renameNodesInMap nrm = IM.mapKeys (nrm IM.!) . IM.map (renameNodesInEdge nrm <$>)
+renameNodesInMap nrm = IM.mapKeys (`lookNode` nrm) . IM.map (renameNodesInEdge nrm <$>)
 
 renameNodesInEdge :: NodeRenameMap -> Edge api c -> Edge api c
 renameNodesInEdge nrm = \case
@@ -62,7 +65,7 @@ renameNodesInEdge nrm = \case
   APICall  s e mx api args  -> APICall  (look s) (look e) mx api args
   Redirect s e              -> Redirect (look s) (look e)
   where
-    look i = fromMaybe i $ nrm IM.!? i
+    look = flip lookNode nrm
 
 renameNodesViaOffset :: Int -> AASTG api c -> AASTG api c
 renameNodesViaOffset offset aastg = renameNodes (IM.fromList [(n, n + offset) | n <- allNodes aastg]) aastg

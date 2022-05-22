@@ -5,6 +5,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Test.HAPI.AASTG.Analysis.Coalesce where
 
@@ -13,7 +14,7 @@ import Test.HAPI.AASTG.Analysis.Rename (normalizeNodes, maxNodeID, renameNodesIn
 import Test.HAPI.AASTG.Analysis.Path (Path(pathCalls, pathEndNode), APath)
 import Data.List ( partition, (\\), sortBy )
 import Data.IntMap (IntMap)
-import Data.Maybe (fromMaybe, isJust, listToMaybe)
+import Data.Maybe (fromMaybe, isJust, listToMaybe, fromJust)
 
 import qualified Data.IntMap as IM
 import qualified Data.HashMap.Strict as HM
@@ -29,14 +30,17 @@ import Data.Function (on)
 import qualified Data.IntSet as IS
 import Test.HAPI.Util.Empty (liftMaybe)
 import qualified Data.TypeRepMap as TM
-import qualified Data.HashMap.Strict as HS
-import Test.HAPI.AASTG.Analysis.ProcType (ProcTypeMap, isSubType, inferProcType, emptySubTypeCtx, UnboundedProcTypeMap (coerce2Grounded), isSubTypeUB, inferProcTypeUB, (!*))
+import Test.HAPI.AASTG.Analysis.ProcType (ProcTypeMap, isSubType, inferProcType, emptySubTypeCtx, UnboundedProcTypeMap, isSubTypeUB, inferProcTypeUB, (!*))
 import Control.Carrier.NonDet.Church (runNonDet)
 import Control.Applicative (Applicative(liftA2))
 import Test.HAPI.Api (ApiName)
 import Test.HAPI.Util.TH (fatalError, FatalErrorKind (FATAL_ERROR))
 import qualified Control.Applicative as A
 import Control.Carrier.State.Church (runState)
+import Test.HAPI.AASTG.Analysis.GenRule (GenRuleUB, ruleApplicableUB, unsafeApplyRule, genRulesForAASTG, GenRule (genRuleUBTypeMap), ruleApplicable, genRules4AASTG, applyRuleOn)
+import Data.HashSet (HashSet)
+import qualified Data.HashSet as HS
+import Test.HAPI.AASTG.Analysis.TypeCheck (TypedAASTG(..), TypeCheckCtx (procTypes))
 
 -- TODO: Optimize me!!!!
 -- | Coalesce 2 AASTGs
@@ -55,7 +59,7 @@ coalesceAASTGs n = \case
   []         -> error "Empty list of AASTGs to coalesce"
   [a]        -> return a
   a : b : as -> do
-    (_, r) <- coalesceAASTG  n a  b
+    (_, r) <- coalesceAASTG n a b
     coalesceAASTGs n (r : as)
 
 directCoalesceState :: NodeID -> NodeID -> AASTG api c -> AASTG api c
@@ -77,7 +81,7 @@ coalescePreprocess a1 a2 = directCoalesceState 0 (lb + 1) combine
 autoCoalesce ::
               ( Alg sig m
               , ApiName api)
-             => NodeID
+             => Int
              -> AASTG api c
              -> m ([(NodeID, NodeID)], AASTG api c)
 autoCoalesce 0       aastg = return ([], aastg)
@@ -175,5 +179,74 @@ upperSubNode ptm n1 n2 = do
   return ans
 
 
-childGraph :: NodeID -> AASTG api c -> IntMap [Edge api c]
-childGraph n aastg = IM.fromList [(c, edgesFrom c aastg) | c <- IS.toList $ childrenNodes aastg IM.! n]
+coalesceRuleOneStep ::
+                     ( Alg sig m
+                     , ApiName api)
+                     => TypedAASTG api c
+                     -> HashSet (GenRule api c)
+                     -> m (Maybe (NodeID, GenRule api c), TypedAASTG api c)
+coalesceRuleOneStep ta rules = do
+  -- debug $ printf "%s: start one step" (show 'coalesceRuleOneStep)
+  -- debug $ printf "%s: aastg=%s" (show 'coalesceRuleOneStep) (show aastg)
+  let uptm1 = procTypes $ typeCheckCtx ta
+  -- debug $ printf "%s: uptm1=%s" (show 'coalesceRuleOneStep) (show uptm1)
+  go candidates
+  where
+    aastg      = castAASTG ta
+    nodeDepths = nodeDepthMap aastg
+    candidates = [(b, r) | b <- sortBy (compare `on` (nodeDepths IM.!)) (allNodes aastg)
+                         , r <- HS.toList rules
+                         ]
+
+    go [] = return (Nothing, ta)
+    go ((i, rule) : xs) = do
+      vsbs <- ruleApplicable i rule ta
+      case vsbs of
+        []           -> go xs
+        ((j, s) : _) -> do
+          x <- applyRuleOn (i, j) s rule ta
+          debug $ printf "%s: i=%s, rule: %s" (show 'coalesceRuleOneStep) (show i) (show rule)
+          debug $ printf "%s: x = %s" (show 'coalesceRuleOneStep) (show x)
+          return (Just (i, rule), fromJust x)
+      -- forM vsbs $ \(j, vsb) -> do
+      --   _
+      -- case mvsb of
+      --   Nothing  -> go uptm1 xs
+      --   Just vsb -> do
+      --     debug $ printf "%s: r <= t: %s" (show 'coalesceRuleOneStep) (show (r, t))
+      --     let ans = unsafeApplyRule r x vsb aastg
+      --     return (Just (x, r), ans)
+
+autoCoalesceRule :: ( Alg sig m
+                    , ApiName api)
+                    => Int
+                    -> HashSet (GenRule api c)
+                    -> TypedAASTG api c
+                    -> m ([(NodeID, GenRule api c)], TypedAASTG api c)
+autoCoalesceRule 0       _     aastg = return ([], aastg)
+autoCoalesceRule maxStep rules aastg = do
+  debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.autoCoalesceRule: rule count: %s" (show (length rules))
+  (!record, !aastg') <- coalesceRuleOneStep aastg rules
+  debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.autoCoalesceRule: coalesce %s" (show record)
+  -- let !aastg'' = normalizeNodes 0 aastg'
+  case record of
+    Nothing -> return ([], aastg')
+    Just (x, r)  -> do
+      debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.autoCoalesceRule: next rule count: %s" (show (HS.fromList (HS.toList rules \\ [r])))
+      (history, ans) <- autoCoalesceRule (maxStep - 1) (HS.fromList (HS.toList rules \\ [r])) aastg'
+      return ((x, r) : history, ans)
+
+
+coalesceRuleAASTG ::
+               ( Alg sig m
+               , ApiName api) => Int -> TypedAASTG api c -> TypedAASTG api c -> m ([(NodeID, GenRule api c)], TypedAASTG api c)
+coalesceRuleAASTG n a1 a2 = do
+  autoCoalesceRule n (HS.fromList (genRules4AASTG a2)) a1
+
+coalesceRuleAASTGs :: (Alg sig m, ApiName api) => Int -> [TypedAASTG api c] -> m (TypedAASTG api c)
+coalesceRuleAASTGs n = \case
+  []         -> error "Empty list of AASTGs to coalesce"
+  [a]        -> return a
+  a : b : as -> do
+    (_, r) <- coalesceRuleAASTG n a b
+    coalesceRuleAASTGs n (r : as)

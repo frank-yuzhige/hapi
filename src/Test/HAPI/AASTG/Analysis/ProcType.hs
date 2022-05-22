@@ -52,7 +52,7 @@ type SVar = NodeID
 
 type ProcTypeMap = IntMap ProcType
 
-newtype UnboundedProcTypeMap = UnboundedProcTypeMap { coerce2Grounded :: ProcTypeMap }
+newtype UnboundedProcTypeMap = UnboundedProcTypeMap { coerce2Bounded :: ProcTypeMap }
 
 data Action where
   ActCall :: forall api p a.
@@ -186,7 +186,10 @@ inferProcType :: forall sig m api c.
             -> m ProcTypeMap
 inferProcType aastg = do
   -- debug $ printf "%s: Terminator Nodes %s" (show 'inferProcType) (show $ getTerminators aastg)
-  ground . coerce2Grounded <$> inferProcTypeUB aastg
+  unBounded2Bounded <$> inferProcTypeUB aastg
+
+unBounded2Bounded :: UnboundedProcTypeMap -> ProcTypeMap
+unBounded2Bounded = ground . coerce2Bounded
   where
     ground m = foldr groundOn m (IM.elems m >>= IS.toList . freeSVar)
     groundOn s m = IM.map (simplifyMu . subSVar s t') $ IM.insert s t' m
@@ -196,21 +199,23 @@ inferProcType aastg = do
               then Mu s t
               else t
 
--- | Check if the given procedure type is well-formed. A well-formed procedure type should satisfy the following statements:
---     1. It does not contain any `free` SVar (state variable).
---     2.
-checkValidType :: forall sig m api c.
-                ( Alg sig m
-                , ApiName api )
-             => AASTG api c
-             -> m ProcTypeMap
-checkValidType = undefined
+boundProcType :: UnboundedProcTypeMap -> ProcType -> ProcType
+boundProcType uptm = go IS.empty
+  where
+    go bound = \case
+      SVar x | IS.member x bound -> SVar x
+             | otherwise         -> go bound (Mu x (uptm !* x))
+      Act a t -> Act a (go bound t)
+      Par ts  -> Par (map (go bound) ts)
+      Mu x t  -> let t' = go (IS.insert x bound) t in
+        if x `IS.member` freeSVar t' then Mu x t' else t'
+      Zero    -> Zero
+
 
 -- | Check if the given @sub@ type is a sub-type of the given @sup@ type
 --   Return @Just@ the variable substitution that instantiates such sub-type relation, or @Nothing@ if @sub@ is not a sub-type of @sup@.
-isSubType' :: ProcType -> ProcType -> Maybe VarSubstitution
-isSubType' sub sup = runEnv
-  $ runState (\s a -> return a) emptySubTypeCtx      -- Pitfall: first state then nondet. Other way round will stop propagation of state between (<|>)
+isSubType' :: Alg sig m => ProcType -> ProcType -> m (Maybe VarSubstitution)
+isSubType' sub sup = runState (\s a -> return a) emptySubTypeCtx      -- Pitfall: first state then nondet. Other way round will stop propagation of state between (<|>)
   $ runNonDet (liftA2 (A.<|>)) (return . Just) (return Nothing)
   $ isSubType sub sup
 
@@ -229,7 +234,7 @@ isSubTypeUB :: forall sig m.
           -> m VarSubstitution
 isSubTypeUB (UnboundedProcTypeMap uptm) sub sup
   = do
-  -- debug $ printf "%s: Checking ... \n>>  %s\n>>  %s" (show 'isSubTypeUB) (show sub) (show sup)
+  debug $ printf "%s: Checking ... \n>>  %s\n>>  %s" (show 'isSubTypeUB) (show sub) (show sup)
   sub ~<=~ sup
   where
     look x = fromMaybe Zero $ IM.lookup x uptm
@@ -270,7 +275,7 @@ isSubTypeUB (UnboundedProcTypeMap uptm) sub sup
             let as' = castWith (apply Refl pp) as
                 xa' = castWith (apply Refl pa) xa
                 s0  = singletonVarSub xb xa'
-            s1 <- getVarSubFromArgs look sub sup as' bs
+            s1 <- getVarSubFromArgs look look sub sup as' bs
             s1' <- liftMaybe $ s0 `unifyVarSubstitution` s1
             s2 <- ta ~<=~ tb
             liftMaybe $ s1' `unifyVarSubstitution` s2
@@ -288,21 +293,22 @@ getVarSubFromArgs :: forall p sig m.
                    ( All Fuzzable p
                    , Eff NonDet sig m)
                 => (SVar -> ProcType)
+                -> (SVar -> ProcType)
                 -> ProcType
                 -> ProcType
                 -> Attributes p
                 -> Attributes p
                 -> m VarSubstitution
-getVarSubFromArgs look d1 d2 Nil       Nil       = return emptyVarSub
-getVarSubFromArgs look d1 d2 (a :* as) (b :* bs) = do
+getVarSubFromArgs look1 look2 d1 d2 Nil       Nil       = return emptyVarSub
+getVarSubFromArgs look1 look2 d1 d2 (a :* as) (b :* bs) = do
   u  <- unify (DepAttr a) (DepAttr b)
-  us <- getVarSubFromArgs look d1 d2 as bs
+  us <- getVarSubFromArgs look1 look2 d1 d2 as bs
   liftMaybe $ unifyVarSubstitution u us
   where
     -- 2 variables are effectively the same, iff they point to some non-variable attribute that is the same.
     unify (DepAttr (Direct (Get x1))) (DepAttr (Direct (Get x2))) = do
-      (_, dx1) <- unaliasVar look d1 x1
-      (_, dx2) <- unaliasVar look d2 x2
+      (_, dx1) <- unaliasVar look1 d1 x1
+      (_, dx2) <- unaliasVar look2 d2 x2
       TM.adjust (SE . HM.insert x2 x1 . unSE) <$> unify dx1 dx2
     -- Non-variable attributes are effectively the same, iff they are the same. (lol)
     unify (DepAttr a) (DepAttr b)
@@ -311,7 +317,7 @@ getVarSubFromArgs look d1 d2 (a :* as) (b :* bs) = do
     -- Api calls are the same, iff the function they calls are the same, and all arguments are pairwise-effectively the same.
     unify (DepCall x1 f fa) (DepCall x2 g ga) = do
       (_, proof, _) <- liftMaybe $ f `apiEqProofs` g
-      TM.adjust (SE . HM.insert x2 x1 . unSE) <$> getVarSubFromArgs look d1 d2 (castWith (apply Refl proof) fa) ga
+      TM.adjust (SE . HM.insert x2 x1 . unSE) <$> getVarSubFromArgs look1 look2 d1 d2 (castWith (apply Refl proof) fa) ga
     -- Otherwise, not unifiable (e.g. x <-> some attr, not unifiable since x could be used in later context)
     unify _ _ = empty
 
@@ -354,6 +360,7 @@ instance Eq Action where
     Nothing    -> False
     Just proof -> castWith proof x == y
                && castWith (apply Refl $ inner proof) a == b
+  ActAssert p   == ActAssert q = p == q
   _ == _ = False
 
 instance Show Action where
@@ -394,10 +401,10 @@ instance Hashable ProcType
 deriving instance Show SubTypeCtx
 
 deriving instance Show UnboundedProcTypeMap
-deriving instance Eq   UnboundedProcTypeMap
+deriving instance Eq UnboundedProcTypeMap
 
 instance (Show t) => Show (Dep t) where
-  show (DepAttr at)     = "DepAttr(" <> show at  <> ")"
+  show (DepAttr at)       = "DepAttr(" <> show at  <> ")"
   show (DepCall x api np) = "DepCall(" <> show x <> "=" <> showApiFromPat api (attrs2Pat np) <> ")"
 
 instance (Eq t, Typeable t) => Eq (Dep t) where
@@ -407,4 +414,3 @@ instance (Eq t, Typeable t) => Eq (Dep t) where
     Just (_, proof, _) -> castWith (apply Refl proof) a `eqAttributes` b
                        && x == y
   _ == _ = False
-

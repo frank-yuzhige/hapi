@@ -121,7 +121,7 @@ deriveProcCtxsUB (UnboundedProcTypeMap uptm) = do
   queries <- fmap IM.unions $ forM (IM.assocs uptm) $ \(n, t) -> do
     (q, qs) <- runState @ProcCtxQueries (\s a -> return (a, s)) IM.empty $ genProcQuery t
     return $ IM.insert n q qs
-  debug $ printf "%s: Queries: %s" (show 'deriveProcCtxsUB) (show queries)
+  -- debug $ printf "%s: Queries: %s" (show 'deriveProcCtxsUB) (show queries)
   return $ IM.fromList [(n, solveProcQueries queries IM.! n)| n <- IM.keys uptm]
 
 -- | Generate ProcCtx queries from the given type, return the query for solving the given type's context

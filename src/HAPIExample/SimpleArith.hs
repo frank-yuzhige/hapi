@@ -302,20 +302,24 @@ previewD = do
   previewAASTG =<< op' 4 a b
 
 q = do
-  test <- return (cyc3 @C) -- runEnvIO $ coalesceAASTGs 500 [addAssoc, addComp, addAssoc2, mulAssoc]
+  test <- fmap castAASTG $ runEnvIO $ coalesceRuleAASTGs 1000 $ map typeCheck' [mulAssoc, addAssoc, addComp] -- coalesceAASTGs 500 [addAssoc, addComp, addAssoc2, mulAssoc]
   previewAASTG test
-  n <- runEnvIO @IO $ inferProcTypeUB test
-  x <- runEnvIO @IO $ runError @TypeCheckError (return . Left) (return . Right) (typeCheck test)
-  let v = acyclicNodes n
-  print n
-  print v
-  print x
+  -- n <- runEnvIO @IO $ inferProcTypeUB test
+  -- x <- runEnvIO @IO $ runError @TypeCheckError (return . Left) (return . Right) (typeCheck test)
+  -- let v = acyclicNodes n
+  -- print n
+  -- print v
+  -- print $ childrenNodes addAssoc
+
   -- print v
   -- y <- runEnvIO @IO $ deriveProcCtxs x
   -- print y
 
 shite = pretty $ entryFun @ArithApi @(CCodeGen :<>: Fuzzable) "main" (traceCall (PKey "x") Add (Value 10 :* Value 20 :* Nil))
 
+
+t1 = Act (ActGen (PKey @Int "i1") Anything) (Act (ActGen (PKey @Int "i0") Anything) Zero)
+tq = runEnvIO @IO $ t1 `isSubType'` Zero
 -- test = do
 --   previewAASTG graph6
 --   c4 >>= previewAASTG

@@ -21,7 +21,7 @@ import Data.IntMap (IntMap)
 import qualified Control.Effect.State.Labelled as LS
 import qualified Data.IntMap as IM
 import qualified Data.IntSet as IS
-import Test.HAPI.AASTG.Analysis.ProcType (ProcType (..), UnboundedProcTypeMap (coerce2Grounded), (!*))
+import Test.HAPI.AASTG.Analysis.ProcType (ProcType (..), UnboundedProcTypeMap (coerce2Bounded), (!*))
 
 
 isCyclicAASTG :: AASTG api c -> [NodeID]
@@ -77,4 +77,4 @@ isAcyclicTypeUB uptm = go IS.empty
       Zero    -> True
 
 acyclicNodes :: UnboundedProcTypeMap -> [NodeID]
-acyclicNodes uptm = [k | k <- IM.keys (coerce2Grounded uptm), isAcyclicTypeUB uptm (uptm !* k) ]
+acyclicNodes uptm = [k | k <- IM.keys (coerce2Bounded uptm), isAcyclicTypeUB uptm (uptm !* k) ]

@@ -4,7 +4,7 @@
 module Test.HAPI.AASTG.Analysis.Nodes where
 
 import Data.HashMap.Strict (HashMap)
-import Test.HAPI.AASTG.Core (NodeID, AASTG (getStart, AASTG), allNodes, endNode, edgesFrom, edgesFrom2EdgesTo)
+import Test.HAPI.AASTG.Core (NodeID, AASTG (getStart, AASTG), allNodes, endNode, edgesFrom, edgesFrom2EdgesTo, Edge)
 import Data.HashSet (HashSet)
 import Control.Algebra (Has, run)
 import Control.Effect.State (State, gets, modify)
@@ -72,3 +72,6 @@ dropOrphanNodes aastg@(AASTG s fs _) = AASTG s fs' (edgesFrom2EdgesTo fs)
   where
     un = unrelatedNodeMap aastg
     fs' = foldr IM.delete fs (un IM.! s)
+
+childGraph :: NodeID -> AASTG api c -> IntMap [Edge api c]
+childGraph n aastg = IM.fromList [(c, edgesFrom c aastg) | c <- IS.toList $ childrenNodes aastg IM.! n]

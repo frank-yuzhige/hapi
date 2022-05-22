@@ -91,4 +91,4 @@ instance (Entry2BlockC f, Entry2BlockC g) => Entry2BlockC (f :$$: g) where
   entry2Block :: forall c. (CMembers CCodeGen c) => ApiTraceEntry (f :$$: g) c -> CBlockItem
   entry2Block (TraceCall x (ApiL f) args) = entry2Block @f @c (TraceCall x f args)
   entry2Block (TraceCall x (ApiR g) args) = entry2Block @g @c (TraceCall x g args)
-  entry2Block a                           = entry2BlockDefault a  -- TODO f or g?
+  entry2Block a                           = entry2BlockDefault a  -- TODO f or g when assert?

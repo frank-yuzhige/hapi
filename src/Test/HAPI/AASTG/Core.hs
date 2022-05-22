@@ -27,8 +27,8 @@ import Data.Maybe (fromMaybe)
 import Data.Serialize (Serialize)
 import Type.Reflection (Typeable)
 import Data.SOP.Constraint (Compose)
-import Data.Containers.ListUtils (nubInt)
-import Data.Hashable (Hashable (hashWithSalt))
+import Data.Containers.ListUtils (nubInt, nubIntOn)
+import Data.Hashable (Hashable (hashWithSalt), hash)
 
 import Data.HashMap.Strict (HashMap)
 import Data.IntMap (IntMap)
@@ -86,6 +86,9 @@ data TaggedEdge t api c = TE { getTag :: t, getEdge :: Edge api c }
 newAASTG :: [Edge sig c] -> AASTG sig c
 newAASTG es = AASTG 0 (groupEdgesOn startNode es) (groupEdgesOn endNode es)
 
+singletonAASTG :: Edge sig c -> AASTG sig c
+singletonAASTG e = AASTG (startNode e) (groupEdgesOn startNode [e]) (groupEdgesOn endNode [e])
+
 startNode :: Edge api c -> NodeID
 startNode (Update s _ _ _) = s
 startNode (ContIf s _ _)   = s
@@ -139,8 +142,12 @@ showEdgeLabel = \case
   ContIf   s e p           -> "if "     <> show p
   Assert   s e p           -> "assert " <> show p
   APICall  s e mx api args -> ""        <> getPKeyID mx <> " = " <> showApiFromPat api (attrs2Pat args) -- apiName api <> "(" <> intercalate ", " (showAttributes args) <> ")"
-  Redirect s e             -> "redir "
+  Redirect s e             -> "redir"
 
+addEdge :: Edge api c -> AASTG api c -> AASTG api c
+addEdge e aastg = AASTG (getStart aastg)
+                        (IM.unionWith (\a b -> nubIntOn hash (a <> b)) (IM.singleton (startNode e) [e]) (getEdgesFrom aastg))
+                        (IM.unionWith (\a b -> nubIntOn hash (a <> b)) (IM.singleton (endNode   e) [e]) (getEdgesTo aastg))
 
 -- | Instances
 instance Show (Edge api c) where
@@ -188,3 +195,10 @@ instance Hashable (Edge api c) where
     `hashWithSalt` e
 
 deriving instance Show (AASTG api c)
+instance Hashable (AASTG api c) where
+  hashWithSalt salt (AASTG s f e) = salt
+    `hashWithSalt` s
+    `hashIntMap` f
+    `hashIntMap` e
+    where
+      hashIntMap salt im = salt `hashWithSalt` IM.toList im
