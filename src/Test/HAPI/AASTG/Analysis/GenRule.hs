@@ -4,8 +4,8 @@
 {-# LANGUAGE BangPatterns #-}
 
 module Test.HAPI.AASTG.Analysis.GenRule where
-import Test.HAPI.AASTG.Analysis.ProcType (ProcType, UnboundedProcTypeMap (coerce2Bounded), isSubType', (!*), boundProcType)
-import Test.HAPI.AASTG.Core (AASTG (..), NodeID, edgesFrom2EdgesTo, allNodes, Edge, startNode, endNode, allEdges, singletonAASTG, addEdge, changeEdgeNode, edgesFrom)
+import Test.HAPI.AASTG.Analysis.ProcType (ProcType, UnboundedProcTypeMap (coerce2Bounded), isSubType', (!*), boundProcType, edge2Act)
+import Test.HAPI.AASTG.Core (AASTG (..), NodeID, edgesFrom2EdgesTo, allNodes, Edge, startNode, endNode, allEdges, singletonAASTG, addEdge, changeEdgeNode, edgesFrom, isEquivalentEdge, isUpdateEdge, isRedirEdge)
 import Test.HAPI.Effect.Eff (Alg, debug)
 import Test.HAPI.AASTG.Analysis.Rename (VarSubstitution, renameVars, maxNodeID, unifyVarSubstitution, renameVarsInEdge)
 import Test.HAPI.AASTG.Analysis.Add (addSubgraph)
@@ -48,22 +48,28 @@ ruleApplicable :: (Alg sig m, ApiName api)
 ruleApplicable i rule@(GenRule pre gen post uptm) aastg = do
   mv <- boundProcType uptm pre `isSubType'` boundProcType uptm2 ti
   case mv of
-    Nothing  -> return []
+    Nothing  -> do
+      debug $ printf "%s: pre failed on %s! \n %s \n %s" (show 'ruleApplicable) (show i) (show (boundProcType uptm pre)) (show (boundProcType uptm2 ti))
+      return []
     Just vsb -> do
       let edge' = renameVarsInEdge vsb gen
-      if edge' `elem` edgesFrom i (castAASTG aastg) then return [] else do
+      if any (isEquivalentEdge edge') (edgesFrom i (castAASTG aastg)) then return [] else do
       merr <- checkEdge (procCtxOf i aastg) edge'
       case merr of
-        Just tec -> return []
+        Just tec -> do
+          debug $ printf "%s: ctx failed on %s!" (show 'ruleApplicable) (show i)
+          return []
         Nothing  -> do
           debug $ printf "%s: pre SAT!" (show 'ruleApplicable)
-          xs <- concat <$> traverse (checkPost vsb) (allNodes $ castAASTG aastg)
-          return $ (maxNodeID (castAASTG aastg) + 1, vsb) : xs
+          xs <- concat <$> traverse (checkPost vsb edge') (allNodes $ castAASTG aastg)
+          if isRedirEdge gen
+            then return xs
+            else return $ (maxNodeID (castAASTG aastg) + 1, vsb) : xs
   where
     ti = procTypeUBOf i aastg
     uptm2 = procTypes $ typeCheckCtx aastg
-    checkPost vsb j = do
-      mv <- boundProcType uptm post `isSubType'` boundProcType uptm2 (procTypeUBOf j aastg)
+    checkPost vsb e' j = do
+      mv <- boundProcType uptm post `isSubType'` boundProcType uptm2 (edge2Act e' $ procTypeUBOf j aastg)
       case mv >>= unifyVarSubstitution vsb of
         Nothing   -> return []
         Just vsb' -> return [(j, vsb')]

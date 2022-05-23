@@ -7,6 +7,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE BangPatterns #-}
 module Test.HAPI.AASTG.Analysis.ProcType where
 
 import Test.HAPI.Args (Attributes, Attribute (..), eqAttributes, attrs2Pat, DirectAttribute (..))
@@ -151,6 +152,18 @@ simplifyMu Zero      = Zero
 (!*) :: UnboundedProcTypeMap -> NodeID -> ProcType
 UnboundedProcTypeMap m !* n = m IM.! n
 
+edge2Act :: (ApiName api) => Edge api c -> ProcType -> ProcType
+edge2Act edge t = case edge of
+  Update s e k a ->
+    Act (ActGen k a) t
+  ContIf s e x   ->
+    fatalError 'inferProcType FATAL_ERROR "Unsupported construct 'forget'"
+  Assert s e p ->
+    Act (ActAssert p) t
+  APICall s e mx api args ->
+    Act (ActCall mx api args) t
+  Redirect n j ->
+    t
 -- | Infer Unbounded procedure types for all nodes in the given AASTG using iterative algorithm.
 inferProcTypeUB :: forall sig m api c.
                        ( Alg sig m
@@ -164,17 +177,7 @@ inferProcTypeUB aastg
       where
         ts = [ t' | edge <- edgesTo i aastg
                   , let t  = SVar (startNode edge)
-                  , let t' = case edge of
-                          Update s e k a ->
-                            Act (ActGen k a) t
-                          ContIf s e x   ->
-                            fatalError 'inferProcType FATAL_ERROR "Unsupported construct 'forget'"
-                          Assert n j p ->
-                            Act (ActAssert p) t
-                          APICall s e mx api args ->
-                            Act (ActCall mx api args) t
-                          Redirect n j ->
-                            t
+                  , let t' = edge2Act edge t
                   ]
 
 
@@ -239,10 +242,10 @@ isSubTypeUB (UnboundedProcTypeMap uptm) sub sup
   where
     look x = fromMaybe Zero $ IM.lookup x uptm
     a ~<=~ b = do
-      -- debug $ printf "%s: Checking ... \n>>  %s\n>>  %s" (show 'isSubTypeUB <> ":~<=~") (show a) (show b)
       checked <- gets (HS.member (a, b) . view checkedPairs)
       if checked then return emptyVarSub else do
         modify $ over checkedPairs $ HS.insert (a, b)
+        debug $ printf "%s: Checking ... \n>>  %s\n>>  %s" (show 'isSubTypeUB <> ":~<=~") (show a) (show b)
         case (a, b) of
           (Zero, Zero) ->
             return emptyVarSub
@@ -271,14 +274,17 @@ isSubTypeUB (UnboundedProcTypeMap uptm) sub sup
           (_, Act (ActCall _ b _) tb) | isExternalPure b
             -> a ~<=~ tb
           (Act a'@(ActCall xa a as) ta, Act b'@(ActCall xb b bs) tb) -> do
-            (_, pp, pa) <- liftMaybe $ apiEqProofs a b
+            (_, !pp, pa) <- liftMaybe $ apiEqProofs a b
             let as' = castWith (apply Refl pp) as
                 xa' = castWith (apply Refl pa) xa
                 s0  = singletonVarSub xb xa'
+            debug $ printf "%s: API call is eq" (show 'isSubTypeUB)
             s1 <- getVarSubFromArgs look look sub sup as' bs
-            s1' <- liftMaybe $ s0 `unifyVarSubstitution` s1
-            s2 <- ta ~<=~ tb
-            liftMaybe $ s1' `unifyVarSubstitution` s2
+            debug $ printf "%s: varsub ok" (show 'isSubTypeUB)
+            s2 <- liftMaybe $ s0 `unifyVarSubstitution` s1
+            debug $ printf "%s: unify ok" (show 'isSubTypeUB)
+            s3 <- ta ~<=~ tb
+            liftMaybe $ s2 `unifyVarSubstitution` s3
           (Act a'@(ActAssert (Value a)) ta, Act b'@(ActAssert (Value b)) tb) -> do
             if a == b then ta ~<=~ tb else empty
           (Act a'@(ActAssert (Get xa)) ta, Act b'@(ActAssert (Get xb)) tb) -> do
@@ -287,7 +293,7 @@ isSubTypeUB (UnboundedProcTypeMap uptm) sub sup
             liftMaybe $ s0 `unifyVarSubstitution` s1
           _ -> empty
 
--- | Given 2 different procedure types and 2 attribute lists, attempt to find a unification (i.e. SVar substitution scheme)
+-- | Given 2 different procedure types and 2 attribute lists, attempt to find a unification (i.e. PKey substitution scheme)
 -- that makes all corresponding attributes in each list `effectively the same`.
 getVarSubFromArgs :: forall p sig m.
                    ( All Fuzzable p
@@ -301,14 +307,18 @@ getVarSubFromArgs :: forall p sig m.
                 -> m VarSubstitution
 getVarSubFromArgs look1 look2 d1 d2 Nil       Nil       = return emptyVarSub
 getVarSubFromArgs look1 look2 d1 d2 (a :* as) (b :* bs) = do
+  debug $ printf "%s: subbing %s" (show 'getVarSubFromArgs) (show (a, b))
   u  <- unify (DepAttr a) (DepAttr b)
   us <- getVarSubFromArgs look1 look2 d1 d2 as bs
   liftMaybe $ unifyVarSubstitution u us
   where
     -- 2 variables are effectively the same, iff they point to some non-variable attribute that is the same.
     unify (DepAttr (Direct (Get x1))) (DepAttr (Direct (Get x2))) = do
+      debug $ printf "%s: var start %s" (show 'getVarSubFromArgs <> ".unify") (show (x1, x2))
       (_, dx1) <- unaliasVar look1 d1 x1
+      debug $ printf "%s: var %s;" (show 'getVarSubFromArgs <> ".unify") (show (x1, dx1))
       (_, dx2) <- unaliasVar look2 d2 x2
+      debug $ printf "%s: var %s;" (show 'getVarSubFromArgs <> ".unify") (show (x2, dx2))
       TM.adjust (SE . HM.insert x2 x1 . unSE) <$> unify dx1 dx2
     -- Non-variable attributes are effectively the same, iff they are the same. (lol)
     unify (DepAttr a) (DepAttr b)
@@ -321,31 +331,34 @@ getVarSubFromArgs look1 look2 d1 d2 (a :* as) (b :* bs) = do
     -- Otherwise, not unifiable (e.g. x <-> some attr, not unifiable since x could be used in later context)
     unify _ _ = empty
 
-unaliasVar :: (Typeable p, Eff NonDet sig m) => (SVar -> ProcType) -> ProcType -> PKey p -> m (PKey p, Dep p)
+unaliasVar :: (Fuzzable p, Eff NonDet sig m) => (SVar -> ProcType) -> ProcType -> PKey p -> m (PKey p, Dep p)
 unaliasVar look t x = do
   n <- lookupPKInType look x t
   case n of
     (DepAttr (Direct (Get y))) -> unaliasVar look t y
     other                      -> return (x, other)
 
-lookupPKInType :: (Typeable t, Eff NonDet sig m) => (SVar -> ProcType) -> PKey t -> ProcType -> m (Dep t)
-lookupPKInType look k = go IS.empty
+lookupPKInType :: forall t sig m. (Fuzzable t, Eff NonDet sig m) => (SVar -> ProcType) -> PKey t -> ProcType -> m (Dep t)
+lookupPKInType look k t = do
+  d <- go IS.empty t
+  debug $ printf "%s: k = %s; v = %s" (show 'lookupPKInType) (show k) (show d)
+  return d
   where
     go history = \case
       SVar x | IS.member x history -> empty
              | otherwise           -> go (IS.insert x history) (look x)
       Act a t  -> case a of
         ActGen  x at -> do
-          proof <- liftMaybe $ inner <$> testEquality (typeOf x) (typeOf k)
-          if castWith (apply Refl proof) x == k
-            then return $ castWith (apply Refl proof) $ DepAttr at
-            else go history t
+          case inner <$> testEquality (typeOf x) (typeOf k) of
+            Just proof | castWith (apply Refl proof) x == k
+              -> return $ castWith (apply Refl proof) $ DepAttr at
+            _ -> go history t
         ActCall x api as -> do
-          proof <- liftMaybe $ inner <$> testEquality (typeOf x) (typeOf k)
-          if castWith (apply Refl proof) x == k
-            then return $ castWith (apply Refl proof) $ DepCall x api as
-            else go history t
-        ActAssert p -> do
+          case inner <$> testEquality (typeOf x) (typeOf k) of
+            Just proof | castWith (apply Refl proof) x == k
+              -> return $ castWith (apply Refl proof) $ DepCall x api as
+            _ -> go history t
+        _ -> do
           go history t
       Par ts -> foldr ((<|>) . go history) empty ts
       Mu s t -> go history t

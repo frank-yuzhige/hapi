@@ -149,6 +149,17 @@ addEdge e aastg = AASTG (getStart aastg)
                         (IM.unionWith (\a b -> nubIntOn hash (a <> b)) (IM.singleton (startNode e) [e]) (getEdgesFrom aastg))
                         (IM.unionWith (\a b -> nubIntOn hash (a <> b)) (IM.singleton (endNode   e) [e]) (getEdgesTo aastg))
 
+isEquivalentEdge :: Edge api c -> Edge api c -> Bool
+isEquivalentEdge e e' = e == changeEdgeNode (startNode e) (endNode e) e'
+
+isUpdateEdge :: Edge api c -> Bool
+isUpdateEdge Update {} = True
+isUpdateEdge _         = False
+
+isRedirEdge :: Edge api c -> Bool
+isRedirEdge Redirect {} = True
+isRedirEdge _           = False
+
 -- | Instances
 instance Show (Edge api c) where
   show e = wrap $ header (startNode e) (endNode e) <> showEdgeLabel e
