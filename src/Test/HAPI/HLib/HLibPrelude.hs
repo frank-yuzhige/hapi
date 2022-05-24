@@ -1,9 +1,12 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TemplateHaskell #-}
 module Test.HAPI.HLib.HLibPrelude where
 
 import qualified Prelude as P
 import Test.HAPI.PrimApi (Prim(..), Prim'(..))
 import Prelude (($))
+import Test.HAPI.Util.TH (fatalError, FatalErrorKind (FATAL_ERROR))
 
 -- | "Prelude" Library for the Prim Api
 -- No one has time for every type hint, only where necessary :)
@@ -28,3 +31,15 @@ len = Prim "length" $ Arity1 P.length
 
 (==) :: P.Eq a => HLibPrelude '[a, a] P.Bool
 (==) = Prim "==" $ BinaryOp (P.==)
+
+fromLeft :: HLibPrelude '[P.Either a b] a
+fromLeft = Prim "fromRight" $ Arity1 check
+  where
+    check (P.Left  a) = a
+    check (P.Right _) = fatalError 'fromLeft FATAL_ERROR "Runtime error: fromLeft on a right value"
+
+fromRight :: HLibPrelude '[P.Either a b] b
+fromRight = Prim "fromRight" $ Arity1 check
+  where
+    check (P.Left  _) = fatalError 'fromRight FATAL_ERROR "Runtime error: fromRight on a left value"
+    check (P.Right a) = a

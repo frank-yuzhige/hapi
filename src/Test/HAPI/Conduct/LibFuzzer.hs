@@ -33,6 +33,7 @@ import Test.HAPI.AASTG.Synth (synthEntropyStub, execEntropyTraceHandler, execEnt
 import Control.Carrier.Writer.Church (runWriter)
 import Test.HAPI.AASTG.Effect.Trav (runTrav)
 import qualified Test.HAPI.ApiTrace.CodeGen.C as C
+import Data.Serialize (Serialize)
 
 data LibFuzzerConduct = LibFuzzerConduct
   { llvmFuzzerTestOneInputM :: CString -> CSize -> IO CInt
@@ -40,21 +41,21 @@ data LibFuzzerConduct = LibFuzzerConduct
   }
 
 
-libFuzzerConductViaAASTG :: (ValidApiDef api, Entry2BlockC api) => AASTG api (Fuzzable :<>: CCodeGen) -> LibFuzzerConduct
+libFuzzerConductViaAASTG :: (ValidApiDef api, Entry2BlockC api) => AASTG api (Serialize :<>: Fuzzable :<>: CCodeGen) -> LibFuzzerConduct
 libFuzzerConductViaAASTG aastg = LibFuzzerConduct
   { llvmFuzzerTestOneInputM = _llvmFuzzerTestOneInputM aastg
   , mainM                   = _traceMainM aastg
   }
 
 _llvmFuzzerTestOneInputM :: ( ValidApiDef api
-                            , CMembers Fuzzable c) => AASTG api c -> CString -> CSize -> IO CInt
+                            , CMembers (Fuzzable :<>: Serialize) c) => AASTG api c -> CString -> CSize -> IO CInt
 _llvmFuzzerTestOneInputM aastg str size = do
   bs <- BS.packCStringLen (str, fromIntegral size)
   runFuzzTest aastg bs
   return 0
 
 _traceMainM :: ( ValidApiDef api
-               , CMembers (CCodeGen :<>: Fuzzable) c
+               , CMembers (CCodeGen :<>: Fuzzable :<>: Serialize) c
                , Entry2BlockC api) => AASTG api c -> IO ()
 _traceMainM aastg = do
   opt <- execParser opts
@@ -84,7 +85,7 @@ runFuzzTest :: forall api c sig m.
              ( MonadIO m
              , MonadFail m
              , Algebra sig m
-             , c :>>>: Fuzzable
+             , CMembers (Fuzzable :<>: Serialize) c
              , ValidApiDef api)
           => AASTG api c
           -> ByteString
@@ -116,7 +117,7 @@ runFuzzTrace :: forall api c sig m.
               ( MonadIO m
               , MonadFail m
               , Algebra sig m
-              , CMembers (CCodeGen :<>: Fuzzable) c
+              , CMembers (CCodeGen :<>: Fuzzable :<>: Serialize) c
               , ValidApiDef api
               , Entry2BlockC api)
            => AASTG api c

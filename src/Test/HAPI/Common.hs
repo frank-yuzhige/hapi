@@ -4,20 +4,27 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE MagicHash #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Test.HAPI.Common where
 import Data.Data (Typeable)
 import Control.Algebra (Has, type (:+:))
-import Data.Serialize (Serialize)
+import Data.Serialize (Serialize (..))
 import Test.HAPI.VPtr (VPtr)
 import Data.Constraint (Constraint)
 import Data.Kind (Type)
 import Data.SOP (All)
 import Data.Hashable (Hashable)
+import GHC.Generics (Generic)
+import GHC.Exts
+import GHC.ForeignPtr (ForeignPtr(..), ForeignPtrContents(..))
 
-class (Typeable t, Show t, Eq t, Serialize t, Hashable t) => Fuzzable t
+class (Typeable t, Show t, Eq t, Hashable t) => Fuzzable t
 
-instance (Typeable t, Show t, Eq t, Serialize t, Hashable t) => Fuzzable t
+instance (Typeable t, Show t, Eq t, Hashable t) => Fuzzable t
 -- TODO: Fine grain control of Fuzzable instance
 -- instance Fuzzable Int
 -- instance Fuzzable Char
@@ -25,3 +32,27 @@ instance (Typeable t, Show t, Eq t, Serialize t, Hashable t) => Fuzzable t
 -- instance (Fuzzable a) => Fuzzable (VPtr a)
 
 -- type AllFuzzable p = (All Fuzzable p, All Compos)
+
+deriving instance Generic (Ptr a)
+instance Serialize (Ptr a) where
+  put p = put (castPtr2Int p)
+  get   = castInt2Ptr <$> get @Int
+
+deriving instance Generic (ForeignPtr a)
+
+
+-- instance Serialize ForeignPtrContents where
+--   put (PlainForeignPtr ir) = _wa
+--   put (MallocPtr mba ir) = _wb
+--   put (PlainPtr mba) = _wc
+
+-- instance Serialize (ForeignPtr a) where
+--   -- put p = put (castPtr2Int p)
+--   -- get   = castInt2Ptr <$> get @Int
+
+
+castInt2Ptr :: Int -> Ptr a
+castInt2Ptr (I# i) = Ptr (int2Addr# i)
+
+castPtr2Int :: Ptr a -> Int
+castPtr2Int (Ptr a) = I# (addr2Int# a)

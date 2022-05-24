@@ -35,7 +35,7 @@ import Test.HAPI.Common (Fuzzable)
 import Data.Maybe (fromJust)
 import Data.HList (HList (HNil), HMap,type  (:~:) (Refl))
 import Data.SOP ( Proxy(Proxy), NP(..), All, hcmap )
-import Test.HAPI.Args (Args, pattern (::*), Attribute (..), validate, DirectAttribute (..))
+import Test.HAPI.Args (Args, pattern (::*), Attribute (..), validate, DirectAttribute (..), ExogenousAttribute (..))
 import Data.SOP.Dict (mapAll)
 import Data.Serialize (Serialize)
 import Test.HAPI.Effect.Orchestration (Orchestration, nextInstruction, OrchestrationError)
@@ -99,18 +99,18 @@ instance (Algebra sig m, Members (State PState :+: GenA) sig, c :>>>: Arbitrary)
           return (ctx $> fromJust v)   -- TODO Exception
         Direct (Value v) -> do
           return (ctx $> v)
-        Anything     -> do
+        Exogenous Anything     -> do
           v <- liftGenA (arbitrary \\ castC @Arbitrary (Dict @(c a)))
           return (ctx $> v)
-        IntRange l r -> do
+        Exogenous (IntRange l r) -> do
           v <- liftGenA (chooseInt (l, r))
           return (ctx $> v)
-        Range    l r -> do
+        Exogenous (Range    l r) -> do
           v <- liftGenA (chooseEnum (l, r))
           return (ctx $> v)
-        AnyOf xs     -> do
-          a <- oneof' (return <$> xs)
-          resolveQVS (QVS a)
+        -- Exogenous AnyOf xs     -> do
+          -- a <- oneof' (return <$> xs)
+          -- resolveQVS (QVS a)
 
 newtype QVSFromStdinAC (c :: Type -> Constraint) m a = QVSFromStdinAC { runQVSFromStdinAC :: m a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadFail)
@@ -135,13 +135,13 @@ newtype QVSFromOrchestrationAC (c :: Type -> Constraint) m a = QVSFromOrchestrat
 instance ( Has (Orchestration QVSSupply) sig m
          , Has (State PState)            sig m
          , Has (Error QVSError)          sig m
-         , c :>>>: Fuzzable)
+         , c :>>>: Serialize)
       => Algebra (QVS c :+: sig) (QVSFromOrchestrationAC c m) where
   alg hdl sig ctx = QVSFromOrchestrationAC $ case sig of
     L qvs   -> resolveQVS qvs
     R other -> alg (runQVSFromOrchestrationAC . hdl) other ctx
     where
-      resolveQVS (QVS attr) = case attr of
+      resolveQVS (QVS (attr :: Attribute a)) = case attr of
         Direct (Get k)   -> do
           v <- gets @PState (lookUp k)
           case v of
@@ -150,19 +150,19 @@ instance ( Has (Orchestration QVSSupply) sig m
           return (ctx $> fromJust v)   -- TODO Exception
         Direct (Value v) -> do
           return (ctx $> v)
-        Anything     -> do
-          v <- next (show attr)
+        Exogenous Anything     -> do
+          v <- next (show attr) \\ castC @Serialize (Dict @(c a))
           return (ctx $> v)
-        IntRange l r -> do
+        Exogenous (IntRange l r) -> do
           v <- next (show attr)
           return (ctx $> sampleRange l r v)
-        Range    l r -> do
+        Exogenous (Range    l r) -> do
           v <- next (show attr)
           return (ctx $> sampleRange l r v)
-        AnyOf xs     -> do
-          v <- next (show attr)
-          let a = xs !! (v `mod` length xs)
-          resolveQVS (QVS a)
+        -- AnyOf xs     -> do
+          -- v <- next (show attr)
+          -- let a = xs !! (v `mod` length xs)
+          -- resolveQVS (QVS a)
         where
           next attr = do
             x <- nextInstruction @QVSSupply

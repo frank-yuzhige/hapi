@@ -237,7 +237,7 @@ isSubTypeUB :: forall sig m.
           -> m VarSubstitution
 isSubTypeUB (UnboundedProcTypeMap uptm) sub sup
   = do
-  debug $ printf "%s: Checking ... \n>>  %s\n>>  %s" (show 'isSubTypeUB) (show sub) (show sup)
+  -- debug $ printf "%s: Checking ... \n>>  %s\n>>  %s" (show 'isSubTypeUB) (show sub) (show sup)
   sub ~<=~ sup
   where
     look x = fromMaybe Zero $ IM.lookup x uptm
@@ -245,7 +245,7 @@ isSubTypeUB (UnboundedProcTypeMap uptm) sub sup
       checked <- gets (HS.member (a, b) . view checkedPairs)
       if checked then return emptyVarSub else do
         modify $ over checkedPairs $ HS.insert (a, b)
-        debug $ printf "%s: Checking ... \n>>  %s\n>>  %s" (show 'isSubTypeUB <> ":~<=~") (show a) (show b)
+        -- debug $ printf "%s: Checking ... \n>>  %s\n>>  %s" (show 'isSubTypeUB <> ":~<=~") (show a) (show b)
         case (a, b) of
           (Zero, Zero) ->
             return emptyVarSub
@@ -278,11 +278,11 @@ isSubTypeUB (UnboundedProcTypeMap uptm) sub sup
             let as' = castWith (apply Refl pp) as
                 xa' = castWith (apply Refl pa) xa
                 s0  = singletonVarSub xb xa'
-            debug $ printf "%s: API call is eq" (show 'isSubTypeUB)
+            -- debug $ printf "%s: API call is eq" (show 'isSubTypeUB)
             s1 <- getVarSubFromArgs look look sub sup as' bs
-            debug $ printf "%s: varsub ok" (show 'isSubTypeUB)
+            -- debug $ printf "%s: varsub ok" (show 'isSubTypeUB)
             s2 <- liftMaybe $ s0 `unifyVarSubstitution` s1
-            debug $ printf "%s: unify ok" (show 'isSubTypeUB)
+            -- debug $ printf "%s: unify ok" (show 'isSubTypeUB)
             s3 <- ta ~<=~ tb
             liftMaybe $ s2 `unifyVarSubstitution` s3
           (Act a'@(ActAssert (Value a)) ta, Act b'@(ActAssert (Value b)) tb) -> do
@@ -307,18 +307,18 @@ getVarSubFromArgs :: forall p sig m.
                 -> m VarSubstitution
 getVarSubFromArgs look1 look2 d1 d2 Nil       Nil       = return emptyVarSub
 getVarSubFromArgs look1 look2 d1 d2 (a :* as) (b :* bs) = do
-  debug $ printf "%s: subbing %s" (show 'getVarSubFromArgs) (show (a, b))
+  -- debug $ printf "%s: subbing %s" (show 'getVarSubFromArgs) (show (a, b))
   u  <- unify (DepAttr a) (DepAttr b)
   us <- getVarSubFromArgs look1 look2 d1 d2 as bs
   liftMaybe $ unifyVarSubstitution u us
   where
     -- 2 variables are effectively the same, iff they point to some non-variable attribute that is the same.
     unify (DepAttr (Direct (Get x1))) (DepAttr (Direct (Get x2))) = do
-      debug $ printf "%s: var start %s" (show 'getVarSubFromArgs <> ".unify") (show (x1, x2))
+      -- debug $ printf "%s: var start %s" (show 'getVarSubFromArgs <> ".unify") (show (x1, x2))
       (_, dx1) <- unaliasVar look1 d1 x1
-      debug $ printf "%s: var %s;" (show 'getVarSubFromArgs <> ".unify") (show (x1, dx1))
+      -- debug $ printf "%s: var %s;" (show 'getVarSubFromArgs <> ".unify") (show (x1, dx1))
       (_, dx2) <- unaliasVar look2 d2 x2
-      debug $ printf "%s: var %s;" (show 'getVarSubFromArgs <> ".unify") (show (x2, dx2))
+      -- debug $ printf "%s: var %s;" (show 'getVarSubFromArgs <> ".unify") (show (x2, dx2))
       TM.adjust (SE . HM.insert x2 x1 . unSE) <$> unify dx1 dx2
     -- Non-variable attributes are effectively the same, iff they are the same. (lol)
     unify (DepAttr a) (DepAttr b)
@@ -341,7 +341,7 @@ unaliasVar look t x = do
 lookupPKInType :: forall t sig m. (Fuzzable t, Eff NonDet sig m) => (SVar -> ProcType) -> PKey t -> ProcType -> m (Dep t)
 lookupPKInType look k t = do
   d <- go IS.empty t
-  debug $ printf "%s: k = %s; v = %s" (show 'lookupPKInType) (show k) (show d)
+  -- debug $ printf "%s: k = %s; v = %s" (show 'lookupPKInType) (show k) (show d)
   return d
   where
     go history = \case

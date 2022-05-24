@@ -135,7 +135,7 @@ renameVarsInEdge vsb = \case
 renameVarsInAttr :: VarSubstitution -> Attribute t -> Attribute t
 renameVarsInAttr vsb = \case
   Direct (Get k) -> Direct (Get (lookVar' k vsb))
-  AnyOf xs       -> AnyOf (map (renameVarsInAttr vsb) xs)
+  -- AnyOf xs       -> AnyOf (map (renameVarsInAttr vsb) xs)
   other          -> other
 
 renameVarsInAttrs :: VarSubstitution -> Attributes t -> Attributes t

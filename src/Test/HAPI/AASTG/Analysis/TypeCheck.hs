@@ -142,7 +142,7 @@ checkEdge ctx edge = case edge of
         if x `memberCtx` ctx
           then return Nothing
           else return $ Just $ UseVariableNotInContext (getPKeyID x) ctx
-      AnyOf as -> foldr (<|>) Nothing <$> mapM checkAttr as
+      -- AnyOf as -> foldr (<|>) Nothing <$> mapM checkAttr as
       _        -> return Nothing
 
 

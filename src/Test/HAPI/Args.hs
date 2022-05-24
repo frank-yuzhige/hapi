@@ -37,10 +37,10 @@ import Data.Type.Equality (testEquality, castWith)
 import Type.Reflection (typeOf)
 import Data.Hashable (Hashable (hashWithSalt))
 
-type Args       a = NP I          a
-type Attributes a = NP Attribute  a
+type Args          a = NP I          a
+type Attributes    a = NP Attribute  a
 type DirAttributes a = NP DirectAttribute a
-type ArgPattern a = NP (K String) a
+type ArgPattern    a = NP (K String) a
 
 pattern (::*) :: x -> Args xs -> Args (x : xs)
 pattern a ::* b = I a :* b
@@ -48,23 +48,37 @@ pattern a ::* b = I a :* b
 infixr 2 ::*
 
 data Attribute a where
-  Direct   :: (Fuzzable a) => DirectAttribute a -> Attribute a
-  Anything :: (Fuzzable a) => Attribute a
-  IntRange :: Int -> Int -> Attribute Int
-  Range    :: (Fuzzable a, Ord a, Enum a)
-           => a -> a -> Attribute a
-  AnyOf    :: (Fuzzable a) => [Attribute a] -> Attribute a
+  Direct    :: (Fuzzable a) => DirectAttribute a -> Attribute a
+  Exogenous :: (Fuzzable a) => ExogenousAttribute a -> Attribute a
+  -- AnyOf    :: (Fuzzable a) => [Attribute a] -> Attribute a
 
 
 data DirectAttribute a where
   Value :: a -> DirectAttribute a
   Get   :: PKey a -> DirectAttribute a
 
+data ExogenousAttribute a where
+  Anything :: ExogenousAttribute a
+  IntRange :: Int -> Int -> ExogenousAttribute Int
+  Range    :: (Enum a, Ord a)
+           => a -> a -> ExogenousAttribute a
+
+-- Smart constructor
+
 value :: (Fuzzable a) => a -> Attribute a
 value = Direct . Value
 
 getVar :: (Fuzzable a) => PKey a -> Attribute a
 getVar = Direct . Get
+
+anything :: (Fuzzable a) => Attribute a
+anything = Exogenous Anything
+
+range :: (Fuzzable a, Enum a, Ord a) => a -> a -> Attribute a
+range a b = Exogenous $ Range a b
+
+irange :: (Fuzzable Int) => Int -> Int -> Attribute Int
+irange a b = Exogenous $ IntRange a b
 
 noArgs :: Args '[]
 noArgs = Nil
@@ -92,9 +106,9 @@ args = QuasiQuoter {
 -- | Check if the provided value satisfies the attribute
 validate :: Attribute a -> a -> Bool
 validate attr a = case attr of
-  IntRange l r -> l <= a && a <= r
-  Range    l r -> l <= a && a <= r
-  _            -> True
+  Exogenous (IntRange l r) -> l <= a && a <= r
+  Exogenous (Range    l r) -> l <= a && a <= r
+  _                        -> True
 
 attributesEq :: forall a b. (Typeable a, Typeable b, All (Compose Eq Attribute) a, All (Compose Eq Attribute) b) => Attributes a -> Attributes b -> Bool
 attributesEq a b = case testEquality (typeOf a) (typeOf b) of
@@ -119,31 +133,33 @@ eqAttributes (a :* as) (b :* bs) = a == b && eqAttributes as bs
 
 -- Hoist
 attrInt2Bool :: (Integral i, Fuzzable i) => Attribute i -> Attribute Bool
-attrInt2Bool (Direct (Value i))      = value (i /= 0)
-attrInt2Bool Anything       = Anything
-attrInt2Bool (IntRange l r)
+attrInt2Bool (Direct (Value i))   = value (i /= 0)
+attrInt2Bool (Exogenous Anything) = Exogenous Anything
+attrInt2Bool (Exogenous (IntRange l r))
   | l == 0 && r == 0 = value False
-  | l <= 0 && 0 <= r = Range False True
+  | l <= 0 && 0 <= r = Exogenous $ Range False True
   | otherwise        = value True
-attrInt2Bool (Range l r)
+attrInt2Bool (Exogenous (Range l r))
   | l == 0 && r == 0 = value False
-  | l <= 0 && 0 <= r = Range False True
+  | l <= 0 && 0 <= r = Exogenous $ Range False True
   | otherwise        = value True
 attrInt2Bool (Direct (Get pk))       = getVar (PKey $ getPKeyID pk)
-attrInt2Bool (AnyOf ats)    = AnyOf (map attrInt2Bool ats)
+-- attrInt2Bool (AnyOf ats)    = AnyOf (map attrInt2Bool ats)
 
 instance Show a => Show (DirectAttribute a) where
   show (Value a)  = show a
   show (Get   pk) = getPKeyID pk
 
-instance Show a => Show (Attribute a) where
-  show (Direct d) = show d
-  show Anything = "Anything"
+instance Show a => Show (ExogenousAttribute a) where
+  show (Anything) = "Anything"
   show (IntRange n i) = "[" <> show n <> ".." <> show i <> "]"
   show (Range a a') = "[" <> show a <> ".." <> show a' <> "]"
-  show (AnyOf ats) = "Any of " <> show ats
+instance Show a => Show (Attribute a) where
+  show (Direct    d) = show d
+  show (Exogenous d) = show d
 
 deriving instance Eq a => Eq (DirectAttribute a)
+deriving instance Eq a => Eq (ExogenousAttribute a)
 deriving instance Eq a => Eq (Attribute a)
 
 instance Hashable a => Hashable (DirectAttribute a) where
@@ -151,13 +167,17 @@ instance Hashable a => Hashable (DirectAttribute a) where
     Value a  -> salt `hashWithSalt` "value" `hashWithSalt` a
     Get   pk -> salt `hashWithSalt` "value" `hashWithSalt` pk
 
-instance Hashable a => Hashable (Attribute a) where
+instance Hashable a => Hashable (ExogenousAttribute a) where
   hashWithSalt salt = \case
-    Direct d     -> salt `hashWithSalt` "dir" `hashWithSalt` d
     Anything     -> salt `hashWithSalt` "any"
     IntRange n i -> salt `hashWithSalt` "irange" `hashWithSalt` n `hashWithSalt` i
     Range a a'   -> salt `hashWithSalt` "range" `hashWithSalt` a `hashWithSalt` a
-    AnyOf ats    -> salt `hashWithSalt` "anyof" `hashWithSalt` ats
+instance Hashable a => Hashable (Attribute a) where
+  hashWithSalt salt = \case
+    Direct d     -> salt `hashWithSalt` "dir" `hashWithSalt` d
+    Exogenous d  -> salt `hashWithSalt` "exo" `hashWithSalt` d
+
+    -- AnyOf ats    -> salt `hashWithSalt` "anyof" `hashWithSalt` ats
 
 instance (All Fuzzable p) => Hashable (NP Attribute p) where
   hashWithSalt salt Nil       = salt `hashWithSalt` "Nil"

@@ -49,22 +49,22 @@ ruleApplicable i rule@(GenRule pre gen post uptm) aastg = do
   mv <- boundProcType uptm pre `isSubType'` boundProcType uptm2 ti
   case mv of
     Nothing  -> do
-      debug $ printf "%s: pre failed on %s! \n %s \n %s" (show 'ruleApplicable) (show i) (show (boundProcType uptm pre)) (show (boundProcType uptm2 ti))
+      -- debug $ printf "%s: pre failed on %s! \n %s \n %s" (show 'ruleApplicable) (show i) (show (boundProcType uptm pre)) (show (boundProcType uptm2 ti))
       return []
     Just vsb -> do
       let edge' = renameVarsInEdge vsb gen
       if any (isEquivalentEdge edge') (edgesFrom i (castAASTG aastg)) then return [] else do
-      merr <- checkEdge (procCtxOf i aastg) edge'
-      case merr of
-        Just tec -> do
-          debug $ printf "%s: ctx failed on %s!" (show 'ruleApplicable) (show i)
-          return []
-        Nothing  -> do
-          debug $ printf "%s: pre SAT!" (show 'ruleApplicable)
-          xs <- concat <$> traverse (checkPost vsb edge') (allNodes $ castAASTG aastg)
-          if isRedirEdge gen
-            then return xs
-            else return $ (maxNodeID (castAASTG aastg) + 1, vsb) : xs
+        merr <- checkEdge (procCtxOf i aastg) edge'
+        case merr of
+          Just tec -> do
+            -- debug $ printf "%s: ctx failed on %s!" (show 'ruleApplicable) (show i)
+            return []
+          Nothing  -> do
+            -- debug $ printf "%s: pre SAT!" (show 'ruleApplicable)
+            xs <- concat <$> traverse (checkPost vsb edge') (allNodes $ castAASTG aastg)
+            if isRedirEdge gen
+              then return xs
+              else return $ (maxNodeID (castAASTG aastg) + 1, vsb) : xs
   where
     ti = procTypeUBOf i aastg
     uptm2 = procTypes $ typeCheckCtx aastg
