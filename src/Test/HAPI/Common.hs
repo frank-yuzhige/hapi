@@ -33,11 +33,6 @@ instance (Typeable t, Show t, Eq t, Hashable t) => Fuzzable t
 
 -- type AllFuzzable p = (All Fuzzable p, All Compos)
 
-deriving instance Generic (Ptr a)
-instance Serialize (Ptr a) where
-  put p = put (castPtr2Int p)
-  get   = castInt2Ptr <$> get @Int
-
 deriving instance Generic (ForeignPtr a)
 
 
@@ -51,8 +46,3 @@ deriving instance Generic (ForeignPtr a)
 --   -- get   = castInt2Ptr <$> get @Int
 
 
-castInt2Ptr :: Int -> Ptr a
-castInt2Ptr (I# i) = Ptr (int2Addr# i)
-
-castPtr2Int :: Ptr a -> Int
-castPtr2Int (Ptr a) = I# (addr2Int# a)

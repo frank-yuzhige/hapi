@@ -34,6 +34,7 @@ import Test.HAPI.AASTG.Effect.Trav (runTrav)
 import qualified Test.HAPI.ApiTrace.CodeGen.C as C
 import Data.Serialize (Serialize)
 import Data.Data (Typeable)
+import Test.HAPI.Serialize (HSerialize)
 
 data LibFuzzerConduct = LibFuzzerConduct
   { llvmFuzzerTestOneInputM :: CString -> CSize -> IO CInt
@@ -43,7 +44,7 @@ data LibFuzzerConduct = LibFuzzerConduct
 
 libFuzzerConductViaAASTG :: ( ValidApiDef api
                             , Entry2BlockC api
-                            , CMembers (Serialize :<>:  CCodeGen) c
+                            , CMembers (HSerialize :<>:  CCodeGen) c
                             , Typeable c)
                          => AASTG api c -> LibFuzzerConduct
 libFuzzerConductViaAASTG aastg = LibFuzzerConduct
@@ -52,7 +53,7 @@ libFuzzerConductViaAASTG aastg = LibFuzzerConduct
   }
 
 _llvmFuzzerTestOneInputM :: ( ValidApiDef api
-                            , CMembers Serialize c
+                            , CMembers HSerialize c
                             , Typeable c)
                          => AASTG api c -> CString -> CSize -> IO CInt
 _llvmFuzzerTestOneInputM aastg str size = do
@@ -61,7 +62,7 @@ _llvmFuzzerTestOneInputM aastg str size = do
   return 0
 
 _traceMainM :: ( ValidApiDef api
-               , CMembers (CCodeGen :<>: Serialize) c
+               , CMembers (CCodeGen :<>: HSerialize) c
                , Typeable c
                , Entry2BlockC api)
             => AASTG api c -> IO ()
@@ -93,7 +94,7 @@ runFuzzTest :: forall api c sig m.
              ( MonadIO m
              , MonadFail m
              , Algebra sig m
-             , CMembers Serialize c
+             , CMembers HSerialize c
              , Typeable c
              , ValidApiDef api)
           => AASTG api c
@@ -112,7 +113,7 @@ runFuzzTest aastg bs
     $ runState (\s a -> return a) PS.emptyPState
     $ runState @EQSupplier (\s a -> return a) supply
     $ runOrchestrationViaBytes @QVSSupply     @EQSupplier
-    $ runQVSFromOrchestrationAC @c
+    $ runQVSFromOrchestrationAC @HSerialize @c
     $ runOrchestrationViaBytes @EntropySupply @EQSupplier
     $ runEntropyAC
     $ runTrav @api @c execEntropyFuzzerHandler
@@ -126,7 +127,7 @@ runFuzzTrace :: forall api c sig m.
               ( MonadIO m
               , MonadFail m
               , Algebra sig m
-              , CMembers (CCodeGen :<>: Serialize) c
+              , CMembers (CCodeGen :<>: HSerialize) c
               , Typeable c
               , ValidApiDef api
               , Entry2BlockC api)
@@ -147,7 +148,7 @@ runFuzzTrace aastg bs
         $ runState (\s a -> return a) PS.emptyPState
         $ runState @EQSupplier (\s a -> return a) supply
         $ runOrchestrationViaBytes @QVSSupply     @EQSupplier
-        $ runQVSFromOrchestrationAC @c
+        $ runQVSFromOrchestrationAC @HSerialize @c
         $ runOrchestrationViaBytes @EntropySupply @EQSupplier
         $ runEntropyAC
         $ runTrav @api @c execEntropyTraceHandler

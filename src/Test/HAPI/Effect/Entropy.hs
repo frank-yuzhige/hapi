@@ -30,6 +30,7 @@ import Control.Carrier.Error.Either (runError, liftEither)
 import Data.Either.Combinators (mapLeft)
 import Data.Word (Word8)
 import Test.HAPI.Effect.Eff
+import qualified Data.Serialize as S
 
 data EntropySupplier (m :: Type -> Type) a where
   GetEntropy :: Int -> EntropySupplier m (Maybe Int)
@@ -50,6 +51,6 @@ instance ( Alg sig m
       -- We use entropy bytestring's length to indicate how long the traversal is.
       -- So even if we only have one out edge, we still eat a byte to avoid infinite loop.
       | otherwise -> do
-        mi <- nextInstruction @EntropySupply @Word8
+        mi <- nextInstruction @EntropySupply @Word8 S.get
         return (ctx $> ((\i -> fromIntegral i `mod` r) <$> mi))
     R other -> alg (runEntropyAC . hdl) other ctx

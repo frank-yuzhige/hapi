@@ -14,6 +14,7 @@ import Test.HAPI.DataType   as X
 import Test.HAPI.Effect     as X
 import Test.HAPI.PState     as X
 import Test.HAPI.Run        as X
+import Test.HAPI.Serialize  as X
 import Test.HAPI.VPtr       as X
 
 -- Re-exports

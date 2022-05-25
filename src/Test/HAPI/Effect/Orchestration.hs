@@ -37,10 +37,10 @@ import Test.HAPI.Effect.Eff
 import Text.Printf (printf)
 
 data Orchestration label (m :: Type -> Type) a where
-  NextInstruction :: (Serialize a, Show a) => Orchestration label m (Maybe a)
+  NextInstruction :: (Serialize a, Show a) => S.Get a -> Orchestration label m (Maybe a)
 
-nextInstruction :: forall label a c sig m. (Has (Orchestration label) sig m, Serialize a, Show a) => m (Maybe a)
-nextInstruction = send (NextInstruction @a @label)
+nextInstruction :: forall label a c sig m. (Has (Orchestration label) sig m, Serialize a, Show a) => S.Get a -> m (Maybe a)
+nextInstruction = send . NextInstruction @a @label
 
 newtype OrchestrationError = OrchestrationError String
 
@@ -65,9 +65,9 @@ instance ( Alg sig m
          , Members (State supply) sig)
       => Algebra (Orchestration label :+: sig) (OrchestrationViaBytesAC label supply m) where
   alg hdl sig ctx = OrchestrationViaBytesAC $ case sig of
-    L NextInstruction -> do
-      e <- gets @supply (eatBytes (labelConsumeDir @label) S.get)
-      debug $ printf "%s: e = %s" (show 'alg) (show e)
+    L (NextInstruction get) -> do
+      e <- gets @supply (eatBytes (labelConsumeDir @label) get)
+      -- debug $ printf "%s: e = %s" (show 'alg) (show e)
       case e of
         Left err          -> return (ctx $> Nothing)
         Right (a, supply) -> put supply >> return (ctx $> Just a)

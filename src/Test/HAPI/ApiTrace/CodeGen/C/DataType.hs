@@ -16,10 +16,11 @@ import Test.HAPI.ApiTrace.CodeGen.C.Util
 import Data.Data (Typeable, Proxy (..))
 import Test.HAPI.Constraint (type (:<>:))
 import Foreign
-import Foreign.C (CInt(..), CChar(..))
+import Foreign.C (CInt(..), CChar(..), CIntPtr(..), CLong(..), CULong(..), CUChar(..), CPtrdiff(..), CLLong(..), CULLong(..), CUInt(..), CUIntPtr(..))
 import Data.Hashable (Hashable)
 import Data.Serialize (Serialize)
 import Language.C.Data.Ident (internalIdent)
+import Test.HAPI.Serialize (HSerialize)
 
 class TyConstC a where
   toCConst :: a -> CExpr
@@ -71,5 +72,45 @@ ctype s = (ty (internalIdent s), id)
 -- C DataType Extra Instances
 deriving instance Hashable CInt
 deriving instance Serialize CInt
+instance HSerialize CInt
+
+deriving instance Hashable CUInt
+deriving instance Serialize CUInt
+instance HSerialize CUInt
+
 deriving instance Hashable CChar
 deriving instance Serialize CChar
+instance HSerialize CChar
+
+deriving instance Hashable CLong
+deriving instance Serialize CLong
+instance HSerialize CLong
+
+deriving instance Hashable CLLong
+deriving instance Serialize CLLong
+instance HSerialize CLLong
+
+deriving instance Hashable CULong
+deriving instance Serialize CULong
+instance HSerialize CULong
+
+deriving instance Hashable CULLong
+deriving instance Serialize CULLong
+instance HSerialize CULLong
+
+deriving instance Hashable CUChar
+deriving instance Serialize CUChar
+instance HSerialize CUChar
+
+deriving instance Hashable CIntPtr
+deriving instance Serialize CIntPtr
+instance HSerialize CIntPtr
+
+deriving instance Hashable CUIntPtr
+deriving instance Serialize CUIntPtr
+instance HSerialize CUIntPtr
+
+deriving instance Hashable CPtrdiff
+deriving instance Serialize CPtrdiff
+instance HSerialize CPtrdiff
+

@@ -81,6 +81,7 @@ library
       Test.HAPI.PrimApi
       Test.HAPI.PState
       Test.HAPI.Run
+      Test.HAPI.Serialize
       Test.HAPI.Util.ByteSupplier
       Test.HAPI.Util.Empty
       Test.HAPI.Util.SOP

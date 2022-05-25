@@ -49,6 +49,9 @@ import Control.Effect.Error (Error, liftEither, throwError)
 import Control.Carrier.Error.Either (runError)
 import Data.Either.Combinators (mapLeft)
 import Test.HAPI.Util.TH (fatalError, FatalErrorKind (FATAL_ERROR))
+import Test.HAPI.Serialize (HSerialize)
+import qualified Test.HAPI.Serialize as HS
+import qualified Data.Serialize as S
 
 
 -- Quantified Value Supplier
@@ -152,14 +155,14 @@ instance (Algebra sig m, Members (State PState :+: GenA) sig, c :>>>: Arbitrary)
 --           then return a
 --           else fail "Not in range"
 
-newtype QVSFromOrchestrationAC (c :: Type -> Constraint) m a = QVSFromOrchestrationAC { runQVSFromOrchestrationAC :: m a }
+newtype QVSFromOrchestrationAC (c0 :: Type -> Constraint) (c :: Type -> Constraint) m a = QVSFromOrchestrationAC { runQVSFromOrchestrationAC :: m a }
   deriving (Functor, Applicative, Monad, MonadFail)
 
 instance ( Has (Orchestration QVSSupply) sig m
          , Has (State PState)            sig m
          , Has (Error QVSError)          sig m
          , c :>>>: Serialize)
-      => Algebra (QVS c :+: sig) (QVSFromOrchestrationAC c m) where
+      => Algebra (QVS c :+: sig) (QVSFromOrchestrationAC Serialize c m) where
   alg hdl sig ctx = QVSFromOrchestrationAC $ case sig of
     L qvs   -> resolveQVS qvs
     R other -> alg (runQVSFromOrchestrationAC . hdl) other ctx
@@ -182,16 +185,49 @@ instance ( Has (Orchestration QVSSupply) sig m
         QExogenous a@(Range    l r) -> do
           v <- next (show a)
           return (ctx $> sampleRange l r v)
-        -- QList Nil -> do
-        --   return (ctx $> Nil)
-        -- QList (q :* qs) -> do
-        -- AnyOf xs     -> do
-          -- v <- next (show attr)
-          -- let a = xs !! (v `mod` length xs)
-          -- resolveQVS (QVS a)
         where
           next attr = do
-            x <- nextInstruction @QVSSupply
+            x <- nextInstruction @QVSSupply S.get
+            case x of
+              Nothing -> throwError (QVSError attr "QVS supplier exhausted")
+              Just  a -> return a
+
+          sampleRange l r v = toEnum $ l' + (v `mod` (r' - l' + 1))
+            where
+              l' = fromEnum l
+              r' = fromEnum r
+
+
+instance ( Has (Orchestration QVSSupply) sig m
+         , Has (State PState)            sig m
+         , Has (Error QVSError)          sig m
+         , c :>>>: HSerialize)
+      => Algebra (QVS c :+: sig) (QVSFromOrchestrationAC HSerialize c m) where
+  alg hdl sig ctx = QVSFromOrchestrationAC $ case sig of
+    L qvs   -> resolveQVS qvs
+    R other -> alg (runQVSFromOrchestrationAC . hdl) other ctx
+    where
+      resolveQVS (qvs :: QVS c n a) = case qvs of
+        QDirect a@(Get k)   -> do
+          v <- gets @PState (lookUp k)
+          case v of
+            Nothing -> throwError (QVSError (show k) "Variable not in scope!")
+            Just a  -> return (ctx $> a)
+          return (ctx $> fromJust v)   -- TODO Exception
+        QDirect (Value v) -> do
+          return (ctx $> v)
+        QExogenous a@Anything     -> do
+          v <- next (show a) \\ castC @HSerialize (Dict @(c a))
+          return (ctx $> v)
+        QExogenous a@(IntRange l r) -> do
+          v <- next (show a)
+          return (ctx $> sampleRange l r v)
+        QExogenous a@(Range    l r) -> do
+          v <- next (show a)
+          return (ctx $> sampleRange l r v)
+        where
+          next attr = do
+            x <- nextInstruction @QVSSupply HS.hget
             case x of
               Nothing -> throwError (QVSError attr "QVS supplier exhausted")
               Just  a -> return a
