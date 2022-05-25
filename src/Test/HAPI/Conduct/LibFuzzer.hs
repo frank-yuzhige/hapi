@@ -15,10 +15,9 @@ import Options.Applicative (Parser, strArgument, help, info, (<**>), helper, ful
 import Control.Monad (when, void)
 import Test.HAPI.AASTG.GraphViz (previewAASTG)
 import Language.C (CConst, CExpr, Pretty (pretty))
-import Test.HAPI.Constraint (CMembers, type (:<>:))
+import Test.HAPI.Constraint ( CMembers, type (:<>:), type (:>>>:) )
 import Test.HAPI.ApiTrace.CodeGen.C.DataType (CCodeGen)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Test.HAPI.Constraint (type (:>>>:))
 import Control.Algebra (Algebra)
 import Data.ByteString (ByteString)
 import Test.HAPI.Effect (PropertyError, PropertyA, runEnvIO, runProperty, runApiFFI, runOrchestrationViaBytes, QVSFromOrchestrationAC (runQVSFromOrchestrationAC), EntropyAC (runEntropyAC), runApiTrace, QVSError (QVSError))
@@ -44,25 +43,28 @@ data LibFuzzerConduct = LibFuzzerConduct
 
 libFuzzerConductViaAASTG :: ( ValidApiDef api
                             , Entry2BlockC api
-                            , CMembers (Serialize :<>: Fuzzable :<>: CCodeGen) c
-                            , Typeable c) => AASTG api c -> LibFuzzerConduct
+                            , CMembers (Serialize :<>:  CCodeGen) c
+                            , Typeable c)
+                         => AASTG api c -> LibFuzzerConduct
 libFuzzerConductViaAASTG aastg = LibFuzzerConduct
   { llvmFuzzerTestOneInputM = _llvmFuzzerTestOneInputM aastg
   , mainM                   = _traceMainM aastg
   }
 
 _llvmFuzzerTestOneInputM :: ( ValidApiDef api
-                            , CMembers (Fuzzable :<>: Serialize) c
-                            , Typeable c) => AASTG api c -> CString -> CSize -> IO CInt
+                            , CMembers Serialize c
+                            , Typeable c)
+                         => AASTG api c -> CString -> CSize -> IO CInt
 _llvmFuzzerTestOneInputM aastg str size = do
   bs <- BS.packCStringLen (str, fromIntegral size)
   runFuzzTest aastg bs
   return 0
 
 _traceMainM :: ( ValidApiDef api
-               , CMembers (CCodeGen :<>: Fuzzable :<>: Serialize) c
+               , CMembers (CCodeGen :<>: Serialize) c
                , Typeable c
-               , Entry2BlockC api) => AASTG api c -> IO ()
+               , Entry2BlockC api)
+            => AASTG api c -> IO ()
 _traceMainM aastg = do
   opt <- execParser opts
   let path = crashPath opt
@@ -91,7 +93,7 @@ runFuzzTest :: forall api c sig m.
              ( MonadIO m
              , MonadFail m
              , Algebra sig m
-             , CMembers (Fuzzable :<>: Serialize) c
+             , CMembers Serialize c
              , Typeable c
              , ValidApiDef api)
           => AASTG api c
@@ -124,7 +126,7 @@ runFuzzTrace :: forall api c sig m.
               ( MonadIO m
               , MonadFail m
               , Algebra sig m
-              , CMembers (CCodeGen :<>: Fuzzable :<>: Serialize) c
+              , CMembers (CCodeGen :<>: Serialize) c
               , Typeable c
               , ValidApiDef api
               , Entry2BlockC api)

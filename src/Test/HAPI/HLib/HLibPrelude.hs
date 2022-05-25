@@ -32,6 +32,9 @@ len = Prim "length" $ Arity1 P.length
 (==) :: P.Eq a => HLibPrelude '[a, a] P.Bool
 (==) = Prim "==" $ BinaryOp (P.==)
 
+fromIntegral :: (P.Integral a, P.Num b) => HLibPrelude '[a] b
+fromIntegral = Prim "fromIntegral" $ Arity1 P.fromIntegral
+
 fromLeft :: HLibPrelude '[P.Either a b] a
 fromLeft = Prim "fromRight" $ Arity1 check
   where

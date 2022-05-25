@@ -47,8 +47,6 @@ traceDecls xs = concat $ TM.toListWith (\(PKeySetEntry s) -> [makeDecl k \\ mapD
     collectVar :: [ApiTraceEntry api c] -> PKeySet c
     collectVar [] = emptyPKeySet
     collectVar (TraceCall (x :: PKey a) _ _ : xs) = addPKey2Set x \\ castC @Typeable (Dict @(c a)) $ collectVar xs
-      -- where
-      --   (ty, f) = toType @CExpr x \\ castC @CCodeGen (Dict @(c a))
     collectVar (_                           : xs) = collectVar xs
 
     makeDecl :: (CCodeGen a) => PKey a -> CBlockItem

@@ -286,8 +286,11 @@ infixl 8 !:
 sizeOfDecl :: CDecl -> CExpr
 sizeOfDecl decl = CSizeofType decl undefNode
 
-malloc :: CExpr -> CExpr
-malloc expr = fromString "malloc" # [expr]
+cmalloc :: CExpr -> CExpr
+cmalloc expr = fromString "malloc" # [expr]
+
+cfree :: CExpr -> CExpr
+cfree expr = fromString "free" # [expr]
 
 cAssert :: CExpr -> CExpr
 cAssert expr = fromString "assert" # [expr]

@@ -32,4 +32,5 @@ instance Entry2BlockC HLibPrelude where
       -> liftEToB $ pk2CVar x <-- let [x, y] = dirAttrs2CExprs @c args in cOp CSubOp x y
     ("*", BinaryOp {})
       -> liftEToB $ pk2CVar x <-- let [x, y] = dirAttrs2CExprs @c args in cOp CMulOp x y
+    -- TODO
     _    -> entry2BlockDefault a

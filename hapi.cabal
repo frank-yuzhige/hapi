@@ -52,6 +52,7 @@ library
       Test.HAPI.ApiTrace.CodeGen.C.Data
       Test.HAPI.ApiTrace.CodeGen.C.DataType
       Test.HAPI.ApiTrace.CodeGen.C.HLibPrelude
+      Test.HAPI.ApiTrace.CodeGen.C.HLibPtr
       Test.HAPI.ApiTrace.CodeGen.C.Util
       Test.HAPI.ApiTrace.Core
       Test.HAPI.ApiTrace.TyConst
