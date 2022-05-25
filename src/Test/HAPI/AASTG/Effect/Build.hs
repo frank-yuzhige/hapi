@@ -33,7 +33,7 @@ import Control.Carrier.State.Church (runState)
 import Control.Monad (void)
 import Test.HAPI.Util.SOP (InjNP (injNP))
 import Data.Data (typeRep, Typeable)
-import Data.Char (toLower)
+import Data.Char (toLower, isAlpha)
 
 {-
 do
@@ -221,7 +221,7 @@ instance ( Has (State [Edge api c]) sig m
   alg hdl sig ctx = BuildAASTGCA $ case sig of
     L (NewVarB p) -> do
       i <- sendLabelled @VAR Fresh
-      let v = PKey (toLower (head (show (typeRep p))) : show i)
+      let v = PKey ((toLower . head . filter isAlpha $ show (typeRep p)) : show i)
       return $ ctx $> v
     L NewNodeB -> do
       n <- sendLabelled @NodeID Fresh

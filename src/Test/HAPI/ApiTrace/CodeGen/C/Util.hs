@@ -3,6 +3,9 @@ module Test.HAPI.ApiTrace.CodeGen.C.Util where
 
 import           Language.C
 import           Data.String
+import Foreign (Ptr)
+
+-- Internal use only
 
 initListExprs :: [CExpr] -> CInit
 initListExprs input = CInitList (fmap (\x -> ([], CInitExpr x undefNode)) input) undefNode
@@ -27,6 +30,9 @@ cCharConst val = CConst (CCharConst (Language.C.cChar val) undefNode)
 
 cStrConst :: String -> CExpr
 cStrConst val = CConst (CStrConst (cString val) undefNode)
+
+cPtrConst :: Ptr a -> CExpr
+cPtrConst = undefined
 
 defTy :: String -> CDeclSpec
 defTy str = CTypeSpec $ CTypeDef (internalIdent str) undefNode

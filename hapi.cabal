@@ -51,6 +51,8 @@ library
       Test.HAPI.ApiTrace.CodeGen.C
       Test.HAPI.ApiTrace.CodeGen.C.Data
       Test.HAPI.ApiTrace.CodeGen.C.DataType
+      Test.HAPI.ApiTrace.CodeGen.C.HLibCString
+      Test.HAPI.ApiTrace.CodeGen.C.HLibFS
       Test.HAPI.ApiTrace.CodeGen.C.HLibPrelude
       Test.HAPI.ApiTrace.CodeGen.C.HLibPtr
       Test.HAPI.ApiTrace.CodeGen.C.Util
@@ -72,6 +74,8 @@ library
       Test.HAPI.Effect.Orchestration.Labels
       Test.HAPI.Effect.Property
       Test.HAPI.Effect.QVS
+      Test.HAPI.HLib.HLibCString
+      Test.HAPI.HLib.HLibFS
       Test.HAPI.HLib.HLibPrelude
       Test.HAPI.HLib.HLibPtr
       Test.HAPI.PrimApi

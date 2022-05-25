@@ -13,6 +13,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Test.HAPI.Effect.Orchestration where
 import Data.Kind (Type, Constraint)
@@ -66,6 +67,7 @@ instance ( Alg sig m
   alg hdl sig ctx = OrchestrationViaBytesAC $ case sig of
     L NextInstruction -> do
       e <- gets @supply (eatBytes (labelConsumeDir @label) S.get)
+      debug $ printf "%s: e = %s" (show 'alg) (show e)
       case e of
         Left err          -> return (ctx $> Nothing)
         Right (a, supply) -> put supply >> return (ctx $> Just a)

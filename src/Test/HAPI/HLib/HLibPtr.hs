@@ -5,7 +5,6 @@
 
 module Test.HAPI.HLib.HLibPtr where
 import Test.HAPI.Api (ApiDefinition, ApiName (..), HasForeignDef (..), implE, showApiFromPatDefault)
-import Test.HAPI (VPtr, vPtr2Ptr)
 import Foreign (Storable (poke, peek), Ptr, castPtr, plusPtr, minusPtr, malloc, mallocBytes, free)
 import Data.SOP ( K(..), NP(..) )
 import Text.Printf (printf)

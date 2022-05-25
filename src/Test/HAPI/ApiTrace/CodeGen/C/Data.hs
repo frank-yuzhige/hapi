@@ -25,19 +25,25 @@ import Test.HAPI.Constraint (type (:>>>:), castC, CMembers, productC)
 import Data.Constraint ((\\), Dict (..), mapDict)
 import Test.HAPI.Common (Fuzzable)
 import Test.HAPI.Args (DirectAttribute (..), DirAttributes)
-import Test.HAPI.ApiTrace.CodeGen.C.DataType (CCodeGen)
+import Test.HAPI.ApiTrace.CodeGen.C.DataType (CCodeGen, TyConstC (..))
 import Test.HAPI.ApiTrace.TyConst (TyConst(..))
 import Data.List (nub)
 import qualified Test.HAPI.Util.TypeRepMap as TM
 import qualified Data.Set as S
 import Data.Data (Typeable)
+import Data.Type.Equality (TestEquality(..))
+import Type.Reflection (typeRep)
+import Data.Maybe (isJust)
 
 class (ApiName api) => Entry2BlockC (api :: ApiDefinition) where
   entry2Block :: forall c. (CMembers CCodeGen c) => ApiTraceEntry api c -> CBlockItem
   entry2Block = entry2BlockDefault
 
 entry2BlockDefault :: forall api c. (CMembers CCodeGen c) => ApiTraceEntry api c -> CBlockItem
-entry2BlockDefault (TraceCall (x :: PKey a) api args) = liftEToB $ pk2CVar x <-- (api2CVar api # dirAttrs2CExprs @c args)
+entry2BlockDefault (TraceCall (x :: PKey a) api args) = case testEquality (typeRep @a) (typeRep @()) of
+  Nothing    -> liftEToB $ pk2CVar x <-- (api2CVar api # dirAttrs2CExprs @c args)
+  Just proof -> liftEToB $ api2CVar api # dirAttrs2CExprs @c args
+
 entry2BlockDefault (TraceAssert p)                    = liftEToB $ cAssert (dirAttr2CExpr p)
 
 
@@ -46,13 +52,15 @@ traceDecls xs = concat $ TM.toListWith (\(PKeySetEntry s) -> [makeDecl k \\ mapD
   where
     collectVar :: [ApiTraceEntry api c] -> PKeySet c
     collectVar [] = emptyPKeySet
-    collectVar (TraceCall (x :: PKey a) _ _ : xs) = addPKey2Set x \\ castC @Typeable (Dict @(c a)) $ collectVar xs
+    collectVar (TraceCall (x :: PKey a) _ _ : xs)
+      | isVoidTy @a = collectVar xs
+      | otherwise   = addPKey2Set x \\ castC @Typeable (Dict @(c a)) $ collectVar xs
     collectVar (_                           : xs) = collectVar xs
 
     makeDecl :: (CCodeGen a) => PKey a -> CBlockItem
-    makeDecl (x :: PKey a) = CBlockDecl $ decl ty (f $ cDeclr $ getPKeyID x) Nothing
+    makeDecl (x :: PKey a) = CBlockDecl $ decl (CTypeSpec ty) (f $ cDeclr $ getPKeyID x) Nothing
       where
-        (ty, f) = toType @CExpr x
+        (ty, f) = toCType x
 
 
 entryFun :: forall api c.
@@ -68,6 +76,9 @@ entryFun fn trace = fun [intTy] fn [] body
           <> map entry2Block (trace2List trace)
           <> [CBlockStmt $ creturn $ cIntConst 0]
 
+isVoidTy :: forall a proxy. (Typeable a) => Bool
+isVoidTy = isJust $ testEquality (typeRep @a) (typeRep @())
+
 pk2CVar :: PKey a -> CExpr
 pk2CVar = cVar . getPKeyID
 
@@ -75,7 +86,7 @@ api2CVar :: ApiName api => api p a -> CExpr
 api2CVar a = cVar $ apiNameUnder "C" a
 
 dirAttr2CExpr :: (CCodeGen a) => DirectAttribute a -> CExpr
-dirAttr2CExpr (Value a) = toConst a
+dirAttr2CExpr (Value a) = toCConst a
 dirAttr2CExpr (Get   x) = pk2CVar x
 
 dirAttrs2CExprs :: forall c p. (All c p, CMembers CCodeGen c) => DirAttributes p -> [CExpr]

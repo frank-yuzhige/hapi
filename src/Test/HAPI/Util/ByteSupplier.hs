@@ -3,6 +3,8 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 module Test.HAPI.Util.ByteSupplier where
 
 import Data.Kind (Type)
@@ -66,16 +68,17 @@ instance ByteSupplier BiDir EQSupplier where
     Left err       -> Left  (CerealError err)
     Right (a, fw') -> Right (a, EQSupplier fw' bw bwo)
   eatBytes BW get (EQSupplier fw bw bwo) = case S.runGetState get bw 0 of
-    Left err       -> eatBytes BW get (EQSupplier fw (bw <> bwo) bwo)
+    Left err       -> eatBytes BW get (EQSupplier fw (resample bw bwo) bwo)
     Right (a, bw') -> Right (a, EQSupplier fw bw' bwo)
+    where
+      resample bw bwo = foldr ($) bw (replicate ((200 `quot` BS.length bwo) `max` 1) (<> bwo))
 
   remainLen FW (EQSupplier fw _ _) = BS.length fw
   remainLen BW (EQSupplier _  _ bwo)
-    | BS.null bwo = 0        -- Effectively infinity as we are reusing BW
-    | otherwise   = maxBound -- Effectively infinity as we are reusing BW
+    | BS.null bwo = 0
+    | otherwise   = maxBound -- Effectively infinite as we are reusing BW
 
 deriving instance Show EQSupplier
-
 
 magicSeparator :: Word8
 magicSeparator = 0xFF

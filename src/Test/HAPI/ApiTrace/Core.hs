@@ -19,9 +19,10 @@ import qualified Data.DList as DL
 import Test.HAPI.PState (PKey)
 import Data.Constraint (Constraint)
 import Data.Kind (Type)
+import Data.Data (Typeable)
 
 data ApiTraceEntry (api :: ApiDefinition) (c :: Type -> Constraint) where
-  TraceCall   :: (ApiName api, All Fuzzable p, All c p, c a)
+  TraceCall   :: (ApiName api, All Fuzzable p, All c p, c a, Typeable a)
               => PKey a -> api p a -> NP DirectAttribute p -> ApiTraceEntry api c
   TraceAssert :: (c Bool)
               => DirectAttribute Bool -> ApiTraceEntry api c
@@ -40,7 +41,8 @@ traceCall :: forall api c p a.
            ( ApiName api
            , All Fuzzable p
            , All c p
-           , c a)
+           , c a
+           , Typeable a)
           => PKey a -> api p a -> NP DirectAttribute p -> ApiTrace api c
 traceCall k api args = apiTrace $ TraceCall k api args
 
