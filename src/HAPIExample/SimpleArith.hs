@@ -79,14 +79,14 @@ type C = Fuzzable :<>: CCodeGen
 graph1 :: AASTG A C
 graph1 = runEnv $ runBuildAASTG $ do
   a <- p <%> val @Int 10
-  b <- p <%> var @Int (anything @C)
+  b <- p <%> var @Int anything
   p <%> call Add (getVar a, getVar b)
   where p = Building @A @C
 
 graph2 :: AASTG A C
 graph2 = runEnv $ runBuildAASTG $ do
-  a <- p <%> var (anything @C @Int)
-  b <- p <%> var (anything @C @Int)
+  a <- p <%> var anything
+  b <- p <%> var anything
   p <%> call Add (getVar a, getVar b)
   where p = Building @A @C
 
@@ -137,7 +137,7 @@ diamond = runEnv $ runBuildAASTG $ do
   n3 <- p <%> newNode
   n4 <- p <%> newNode
   n5 <- p <%> newNode
-  x <- p <%(n1,n2)%> var (anything @C)
+  x <- p <%(n1,n2)%> var anything
   p <%(n2,n3)%> call Add (getVar x, value 1)
   p <%(n3,n5)%> call Add (getVar x, value 2)
   p <%(n2,n4)%> call Add (getVar x, value 3)
@@ -153,7 +153,7 @@ cyc = runEnv $ runBuildAASTG $ do
   n4 <- p <%> newNode
   n5 <- p <%> newNode
   n6 <- p <%> newNode
-  x  <- p <%(n1,n2)%> var (anything @C)
+  x  <- p <%(n1,n2)%> var anything
   p <%(n4,n3)%> call Add (getVar x, value 4)
   p <%(n3,n4)%> call Add (getVar x, value 2)
   p <%(n4,n2)%> call Add (getVar x, value 3)
@@ -170,7 +170,7 @@ cyc2 = runEnv $ runBuildAASTG $ do
   n2 <- p <%> newNode
   n3 <- p <%> newNode
   n4 <- p <%> newNode
-  x <- p <%(n1,n2)%> var (anything @C)
+  x <- p <%(n1,n2)%> var anything
   p <%(n2,n3)%> call Add (getVar x, value 1)
   p <%(n3,n4)%> call Add (getVar x, value 2)
   p <%(n4,n2)%> call Add (getVar x, value 3)
@@ -182,7 +182,7 @@ cyc3 = runEnv $ runBuildAASTG $ do
   n2 <- p <%> newNode
   n3 <- p <%> newNode
   n4 <- p <%> newNode
-  x <- p <%(n1,n2)%> var (anything @C)
+  x <- p <%(n1,n2)%> var anything
   p <%(n2,n3)%> call Add (getVar x, value 1)
   p <%(n3,n4)%> call Sub (getVar x, value 2)
   p <%(n4,n2)%> call Add (getVar x, value 3)
@@ -195,7 +195,7 @@ cyc4 = runEnv $ runBuildAASTG $ do
   n1 <- p <%> currNode
   n2 <- p <%> newNode
   n3 <- p <%> newNode
-  x <- p <%(n1,n2)%> var (anything @C)
+  x <- p <%(n1,n2)%> var anything
   p <%(n2,n3)%> call Add (getVar x, value 1)
   p <%(n3,n2)%> call Sub (getVar x, value 2)
   where p = Building @A @C
@@ -206,7 +206,7 @@ invalid = runEnv $ runBuildAASTG $ do
   n2 <- p <%> newNode
   n3 <- p <%> newNode
   n4 <- p <%> newNode
-  x <- p <%(n1,n2)%> var (anything @C)
+  x <- p <%(n1,n2)%> var anything
   y <- p <%(n3,n2)%> call Sub (getVar x, value 2)
   p <%(n2,n3)%> call Add (getVar x, getVar y)
   p <%(n2,n4)%> assertTrue (HLib.==) (getVar x, getVar y)
@@ -218,8 +218,8 @@ addComp = runEnv $ runBuildAASTG $ do
   -- p <%> redirect
 
   s <- p <%> currNode
-  a <- p <%> var @Int (anything @C)
-  b <- p <%> var @Int (anything @C)
+  a <- p <%> var @Int anything
+  b <- p <%> var @Int anything
   x <- p <%> call Add (getVar a, getVar b)
   y <- p <%> call (HLib.+) (getVar a, getVar b)
   p <%> assertTrue (HLib.==) (getVar x, getVar y)
@@ -242,8 +242,8 @@ addAssoc :: AASTG A C
 addAssoc = runEnv $ runBuildAASTG $ do
   p <%> redirect
   s <- p <%> currNode
-  a <- p <%> var @Int (anything @C)
-  b <- p <%> var @Int (anything @C)
+  a <- p <%> var @Int anything
+  b <- p <%> var @Int anything
   x <- p <%> call Add (getVar a, getVar b)
   y <- p <%> call Add (getVar b, getVar a)
   p <%> assertTrue (HLib.==) (getVar x, getVar y)
@@ -255,8 +255,8 @@ addAssoc2 :: AASTG A C
 addAssoc2 = runEnv $ runBuildAASTG $ do
   -- p <%> redirect
   s <- p <%> currNode
-  a <- p <%> var @Int (anything @C)
-  b <- p <%> var @Int (anything @C)
+  a <- p <%> var @Int anything
+  b <- p <%> var @Int anything
   x <- p <%> call Add (getVar b, getVar a)
   y <- p <%> call Add (getVar a, getVar b)
   p <%> assertTrue (HLib.==) (getVar x, getVar y)
@@ -268,8 +268,8 @@ mulAssoc :: AASTG A C
 mulAssoc = runEnv $ runBuildAASTG $ do
   p <%> redirect
   s <- p <%> currNode
-  a <- p <%> var @Int (anything @C)
-  b <- p <%> var @Int (anything @C)
+  a <- p <%> var @Int anything
+  b <- p <%> var @Int anything
   x <- p <%> call Mul (getVar a, getVar b)
   y <- p <%> call Mul (getVar b, getVar a)
   p <%> assertTrue (HLib.==) (getVar x, getVar y)

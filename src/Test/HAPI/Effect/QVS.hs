@@ -60,7 +60,7 @@ data QVS (c :: Type -> Constraint) (m :: Type -> Type) a where
 data QVSError = QVSError { causedAttribute :: String, errorMessage :: String }
   deriving Show
 
-mkQVS :: forall c a m. Typeable c => Attribute a -> QVS c m a
+mkQVS :: forall c a m. Typeable c => Attribute c a -> QVS c m a
 mkQVS (Direct d) = QDirect d
 mkQVS (Exogenous (e :: ExogenousAttribute c1 a)) = case testEquality (typeOf e) (typeRep @(ExogenousAttribute c a)) of
   Nothing    -> fatalError 'mkQVS FATAL_ERROR "TODO fix me"
@@ -68,7 +68,7 @@ mkQVS (Exogenous (e :: ExogenousAttribute c1 a)) = case testEquality (typeOf e) 
 
 
 -- | Convert attribute to QVS
-attributes2QVSs :: forall c p m. Typeable c => Attributes p -> NP (QVS c m) p
+attributes2QVSs :: forall c p m. Typeable c => Attributes c p -> NP (QVS c m) p
 attributes2QVSs Nil = Nil
 attributes2QVSs (a :* as) = mkQVS a :* attributes2QVSs as
 

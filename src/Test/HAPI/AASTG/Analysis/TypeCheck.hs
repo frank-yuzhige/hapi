@@ -129,14 +129,14 @@ checkEdge ctx edge = case edge of
   APICall  _ _ k f args -> checkArgs args
   Redirect _ _          -> return Nothing
   where
-    checkArgs :: forall p. Attributes p -> m (Maybe TypeErrorCause)
+    checkArgs :: forall p. Attributes c p -> m (Maybe TypeErrorCause)
     checkArgs Nil       = return Nothing
     checkArgs (a :* as) = do
       x <- checkAttr a
       y <- checkArgs as
       return (x <|> y)
 
-    checkAttr :: forall a. Attribute a -> m (Maybe TypeErrorCause)
+    checkAttr :: forall a. Attribute c a -> m (Maybe TypeErrorCause)
     checkAttr = \case
       Direct (Get x) ->
         if x `memberCtx` ctx

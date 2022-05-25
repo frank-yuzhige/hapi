@@ -15,7 +15,7 @@
 module Test.HAPI.AASTG.Core where
 import Test.HAPI.Effect.QVS (QVS (..), attributes2QVSs, qvs2m)
 import Test.HAPI.Api (ApiDefinition, ApiName (apiName, showApiFromPat), apiEq)
-import Test.HAPI.Args (Args, Attribute (..), attributesEq, repEq, attrs2Pat, DirectAttribute)
+import Test.HAPI.Args (Args, Attribute (..), attributesEq, repEq, attrs2Pat, DirectAttribute, Attributes)
 import Test.HAPI.PState (PKey (PKey, getPKeyID), PState (PState), PStateSupports (record, forget))
 import Test.HAPI.Common (Fuzzable)
 import Data.SOP (All, NP)
@@ -42,29 +42,29 @@ type EdgeID = Int
 
 data Edge apis c where
   -- | Updates the value of a variable by the given attribute
-  Update   :: forall a api c. (Fuzzable a, c a)
+  Update   :: forall a api c. (Fuzzable a, Typeable c)
            => NodeID            -- From
            -> NodeID            -- To
            -> PKey a            -- Variable
-           -> Attribute a       -- Attribute of the value
+           -> Attribute c a     -- Attribute of the value
            -> Edge api c
-  ContIf   :: forall a api c. (Fuzzable Bool, c Bool)  -- TODO: Not yet supported
+  ContIf   :: forall a api c. (Fuzzable Bool, Typeable c, c Bool)  -- TODO: Not yet supported
            => NodeID            -- From
            -> NodeID            -- To
            -> DirectAttribute Bool
            -> Edge api c
   -- TODO better assertion
-  Assert   :: forall a api c. (Fuzzable Bool, c Bool)
+  Assert   :: forall a api c. (Fuzzable Bool, Typeable c, c Bool)
            => NodeID               -- From
            -> NodeID               -- To
            -> DirectAttribute Bool
            -> Edge api c
-  APICall  :: forall a sig api p c. (Fuzzable a, c a, IsValidCall c api p)
+  APICall  :: forall a sig api p c. (Fuzzable a, IsValidCall c api p, c a)
            => NodeID             -- From
            -> NodeID             -- To
            -> PKey a             -- Store result to variable
            -> api p a            -- API call (constructor)
-           -> NP Attribute p     -- Argument Attributes List
+           -> Attributes c p     -- Argument Attributes List
            -> Edge api c
 
   -- | For internal use only
@@ -73,7 +73,7 @@ data Edge apis c where
            -> NodeID             -- To
            -> Edge api c
 
-type IsValidCall c api p = (All c p, All (Compose Eq Attribute) p, ApiName api, All Fuzzable p, Typeable p)
+type IsValidCall c api p = (Typeable c, All c p, All (Compose Eq (Attribute c)) p, ApiName api, All Fuzzable p, Typeable p)
 
 data AASTG sig c = AASTG {
   getStart     :: !NodeID,
@@ -149,7 +149,7 @@ addEdge e aastg = AASTG (getStart aastg)
                         (IM.unionWith (\a b -> nubIntOn hash (a <> b)) (IM.singleton (startNode e) [e]) (getEdgesFrom aastg))
                         (IM.unionWith (\a b -> nubIntOn hash (a <> b)) (IM.singleton (endNode   e) [e]) (getEdgesTo aastg))
 
-isEquivalentEdge :: Edge api c -> Edge api c -> Bool
+isEquivalentEdge :: Typeable c => Edge api c -> Edge api c -> Bool
 isEquivalentEdge e e' = e == changeEdgeNode (startNode e) (endNode e) e'
 
 isUpdateEdge :: Edge api c -> Bool
@@ -167,7 +167,7 @@ instance Show (Edge api c) where
       header s e = show s <> " -> " <> show e <> ": "
       wrap n     = "<" <> n <> ">"
 
-instance Eq (Edge api c) where
+instance Typeable c => Eq (Edge api c) where
   Update s e k a == Update s' e' k' a' =
     s == s' && e == e' && repEq k k' && repEq a a'
   Assert s e p == Assert s' e' p' =

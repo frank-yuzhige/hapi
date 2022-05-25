@@ -23,6 +23,7 @@ import Control.Effect.State (State)
 import GHC.Generics (Generic)
 import Data.Hashable (Hashable (hashWithSalt, hash))
 import Data.Containers.ListUtils (nubIntOn)
+import Data.Data (Typeable)
 
 
 class Path p where
@@ -106,10 +107,10 @@ instance Path APathView where
 
 
 deriving instance Show    (APath api c)
-deriving instance Eq      (APath api c)
+deriving instance Typeable c => Eq      (APath api c)
 deriving instance Generic (APath api c)
 instance Hashable (APath api c) where
   hashWithSalt salt (APath p) = V.foldr (flip hashWithSalt) salt p
 
 deriving instance Show (APathView api c)
-deriving instance Eq   (APathView api c)
+deriving instance Typeable c => Eq   (APathView api c)

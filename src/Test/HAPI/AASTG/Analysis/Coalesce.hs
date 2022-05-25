@@ -41,6 +41,7 @@ import Test.HAPI.AASTG.Analysis.GenRule (GenRuleUB, ruleApplicableUB, unsafeAppl
 import Data.HashSet (HashSet)
 import qualified Data.HashSet as HS
 import Test.HAPI.AASTG.Analysis.TypeCheck (TypedAASTG(..), TypeCheckCtx (procTypes))
+import Data.Data (Typeable)
 
 -- TODO: Optimize me!!!!
 -- | Coalesce 2 AASTGs
@@ -181,7 +182,8 @@ upperSubNode ptm n1 n2 = do
 
 coalesceRuleOneStep ::
                      ( Alg sig m
-                     , ApiName api)
+                     , ApiName api
+                     , Typeable c)
                      => TypedAASTG api c
                      -> HashSet (GenRule api c)
                      -> m (Maybe (NodeID, GenRule api c), TypedAASTG api c)
@@ -218,7 +220,8 @@ coalesceRuleOneStep ta rules = do
       --     return (Just (x, r), ans)
 
 autoCoalesceRule :: ( Alg sig m
-                    , ApiName api)
+                    , ApiName api
+                    , Typeable c)
                     => Int
                     -> HashSet (GenRule api c)
                     -> TypedAASTG api c
@@ -239,11 +242,12 @@ autoCoalesceRule maxStep rules aastg = do
 
 coalesceRuleAASTG ::
                ( Alg sig m
-               , ApiName api) => Int -> TypedAASTG api c -> TypedAASTG api c -> m ([(NodeID, GenRule api c)], TypedAASTG api c)
+               , ApiName api
+               , Typeable c) => Int -> TypedAASTG api c -> TypedAASTG api c -> m ([(NodeID, GenRule api c)], TypedAASTG api c)
 coalesceRuleAASTG n a1 a2 = do
   autoCoalesceRule n (HS.fromList (genRules4AASTG a2)) a1
 
-coalesceRuleAASTGs :: (Alg sig m, ApiName api) => Int -> [TypedAASTG api c] -> m (TypedAASTG api c)
+coalesceRuleAASTGs :: (Alg sig m, ApiName api, Typeable c) => Int -> [TypedAASTG api c] -> m (TypedAASTG api c)
 coalesceRuleAASTGs n = \case
   []         -> error "Empty list of AASTGs to coalesce"
   [a]        -> return a

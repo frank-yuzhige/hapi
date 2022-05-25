@@ -42,7 +42,10 @@ data LibFuzzerConduct = LibFuzzerConduct
   }
 
 
-libFuzzerConductViaAASTG :: (ValidApiDef api, Entry2BlockC api) => AASTG api (Serialize :<>: Fuzzable :<>: CCodeGen) -> LibFuzzerConduct
+libFuzzerConductViaAASTG :: ( ValidApiDef api
+                            , Entry2BlockC api
+                            , CMembers (Serialize :<>: Fuzzable :<>: CCodeGen) c
+                            , Typeable c) => AASTG api c -> LibFuzzerConduct
 libFuzzerConductViaAASTG aastg = LibFuzzerConduct
   { llvmFuzzerTestOneInputM = _llvmFuzzerTestOneInputM aastg
   , mainM                   = _traceMainM aastg

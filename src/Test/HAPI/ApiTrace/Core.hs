@@ -44,9 +44,7 @@ traceCall :: forall api c p a.
           => PKey a -> api p a -> NP DirectAttribute p -> ApiTrace api c
 traceCall k api args = apiTrace $ TraceCall k api args
 
-traceAssert :: forall api c.
-             (c Bool)
-            => DirectAttribute Bool -> ApiTrace api c
+traceAssert :: forall api c. (c Bool) => DirectAttribute Bool -> ApiTrace api c
 traceAssert p = apiTrace $ TraceAssert @c @api p
 
 trace2List :: ApiTrace api c -> [ApiTraceEntry api c]

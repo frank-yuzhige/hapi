@@ -32,7 +32,7 @@ import Data.Functor (($>))
 import Control.Carrier.State.Church (runState)
 import Control.Monad (void)
 import Test.HAPI.Util.SOP (InjNP (injNP))
-import Data.Data (typeRep)
+import Data.Data (typeRep, Typeable)
 import Data.Char (toLower)
 
 {-
@@ -116,12 +116,12 @@ p <%> ec = do
   e <- sNewNode  @api @c
   p <% (s, e) %> ec
 
-val :: forall t api c sig m proxy. (Has (BuildAASTG api c) sig m, Fuzzable t, c t)
+val :: forall t api c sig m proxy. (Has (BuildAASTG api c) sig m, Fuzzable t, c t, Typeable c)
     => t -> EdgeCon proxy api c m (PKey t)
 val v = var (Direct $ Value v)
 
-var :: forall t api c sig m proxy. (Has (BuildAASTG api c) sig m, Fuzzable t, c t)
-    => Attribute t -> EdgeCon proxy api c m (PKey t)
+var :: forall t api c sig m proxy. (Has (BuildAASTG api c) sig m, Fuzzable t, c t, Typeable c)
+    => Attribute c t -> EdgeCon proxy api c m (PKey t)
 var attr (s, e) _ = do
   x <- sNewVar @api @c
   sNewEdge @api @c (Update s e x attr)
@@ -134,7 +134,7 @@ call_ :: forall api apis c sig m a p args proxy.
       , IsValidCall c api p
       , c a
       , Fuzzable a
-      , InjNP args Attribute p)
+      , InjNP args (Attribute c) p)
    => api p a
    -> args
    -> EdgeCon proxy apis c m ()
@@ -146,7 +146,7 @@ call :: forall api apis c sig m a p args proxy.
        , IsValidCall c api p
        , c a
        , Fuzzable a
-       , InjNP args Attribute p)
+       , InjNP args (Attribute c) p)
     => api p a
     -> args
     -> EdgeCon proxy apis c m (PKey a)
@@ -159,7 +159,8 @@ call f args (s, e) _ = do
 assert :: forall apis c sig m proxy.
        ( Has (BuildAASTG apis c) sig m
        , Fuzzable Bool
-       , c Bool)
+       , c Bool
+       , Typeable c)
     => PKey Bool
     -> EdgeCon proxy apis c m ()
 assert k (s, e) _ = do
@@ -198,7 +199,7 @@ assertTrue :: forall api apis c sig m p args proxy.
             , ApiMember api apis
             , IsValidCall c api p
             , c Bool
-            , InjNP args Attribute p
+            , InjNP args (Attribute c) p
             , Fuzzable Bool)
           => api p Bool
           -> args

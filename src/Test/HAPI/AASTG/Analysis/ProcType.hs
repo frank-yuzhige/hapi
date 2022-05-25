@@ -6,11 +6,12 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE BangPatterns #-}
 module Test.HAPI.AASTG.Analysis.ProcType where
 
-import Test.HAPI.Args (Attributes, Attribute (..), eqAttributes, attrs2Pat, DirectAttribute (..))
+import Test.HAPI.Args (Attributes, Attribute (..), eqAttributes, attrs2Pat, DirectAttribute (..), eqAttributes')
 import Test.HAPI.Common (Fuzzable)
 import Test.HAPI.PState (PKey(..))
 import Test.HAPI.Api (ApiName (..), apiEqProofs, isExternalPure)
@@ -34,7 +35,7 @@ import Control.Effect.Choose ((<|>))
 import qualified Data.TypeRepMap as TM
 import qualified Data.IntMap.Strict as IM
 import qualified Data.IntSet as IS
-import Type.Reflection (typeOf)
+import Type.Reflection (typeOf, typeRep)
 import qualified Data.HashMap.Strict as HM
 import Text.Printf (printf)
 import Data.IntMap (IntMap)
@@ -56,19 +57,21 @@ type ProcTypeMap = IntMap ProcType
 newtype UnboundedProcTypeMap = UnboundedProcTypeMap { coerce2Bounded :: ProcTypeMap }
 
 data Action where
-  ActCall :: forall api p a.
+  ActCall :: forall api p a c.
            ( ApiName api
            , Typeable p
+           , Typeable c
            , All Fuzzable p
            , Fuzzable a)
         => PKey a
         -> api p a
-        -> Attributes p
+        -> Attributes c p
         -> Action
-  ActGen  :: forall a.
-           ( Fuzzable a )
+  ActGen  :: forall a c.
+           ( Fuzzable a
+           , Typeable c)
         => PKey a
-        -> Attribute a
+        -> Attribute c a
         -> Action
   ActAssert :: (Fuzzable Bool)
         => DirectAttribute Bool
@@ -86,9 +89,9 @@ data ProcType
   | Mu   SVar ProcType
   | Zero
 
-data Dep t where
-  DepAttr ::                                              Attribute t               -> Dep t
-  DepCall :: (ApiName api, Typeable p, All Fuzzable p) => PKey t -> api p t -> NP Attribute p -> Dep t
+data Dep c t where
+  DepAttr ::                                              Attribute c t                       -> Dep c t
+  DepCall :: (ApiName api, Typeable p, All Fuzzable p) => PKey t -> api p t -> Attributes c p -> Dep c t
 
 $(makeLenses ''SubTypeCtx)
 
@@ -275,7 +278,8 @@ isSubTypeUB (UnboundedProcTypeMap uptm) sub sup
             -> a ~<=~ tb
           (Act a'@(ActCall xa a as) ta, Act b'@(ActCall xb b bs) tb) -> do
             (_, !pp, pa) <- liftMaybe $ apiEqProofs a b
-            let as' = castWith (apply Refl pp) as
+            sproof <- liftMaybe $ testEquality (typeOf as) (typeOf bs)
+            let as' = castWith sproof as
                 xa' = castWith (apply Refl pa) xa
                 s0  = singletonVarSub xb xa'
             -- debug $ printf "%s: API call is eq" (show 'isSubTypeUB)
@@ -295,15 +299,16 @@ isSubTypeUB (UnboundedProcTypeMap uptm) sub sup
 
 -- | Given 2 different procedure types and 2 attribute lists, attempt to find a unification (i.e. PKey substitution scheme)
 -- that makes all corresponding attributes in each list `effectively the same`.
-getVarSubFromArgs :: forall p sig m.
+getVarSubFromArgs :: forall p c sig m.
                    ( All Fuzzable p
-                   , Eff NonDet sig m)
+                   , Eff NonDet sig m
+                   , Typeable c)
                 => (SVar -> ProcType)
                 -> (SVar -> ProcType)
                 -> ProcType
                 -> ProcType
-                -> Attributes p
-                -> Attributes p
+                -> Attributes c p
+                -> Attributes c p
                 -> m VarSubstitution
 getVarSubFromArgs look1 look2 d1 d2 Nil       Nil       = return emptyVarSub
 getVarSubFromArgs look1 look2 d1 d2 (a :* as) (b :* bs) = do
@@ -331,14 +336,14 @@ getVarSubFromArgs look1 look2 d1 d2 (a :* as) (b :* bs) = do
     -- Otherwise, not unifiable (e.g. x <-> some attr, not unifiable since x could be used in later context)
     unify _ _ = empty
 
-unaliasVar :: (Fuzzable p, Eff NonDet sig m) => (SVar -> ProcType) -> ProcType -> PKey p -> m (PKey p, Dep p)
+unaliasVar :: (Fuzzable p, Eff NonDet sig m, Typeable c) => (SVar -> ProcType) -> ProcType -> PKey p -> m (PKey p, Dep c p)
 unaliasVar look t x = do
   n <- lookupPKInType look x t
   case n of
     (DepAttr (Direct (Get y))) -> unaliasVar look t y
     other                      -> return (x, other)
 
-lookupPKInType :: forall t sig m. (Fuzzable t, Eff NonDet sig m) => (SVar -> ProcType) -> PKey t -> ProcType -> m (Dep t)
+lookupPKInType :: forall t c sig m. (Fuzzable t, Eff NonDet sig m, Typeable c) => (SVar -> ProcType) -> PKey t -> ProcType -> m (Dep c t)
 lookupPKInType look k t = do
   d <- go IS.empty t
   -- debug $ printf "%s: k = %s; v = %s" (show 'lookupPKInType) (show k) (show d)
@@ -351,12 +356,16 @@ lookupPKInType look k t = do
         ActGen  x at -> do
           case inner <$> testEquality (typeOf x) (typeOf k) of
             Just proof | castWith (apply Refl proof) x == k
-              -> return $ castWith (apply Refl proof) $ DepAttr at
+              -> let d = DepAttr at in case testEquality (typeOf d) (typeRep @(Dep c t)) of
+                Just cproof -> return $ castWith cproof d
+                Nothing     -> go history t
             _ -> go history t
         ActCall x api as -> do
           case inner <$> testEquality (typeOf x) (typeOf k) of
             Just proof | castWith (apply Refl proof) x == k
-              -> return $ castWith (apply Refl proof) $ DepCall x api as
+              -> let d = DepCall x api as in case testEquality (typeOf d) (typeRep @(Dep c t)) of
+                Just cproof -> return $ castWith cproof d
+                Nothing     -> go history t
             _ -> go history t
         _ -> do
           go history t
@@ -368,11 +377,11 @@ instance Eq Action where
   ActCall m f as == ActCall n g bs = case apiEqProofs f g of
     Nothing        -> False
     Just (_, p, a) -> castWith (apply Refl a) m == n
-                   && castWith (apply Refl p) as `eqAttributes` bs
-  ActGen x a == ActGen y b = case testEquality (typeOf x) (typeOf y) of
+                   && castWith (apply Refl p) as `eqAttributes'` bs
+  ActGen x a == ActGen y b = case testEquality (typeOf a) (typeOf b) of
     Nothing    -> False
-    Just proof -> castWith proof x == y
-               && castWith (apply Refl $ inner proof) a == b
+    Just proof -> castWith (apply Refl $ inner proof) x == y
+               && castWith proof a == b
   ActAssert p   == ActAssert q = p == q
   _ == _ = False
 
@@ -416,11 +425,11 @@ deriving instance Show SubTypeCtx
 deriving instance Show UnboundedProcTypeMap
 deriving instance Eq UnboundedProcTypeMap
 
-instance (Show t) => Show (Dep t) where
+instance (Show t) => Show (Dep c t) where
   show (DepAttr at)       = "DepAttr(" <> show at  <> ")"
   show (DepCall x api np) = "DepCall(" <> show x <> "=" <> showApiFromPat api (attrs2Pat np) <> ")"
 
-instance (Eq t, Typeable t) => Eq (Dep t) where
+instance (Eq t, Typeable t) => Eq (Dep c t) where
   (DepAttr a)     == (DepAttr b)     = a == b
   (DepCall x f a) == (DepCall y g b) = case f `apiEqProofs` g of
     Nothing            -> False

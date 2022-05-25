@@ -13,7 +13,7 @@ import Test.HAPI.Effect.Orchestration (Orchestration)
 import Test.HAPI.Effect.Orchestration.Labels (EntropySupply)
 import Test.HAPI.Effect.Entropy (EntropySupplier)
 import Test.HAPI.AASTG.Effect.Trav (Trav)
-import Test.HAPI.ApiTrace (ApiTrace)
+import Test.HAPI.ApiTrace.Core ( ApiTrace )
 import Control.Effect.Writer (Writer)
 
 -- | Type Synonym of a fuzzer for an API set.

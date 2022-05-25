@@ -5,11 +5,11 @@
 module Test.HAPI.Util.SOP where
 import Data.SOP (NP (..))
 
-class InjNP t f p | t f -> p where
+class InjNP t f p | t f -> p, p f -> t where
   injNP :: t -> NP f p
 
-instance InjNP (NP f p) f p where
-  injNP = id
+-- instance InjNP (NP f p) f p where
+--   injNP = id
 
 instance InjNP (f a) f '[a] where
   injNP a = a :* Nil

@@ -18,6 +18,7 @@ import Control.Monad (filterM)
 import Data.HashSet (HashSet)
 import Test.HAPI.Api (ApiName)
 import Text.Printf (printf)
+import Data.Data (Typeable)
 
 
 data GenRule api c = GenRule
@@ -40,7 +41,7 @@ genRule4Edge edge aastg = GenRule ts edge te uptm
 genRules4AASTG :: TypedAASTG api c -> [GenRule api c]
 genRules4AASTG aastg = map (`genRule4Edge` aastg) (allEdges $ castAASTG aastg)
 
-ruleApplicable :: (Alg sig m, ApiName api)
+ruleApplicable :: (Alg sig m, ApiName api, Typeable c)
                => NodeID
                -> GenRule api c
                -> TypedAASTG api c
