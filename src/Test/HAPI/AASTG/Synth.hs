@@ -8,12 +8,12 @@
 module Test.HAPI.AASTG.Synth where
 import Control.Algebra (Has, type (:+:), send)
 import Test.HAPI.Effect.Api (Api, mkCall)
-import Test.HAPI.Effect.QVS (QVS(QVS), attributes2QVSs, qvs2m, qvs2Direct, qvs2Directs)
+import Test.HAPI.Effect.QVS (QVS(..), attributes2QVSs, qvs2m, qvs2Direct, qvs2Directs, mkQVS)
 import Control.Effect.State (State, modify)
 import Test.HAPI.PState (PState, PStateSupports (record, forget), PKey (PKey))
 import Test.HAPI.Effect.Property (PropertyA, shouldBe)
 import Test.HAPI.AASTG.Core (AASTG (AASTG, getStart), Edge (..), endNode, NodeID, edgesFrom)
-import Test.HAPI.Args (Attribute(..), getVar)
+import Test.HAPI.Args (getVar, Attribute (..))
 
 import qualified Data.IntMap as IM
 import Test.HAPI.Effect.Fuzzer (Fuzzer, EntropyFuzzer, EntropyTracer)
@@ -29,9 +29,10 @@ import Control.Effect.Writer (tell)
 import Test.HAPI.ApiTrace (ApiTraceEntry(TraceCall), traceCall, traceAssert)
 import Data.Constraint ((\\), Dict (..))
 import Text.Printf (printf)
+import Data.Data (Typeable)
 
 -- | Synthesize fuzzer stubs
-synthStub :: forall api c sig m. (Has (Fuzzer api c) sig m) => AASTG api c -> [m ()]
+synthStub :: forall api c sig m. (Has (Fuzzer api c) sig m, Typeable c) => AASTG api c -> [m ()]
 synthStub (AASTG start edges _) = synth start
   where
     synth i = case edges IM.!? i of
@@ -39,16 +40,16 @@ synthStub (AASTG start edges _) = synth start
       Just [] -> [return ()]
       Just es -> concat [(synthOneStep edge >>) <$> synth (endNode edge) | edge <- es]
 
-synthOneStep :: forall api c sig m. (Has (Fuzzer api c) sig m) => Edge api c -> m ()
+synthOneStep :: forall api c sig m. (Has (Fuzzer api c) sig m, Typeable c) => Edge api c -> m ()
 synthOneStep (Update s e k a) = do
-  v <- send (QVS @c a)
+  v <- send (mkQVS @c a)
   modify @PState (record k v)
 synthOneStep (ContIf s e p) = do
   return ()
   -- v <- send (QVS @c (Direct p))
   -- modify @PState (forget k)
 synthOneStep (Assert s e p) = do
-  v <- send (QVS @c (Direct p))
+  v <- send (mkQVS @c (Direct p))
   v `shouldBe` True
 synthOneStep (APICall s e x api args) = do
   -- 1. Resolve Attributes (Into QVS)
@@ -59,15 +60,15 @@ synthOneStep (APICall s e x api args) = do
   modify @PState (record x r)
 synthOneStep (Redirect s e) = return ()
 
-traceOneStep :: forall api c sig m. (Has (EntropyTracer api c) sig m) => Edge api c -> m ()
+traceOneStep :: forall api c sig m. (Has (EntropyTracer api c) sig m, Typeable c) => Edge api c -> m ()
 traceOneStep (Update s e k a) = do
-  v <- send (QVS @c a)
+  v <- send (mkQVS @c a)
   modify @PState (record k v)
 traceOneStep (ContIf s e k) = do
   return ()
   -- modify @PState (forget k)
 traceOneStep (Assert s e p) = do
-  v <- qvs2Direct (QVS @c (Direct p))
+  v <- qvs2Direct (mkQVS @c (Direct p))
   tell (traceAssert @api @c v)
 traceOneStep (APICall s e (x :: PKey a) api args) = do
   args <- qvs2Directs @c (attributes2QVSs args)
@@ -75,12 +76,12 @@ traceOneStep (APICall s e (x :: PKey a) api args) = do
 traceOneStep (Redirect s e) = do
   return ()
 
-execEntropyFuzzerHandler :: forall api c sig m. (Has (Fuzzer api c) sig m) => TravHandler api c m
+execEntropyFuzzerHandler :: forall api c sig m. (Has (Fuzzer api c) sig m, Typeable c) => TravHandler api c m
 execEntropyFuzzerHandler = TravHandler $ \case
   OnEdge e -> synthOneStep e
   OnNode n -> return ()
 
-execEntropyTraceHandler :: forall api c sig m. (Has (EntropyTracer api c) sig m) => TravHandler api c m
+execEntropyTraceHandler :: forall api c sig m. (Has (EntropyTracer api c) sig m, Typeable c) => TravHandler api c m
 execEntropyTraceHandler = TravHandler $ \case
    OnEdge e -> traceOneStep e
    OnNode n -> return ()

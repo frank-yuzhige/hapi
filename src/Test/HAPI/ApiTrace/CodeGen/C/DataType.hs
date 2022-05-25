@@ -10,7 +10,9 @@ import Test.HAPI.ApiTrace.CodeGen.C.Util
 import Data.Data (Typeable)
 import Test.HAPI.Constraint (type (:<>:))
 
-type CCodeGen = TyConst CExpr (CDeclSpec, CDeclr -> CDeclr) :<>: Typeable
+type TyConstC = TyConst CExpr (CDeclSpec, CDeclr -> CDeclr)
+
+type CCodeGen = TyConstC :<>: Typeable
 
 instance TyConst CExpr (CDeclSpec, CDeclr -> CDeclr) Int where
   toConst  = cIntConst . fromIntegral

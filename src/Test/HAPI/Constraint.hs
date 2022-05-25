@@ -59,16 +59,6 @@ instance {-# OVERLAPPABLE #-}
   projEntailment = unmapDict $ \d -> mapDict (projEntailment @(l1 :<>: l2 :<>: l3) @f) (Dict \\ d)
   {-# INLINE projEntailment #-}
 
--- instance {-# OVERLAPPABLE #-}
---          ( f :>>>: l1
---          , f :>>>: l2)
---       => (f :>>>: (l1 :<>: l2)) where
---   projEntailment :: forall a. f a :- (:<>:) l1 l2 a
---   projEntailment = Sub $ Dict \\ f1 \\ f2
---     where
---       f1 = projEntailment @f @l1 @a
---       f2 = projEntailment @f @l2 @a
-
 -- | Cast a witness of a Constraint1 satisfies a type, by applying an entailment via projEntailment.
 castC :: forall g f a. (f :>>>: g) => Dict (f a) -> Dict (g a)
 castC = mapDict projEntailment
@@ -85,7 +75,6 @@ productC = Sub $ Dict \\ f1 \\ f2
 dikt :: forall c a. (c a) => Dict (c a)
 dikt = Dict
 
--- castL :: forall f l1 a l2. (f :>>>: (l1 :<>: l2)) => Dict (f a) -> Dict (l1 a)
 -- castL = mapDict projEntailment
 
 -- castR ::  forall f l2 a l1. (CMembers (l1 :<>: l2) f) => Dict (f a) -> Dict (l2 a)
@@ -94,3 +83,6 @@ dikt = Dict
 type family CMembers (sub :: Constraint1) (sup :: Constraint1) :: Constraint where
   CMembers (f :<>: g) s = (CMembers f s, CMembers g s)
   CMembers f          s = s :>>>: f
+
+class T (k :: Type)
+instance T k

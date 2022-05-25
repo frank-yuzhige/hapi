@@ -76,76 +76,76 @@ type A = ArithApi :$$: HLibPrelude
 type C = Fuzzable :<>: CCodeGen
 
 
-graph1 :: forall c. BasicSpec c => AASTG A c
+graph1 :: AASTG A C
 graph1 = runEnv $ runBuildAASTG $ do
   a <- p <%> val @Int 10
-  b <- p <%> var @Int anything
+  b <- p <%> var @Int (anything @C)
   p <%> call Add (getVar a, getVar b)
-  where p = Building @A @c
+  where p = Building @A @C
 
-graph2 :: forall c. BasicSpec c => AASTG A c
+graph2 :: AASTG A C
 graph2 = runEnv $ runBuildAASTG $ do
-  a <- p <%> var (anything @Int)
-  b <- p <%> var (anything @Int)
+  a <- p <%> var (anything @C @Int)
+  b <- p <%> var (anything @C @Int)
   p <%> call Add (getVar a, getVar b)
-  where p = Building @A @c
+  where p = Building @A @C
 
-graph3 :: forall c. BasicSpec c => AASTG A c
+graph3 :: AASTG A C
 graph3 = runEnv $ runBuildAASTG $ do
-  a <- p <%> var (anything @Int)
-  b <- p <%> var (anything @Int)
+  a <- p <%> var (anything @C @Int)
+  b <- p <%> var (anything @C @Int)
   c <- p <%> call Add (getVar b, getVar a)
   p <%> call Add (getVar a, getVar c)
-  where p = Building @A @c
+  where p = Building @A @C
 
-graph4 :: forall c. BasicSpec c => AASTG A c
+graph4 :: AASTG A C
 graph4 = runEnv $ runBuildAASTG $ do
-  a <- p <%> var (anything @Int)
-  b <- p <%> var (anything @Int)
+  a <- p <%> var (anything @C @Int)
+  b <- p <%> var (anything @C @Int)
   c <- p <%> call Add (getVar a, getVar b)
   d <- p <%> call Add (getVar a, getVar c)
   p <%> call Add (getVar c, getVar d)
-  where p = Building @A @c
+  where p = Building @A @C
 
-graph5 :: forall c. BasicSpec c => AASTG A c
+graph5 :: AASTG A C
 graph5 = runEnv $ runBuildAASTG $ do
-  a <- p <%> var (anything @Int)
-  b <- p <%> var (anything @Int)
+  a <- p <%> var (anything @C @Int)
+  b <- p <%> var (anything @C @Int)
   c <- p <%> call Add (getVar a, getVar b)
   d <- p <%> call Sub (getVar a, getVar c)
   p <%> call Add (getVar c, getVar d)
-  where p = Building @A @c
+  where p = Building @A @C
 
-graph6 :: forall c. BasicSpec c => AASTG A c
+graph6 :: AASTG A C
 graph6 = runEnv $ runBuildAASTG $ do
-  a <- p <%> var (anything @Int)
-  b <- p <%> var (anything @Int)
+  a <- p <%> var (anything @C @Int)
+  b <- p <%> var (anything @C @Int)
   c <- p <%> call Add (getVar a, getVar b)
   d <- p <%> call Add (getVar a, getVar c)
   fork p $ p <%> call Neg (getVar c)
   fork p $ p <%> call (HLib.+) (getVar c, getVar c)
   p <%> call Mul (getVar a, getVar d)
-  where p = Building @A @c
+  where p = Building @A @C
 
-cograph :: forall c. BasicSpec c => AASTG A c
+cograph :: AASTG A C
 cograph = runEnv $ coalesceAASTGs 500 [graph1, graph2, graph3, graph4, graph5, graph6]
 
-diamond :: forall c. BasicSpec c => AASTG A c
+diamond :: AASTG A C
 diamond = runEnv $ runBuildAASTG $ do
   n1 <- p <%> currNode
   n2 <- p <%> newNode
   n3 <- p <%> newNode
   n4 <- p <%> newNode
   n5 <- p <%> newNode
-  x <- p <%(n1,n2)%> var anything
+  x <- p <%(n1,n2)%> var (anything @C)
   p <%(n2,n3)%> call Add (getVar x, value 1)
   p <%(n3,n5)%> call Add (getVar x, value 2)
   p <%(n2,n4)%> call Add (getVar x, value 3)
   p <%(n4,n5)%> call Add (getVar x, value 4)
-  where p = Building @A @c
+  where p = Building @A @C
 
 
-cyc :: forall c. BasicSpec c => AASTG A c
+cyc :: AASTG A C
 cyc = runEnv $ runBuildAASTG $ do
   n1 <- p <%> currNode
   n2 <- p <%> newNode
@@ -153,64 +153,64 @@ cyc = runEnv $ runBuildAASTG $ do
   n4 <- p <%> newNode
   n5 <- p <%> newNode
   n6 <- p <%> newNode
-  x  <- p <%(n1,n2)%> var anything
+  x  <- p <%(n1,n2)%> var (anything @C)
   p <%(n4,n3)%> call Add (getVar x, value 4)
   p <%(n3,n4)%> call Add (getVar x, value 2)
   p <%(n4,n2)%> call Add (getVar x, value 3)
   p <%(n2,n3)%> call Add (getVar x, value 1)
   b  <- p <%(n4, n5)%> call (HLib.==) (getVar x, value 10)
   p <%(n5, n6)%> assert b
-  where p = Building @A @c
+  where p = Building @A @C
 
-  -- newEdge @A @c (Redirect n2 n5)
+  -- newEdge @A @C (Redirect n2 n5)
 
-cyc2 :: forall c. BasicSpec c => AASTG A c
+cyc2 :: AASTG A C
 cyc2 = runEnv $ runBuildAASTG $ do
   n1 <- p <%> currNode
   n2 <- p <%> newNode
   n3 <- p <%> newNode
   n4 <- p <%> newNode
-  x <- p <%(n1,n2)%> var anything
+  x <- p <%(n1,n2)%> var (anything @C)
   p <%(n2,n3)%> call Add (getVar x, value 1)
   p <%(n3,n4)%> call Add (getVar x, value 2)
   p <%(n4,n2)%> call Add (getVar x, value 3)
-  where p = Building @A @c
+  where p = Building @A @C
 
-cyc3 :: forall c. BasicSpec c => AASTG A c
+cyc3 :: AASTG A C
 cyc3 = runEnv $ runBuildAASTG $ do
   n1 <- p <%> currNode
   n2 <- p <%> newNode
   n3 <- p <%> newNode
   n4 <- p <%> newNode
-  x <- p <%(n1,n2)%> var anything
+  x <- p <%(n1,n2)%> var (anything @C)
   p <%(n2,n3)%> call Add (getVar x, value 1)
   p <%(n3,n4)%> call Sub (getVar x, value 2)
   p <%(n4,n2)%> call Add (getVar x, value 3)
   p <%(n4,n3)%> call Add (getVar x, value 4)
   p <%(n4,n3)%> call Add (getVar x, value 5)
-  where p = Building @A @c
+  where p = Building @A @C
 
-cyc4 :: forall c. BasicSpec c => AASTG A c
+cyc4 :: AASTG A C
 cyc4 = runEnv $ runBuildAASTG $ do
   n1 <- p <%> currNode
   n2 <- p <%> newNode
   n3 <- p <%> newNode
-  x <- p <%(n1,n2)%> var anything
+  x <- p <%(n1,n2)%> var (anything @C)
   p <%(n2,n3)%> call Add (getVar x, value 1)
   p <%(n3,n2)%> call Sub (getVar x, value 2)
-  where p = Building @A @c
+  where p = Building @A @C
 
-invalid :: forall c. BasicSpec c => AASTG A c
+invalid :: AASTG A C
 invalid = runEnv $ runBuildAASTG $ do
   n1 <- p <%> currNode
   n2 <- p <%> newNode
   n3 <- p <%> newNode
   n4 <- p <%> newNode
-  x <- p <%(n1,n2)%> var anything
+  x <- p <%(n1,n2)%> var (anything @C)
   y <- p <%(n3,n2)%> call Sub (getVar x, value 2)
   p <%(n2,n3)%> call Add (getVar x, getVar y)
   p <%(n2,n4)%> assertTrue (HLib.==) (getVar x, getVar y)
-  where p = Building @A @c
+  where p = Building @A @C
 
 
 addComp :: AASTG A C
@@ -218,8 +218,8 @@ addComp = runEnv $ runBuildAASTG $ do
   -- p <%> redirect
 
   s <- p <%> currNode
-  a <- p <%> var @Int anything
-  b <- p <%> var @Int anything
+  a <- p <%> var @Int (anything @C)
+  b <- p <%> var @Int (anything @C)
   x <- p <%> call Add (getVar a, getVar b)
   y <- p <%> call (HLib.+) (getVar a, getVar b)
   p <%> assertTrue (HLib.==) (getVar x, getVar y)
@@ -242,8 +242,8 @@ addAssoc :: AASTG A C
 addAssoc = runEnv $ runBuildAASTG $ do
   p <%> redirect
   s <- p <%> currNode
-  a <- p <%> var @Int anything
-  b <- p <%> var @Int anything
+  a <- p <%> var @Int (anything @C)
+  b <- p <%> var @Int (anything @C)
   x <- p <%> call Add (getVar a, getVar b)
   y <- p <%> call Add (getVar b, getVar a)
   p <%> assertTrue (HLib.==) (getVar x, getVar y)
@@ -255,8 +255,8 @@ addAssoc2 :: AASTG A C
 addAssoc2 = runEnv $ runBuildAASTG $ do
   -- p <%> redirect
   s <- p <%> currNode
-  a <- p <%> var @Int anything
-  b <- p <%> var @Int anything
+  a <- p <%> var @Int (anything @C)
+  b <- p <%> var @Int (anything @C)
   x <- p <%> call Add (getVar b, getVar a)
   y <- p <%> call Add (getVar a, getVar b)
   p <%> assertTrue (HLib.==) (getVar x, getVar y)
@@ -268,8 +268,8 @@ mulAssoc :: AASTG A C
 mulAssoc = runEnv $ runBuildAASTG $ do
   p <%> redirect
   s <- p <%> currNode
-  a <- p <%> var @Int anything
-  b <- p <%> var @Int anything
+  a <- p <%> var @Int (anything @C)
+  b <- p <%> var @Int (anything @C)
   x <- p <%> call Mul (getVar a, getVar b)
   y <- p <%> call Mul (getVar b, getVar a)
   p <%> assertTrue (HLib.==) (getVar x, getVar y)
@@ -285,13 +285,13 @@ mulAssoc = runEnv $ runBuildAASTG $ do
 
 
 previewCo :: IO ()
-previewCo = previewAASTG (cograph @Fuzzable)
+previewCo = previewAASTG (cograph)
 
-previewCy = previewAASTG (cyc @Fuzzable)
+previewCy = previewAASTG (cyc)
 
 previewD = do
-  let a = cyc3 @Fuzzable
-      b = cyc @Fuzzable
+  let a = cyc3
+      b = cyc
   previewAASTG a
   previewAASTG b
   previewAASTG =<< op' 0 a b
@@ -319,7 +319,7 @@ q = do
 shite = pretty $ entryFun @ArithApi @(CCodeGen :<>: Fuzzable) "main" (traceCall (PKey "x") Add (Value 10 :* Value 20 :* Nil))
 
 
-t1 = Act (ActGen (PKey @Int "i1") anything) (Act (ActGen (PKey @Int "i0") anything) Zero)
+t1 = Act (ActGen (PKey @Int "i1") (anything @C)) (Act (ActGen (PKey @Int "i0") (anything @C)) Zero)
 tq = runEnvIO @IO $ t1 `isSubType'` Zero
 -- test = do
 --   previewAASTG graph6

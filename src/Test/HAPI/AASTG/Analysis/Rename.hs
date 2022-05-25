@@ -21,7 +21,7 @@ import Test.HAPI.Common (Fuzzable)
 import qualified Data.IntMap.Strict  as IM
 import qualified Data.TypeRepMap     as TM
 import qualified Data.HashMap.Strict as HM
-import Test.HAPI.Args (Attribute (..), Attributes, DirectAttribute (..))
+import Test.HAPI.Args (Attributes, DirectAttribute (..), Attribute (..))
 import Data.SOP.NP (NP(Nil, (:*)))
 import qualified Test.HAPI.Util.TypeRepMap as TM
 import Data.Data (typeRep, Data, Typeable)

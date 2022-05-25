@@ -13,6 +13,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 {-
 Quantified Value Generation Effect
@@ -35,30 +36,41 @@ import Test.HAPI.Common (Fuzzable)
 import Data.Maybe (fromJust)
 import Data.HList (HList (HNil), HMap,type  (:~:) (Refl))
 import Data.SOP ( Proxy(Proxy), NP(..), All, hcmap )
-import Test.HAPI.Args (Args, pattern (::*), Attribute (..), validate, DirectAttribute (..), ExogenousAttribute (..))
+import Test.HAPI.Args (Args, pattern (::*), Attribute (..), validate, DirectAttribute (..), ExogenousAttribute (..), Attributes)
 import Data.SOP.Dict (mapAll)
 import Data.Serialize (Serialize)
 import Test.HAPI.Effect.Orchestration (Orchestration, nextInstruction, OrchestrationError)
 import Test.HAPI.Effect.Orchestration.Labels (QVSSupply)
 import Data.Type.Equality (castWith, TestEquality (testEquality), apply)
-import Type.Reflection ( TypeRep, typeOf, Typeable )
+import Type.Reflection ( TypeRep, typeOf, Typeable, typeRep )
 import Test.HAPI.Constraint (type (:>>>:), castC)
 import Data.Constraint ((\\), mapDict, Dict (..))
 import Control.Effect.Error (Error, liftEither, throwError)
 import Control.Carrier.Error.Either (runError)
 import Data.Either.Combinators (mapLeft)
+import Test.HAPI.Util.TH (fatalError, FatalErrorKind (FATAL_ERROR))
 
 
 -- Quantified Value Supplier
 data QVS (c :: Type -> Constraint) (m :: Type -> Type) a where
-  QVS :: (c a) => Attribute a -> QVS c m a
+  QDirect    :: (Typeable a) => DirectAttribute a      -> QVS c m a
+  QExogenous :: (Fuzzable a) => ExogenousAttribute c a -> QVS c m a
+  -- QList      :: (All Typeable p) => NP (QVS c m) p -> QVS c m (Args p)
 
 data QVSError = QVSError { causedAttribute :: String, errorMessage :: String }
   deriving Show
 
+mkQVS :: forall c a m. Typeable c => Attribute a -> QVS c m a
+mkQVS (Direct d) = QDirect d
+mkQVS (Exogenous (e :: ExogenousAttribute c1 a)) = case testEquality (typeOf e) (typeRep @(ExogenousAttribute c a)) of
+  Nothing    -> fatalError 'mkQVS FATAL_ERROR "TODO fix me"
+  Just proof -> QExogenous $ castWith proof e
+
+
 -- | Convert attribute to QVS
-attributes2QVSs :: forall c p m. (All c p) => NP Attribute p -> NP (QVS c m) p
-attributes2QVSs = hcmap (Proxy @c) QVS
+attributes2QVSs :: forall c p m. Typeable c => Attributes p -> NP (QVS c m) p
+attributes2QVSs Nil = Nil
+attributes2QVSs (a :* as) = mkQVS a :* attributes2QVSs as
 
 -- | Generate values in HList
 qvs2m :: (Has (QVS c) sig m) => NP (QVS c m) p -> m (Args p)
@@ -69,8 +81,8 @@ qvs2m (qvs :* q) = do
   return (a ::* s)
 
 qvs2Direct :: (Has (QVS c :+: State PState) sig m) => QVS c m a -> m (DirectAttribute a)
-qvs2Direct qvs@(QVS a) = case a of
-    Direct (Get x) -> do
+qvs2Direct qvs = case qvs of
+    QDirect (Get x) -> do
       r <- gets @PState (lookUp x)
       case r of
         Nothing -> return (Get x)
@@ -93,41 +105,52 @@ instance (Algebra sig m, Members (State PState :+: GenA) sig, c :>>>: Arbitrary)
     L qvs   -> resolveQVS qvs
     R other -> alg (runQVSFuzzArbitraryAC . hdl) other ctx
     where
-      resolveQVS (QVS (attr :: Attribute a)) = case attr of
-        Direct (Get k)   -> do
+      resolveQVS (qvs :: QVS c n a) = case qvs of
+        QDirect (Get k)   -> do
           v <- gets @PState (lookUp k)
           return (ctx $> fromJust v)   -- TODO Exception
-        Direct (Value v) -> do
+        QDirect (Value v) -> do
           return (ctx $> v)
-        Exogenous Anything     -> do
+        QExogenous Anything     -> do
           v <- liftGenA (arbitrary \\ castC @Arbitrary (Dict @(c a)))
           return (ctx $> v)
-        Exogenous (IntRange l r) -> do
+        QExogenous (IntRange l r) -> do
           v <- liftGenA (chooseInt (l, r))
           return (ctx $> v)
-        Exogenous (Range    l r) -> do
+        QExogenous (Range    l r) -> do
           v <- liftGenA (chooseEnum (l, r))
           return (ctx $> v)
         -- Exogenous AnyOf xs     -> do
           -- a <- oneof' (return <$> xs)
           -- resolveQVS (QVS a)
 
-newtype QVSFromStdinAC (c :: Type -> Constraint) m a = QVSFromStdinAC { runQVSFromStdinAC :: m a }
-  deriving (Functor, Applicative, Monad, MonadIO, MonadFail)
+-- newtype QVSFromStdinAC (c :: Type -> Constraint) m a = QVSFromStdinAC { runQVSFromStdinAC :: m a }
+--   deriving (Functor, Applicative, Monad, MonadIO, MonadFail)
 
-instance (Algebra sig m, MonadIO m, c :>>>: Read) => Algebra (QVS c :+: sig) (QVSFromStdinAC c m) where
-  alg hdl sig ctx = QVSFromStdinAC $ case sig of
-    L qvs -> do
-      liftIO $ putStrLn "Please provide input: "
-      input <- liftIO $ case qvs of QVS (attr :: Attribute a) -> readAndValidate attr \\ castC @Read (Dict @(c a))
-      return (ctx $> input)
-    R other -> alg (runQVSFromStdinAC . hdl) other ctx
-    where
-      readAndValidate attr = do
-        a <- readLn
-        if validate attr a
-          then return a
-          else fail "Not in range"
+-- instance ( Algebra sig m
+--          , Has (Error QVSError)          sig m
+--          , Has (State PState)            sig m
+--          , MonadIO m
+--          , c :>>>: Read)
+--       => Algebra (QVS c :+: sig) (QVSFromStdinAC c m) where
+--   alg hdl sig ctx = QVSFromStdinAC $ case sig of
+--     L qvs -> do
+--       input <- case attr of
+--         Direct (Get x)                          -> do
+--           v <- gets @PState (lookUp x)
+--           case v of
+--             Nothing -> throwError (QVSError (show attr) "Variable not in scope!")
+--             Just a  -> return a
+--         Direct (Value v) -> return v
+--         Exogenous (a :: ExogenousAttribute c a) -> liftIO (putStrLn "Please provide input: " >> readAndValidate attr) \\ castC @Read (Dict @(c a))
+--       return (ctx $> input)
+--     R other -> alg (runQVSFromStdinAC . hdl) other ctx
+--     where
+--       readAndValidate attr = do
+--         a <- readLn
+--         if validate attr a
+--           then return a
+--           else fail "Not in range"
 
 newtype QVSFromOrchestrationAC (c :: Type -> Constraint) m a = QVSFromOrchestrationAC { runQVSFromOrchestrationAC :: m a }
   deriving (Functor, Applicative, Monad, MonadFail)
@@ -141,24 +164,27 @@ instance ( Has (Orchestration QVSSupply) sig m
     L qvs   -> resolveQVS qvs
     R other -> alg (runQVSFromOrchestrationAC . hdl) other ctx
     where
-      resolveQVS (QVS (attr :: Attribute a)) = case attr of
-        Direct (Get k)   -> do
+      resolveQVS (qvs :: QVS c n a) = case qvs of
+        QDirect a@(Get k)   -> do
           v <- gets @PState (lookUp k)
           case v of
-            Nothing -> throwError (QVSError (show attr) "Variable not in scope!")
+            Nothing -> throwError (QVSError (show k) "Variable not in scope!")
             Just a  -> return (ctx $> a)
           return (ctx $> fromJust v)   -- TODO Exception
-        Direct (Value v) -> do
+        QDirect (Value v) -> do
           return (ctx $> v)
-        Exogenous Anything     -> do
-          v <- next (show attr) \\ castC @Serialize (Dict @(c a))
+        QExogenous a@Anything     -> do
+          v <- next (show a) \\ castC @Serialize (Dict @(c a))
           return (ctx $> v)
-        Exogenous (IntRange l r) -> do
-          v <- next (show attr)
+        QExogenous a@(IntRange l r) -> do
+          v <- next (show a)
           return (ctx $> sampleRange l r v)
-        Exogenous (Range    l r) -> do
-          v <- next (show attr)
+        QExogenous a@(Range    l r) -> do
+          v <- next (show a)
           return (ctx $> sampleRange l r v)
+        -- QList Nil -> do
+        --   return (ctx $> Nil)
+        -- QList (q :* qs) -> do
         -- AnyOf xs     -> do
           -- v <- next (show attr)
           -- let a = xs !! (v `mod` length xs)

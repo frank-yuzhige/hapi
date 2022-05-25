@@ -36,12 +36,14 @@ import qualified Control.Carrier.Trace.Printing as PRINTING
 import Test.HAPI.AASTG.Effect.Trav (runTrav)
 import Test.HAPI.Constraint (type (:<>:), type (:>>>:))
 import Test.HAPI.ApiTrace.CodeGen.C.DataType (CCodeGen)
+import Data.Data (Typeable)
 
 runFuzzTestNonDet :: forall api c sig m.
                    ( MonadIO m
                    , MonadFail m
                    , Algebra sig m
                    , c :>>>: Arbitrary
+                   , Typeable c
                    , ValidApiDef api) => AASTG api c -> m ()
 runFuzzTestNonDet aastg = runEnvIO $ do
   let s = synthStub @api @c aastg

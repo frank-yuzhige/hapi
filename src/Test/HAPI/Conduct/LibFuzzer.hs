@@ -34,6 +34,7 @@ import Control.Carrier.Writer.Church (runWriter)
 import Test.HAPI.AASTG.Effect.Trav (runTrav)
 import qualified Test.HAPI.ApiTrace.CodeGen.C as C
 import Data.Serialize (Serialize)
+import Data.Data (Typeable)
 
 data LibFuzzerConduct = LibFuzzerConduct
   { llvmFuzzerTestOneInputM :: CString -> CSize -> IO CInt
@@ -48,7 +49,8 @@ libFuzzerConductViaAASTG aastg = LibFuzzerConduct
   }
 
 _llvmFuzzerTestOneInputM :: ( ValidApiDef api
-                            , CMembers (Fuzzable :<>: Serialize) c) => AASTG api c -> CString -> CSize -> IO CInt
+                            , CMembers (Fuzzable :<>: Serialize) c
+                            , Typeable c) => AASTG api c -> CString -> CSize -> IO CInt
 _llvmFuzzerTestOneInputM aastg str size = do
   bs <- BS.packCStringLen (str, fromIntegral size)
   runFuzzTest aastg bs
@@ -56,6 +58,7 @@ _llvmFuzzerTestOneInputM aastg str size = do
 
 _traceMainM :: ( ValidApiDef api
                , CMembers (CCodeGen :<>: Fuzzable :<>: Serialize) c
+               , Typeable c
                , Entry2BlockC api) => AASTG api c -> IO ()
 _traceMainM aastg = do
   opt <- execParser opts
@@ -86,6 +89,7 @@ runFuzzTest :: forall api c sig m.
              , MonadFail m
              , Algebra sig m
              , CMembers (Fuzzable :<>: Serialize) c
+             , Typeable c
              , ValidApiDef api)
           => AASTG api c
           -> ByteString
@@ -118,6 +122,7 @@ runFuzzTrace :: forall api c sig m.
               , MonadFail m
               , Algebra sig m
               , CMembers (CCodeGen :<>: Fuzzable :<>: Serialize) c
+              , Typeable c
               , ValidApiDef api
               , Entry2BlockC api)
            => AASTG api c
@@ -133,7 +138,6 @@ runFuzzTrace aastg bs
         $ runProperty @PropertyA
         $ runWriter @(ApiTrace api c) (\w _ -> return w)
         $ PRINTING.runTrace
-        $ runForeign (fail . show)
         $ runApiTrace @api
         $ runState (\s a -> return a) PS.emptyPState
         $ runState @EQSupplier (\s a -> return a) supply
@@ -143,9 +147,8 @@ runFuzzTrace aastg bs
         $ runEntropyAC
         $ runTrav @api @c execEntropyTraceHandler
         stub
-      let fn = C.entryFun "main" trace
-          pp = pretty fn
-      liftIO $ print pp
+      let fn = show $ pretty $ C.entryFun "main" trace
+      liftIO $ putStrLn fn
       return ()
   where
     stub           = synthEntropyStub @api @c aastg

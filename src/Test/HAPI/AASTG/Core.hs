@@ -13,7 +13,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 
 module Test.HAPI.AASTG.Core where
-import Test.HAPI.Effect.QVS (QVS (QVS), attributes2QVSs, qvs2m)
+import Test.HAPI.Effect.QVS (QVS (..), attributes2QVSs, qvs2m)
 import Test.HAPI.Api (ApiDefinition, ApiName (apiName, showApiFromPat), apiEq)
 import Test.HAPI.Args (Args, Attribute (..), attributesEq, repEq, attrs2Pat, DirectAttribute)
 import Test.HAPI.PState (PKey (PKey, getPKeyID), PState (PState), PStateSupports (record, forget))
