@@ -11,6 +11,10 @@ class InjNP t f p | t f -> p, p f -> t where
 -- instance InjNP (NP f p) f p where
 --   injNP = id
 
+
+instance InjNP () f '[] where
+  injNP _ = Nil
+
 instance InjNP (f a) f '[a] where
   injNP a = a :* Nil
 
