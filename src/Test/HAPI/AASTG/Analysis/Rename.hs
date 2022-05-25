@@ -112,7 +112,7 @@ unliftSE (SE' se) = SE <$> HM.foldrWithKey folder (Just HM.empty) se
   where
     folder k s e
       | HS.size s == 1 = HM.insert k (head $ HS.toList s) <$> e
-      | otherwise     = Nothing
+      | otherwise      = Nothing
 
 renameVars :: VarSubstitution -> AASTG api c -> AASTG api c
 renameVars vsb aastg@(AASTG start fs bs) = AASTG start (renameVarsInMap vsb fs) (renameVarsInMap vsb bs)

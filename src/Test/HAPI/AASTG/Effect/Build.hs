@@ -221,8 +221,10 @@ instance ( Has (State [Edge api c]) sig m
   alg hdl sig ctx = BuildAASTGCA $ case sig of
     L (NewVarB p) -> do
       i <- sendLabelled @VAR Fresh
-      let v = PKey ((toLower . head . filter isAlpha $ show (typeRep p)) : show i)
+      let v = PKey (mkPrefix (show (typeRep p)) : show i)
       return $ ctx $> v
+      where
+        mkPrefix = toLower . head . (<> "u") . filter isAlpha
     L NewNodeB -> do
       n <- sendLabelled @NodeID Fresh
       return $ ctx $> n

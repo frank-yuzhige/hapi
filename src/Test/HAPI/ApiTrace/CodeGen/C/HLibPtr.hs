@@ -28,7 +28,7 @@ instance Entry2BlockC HLibPtr where
     MinusPtr    -> liftEToB $ pk2CVar x <-- let [a, b]    = aExprs in cOp CSubOp a b
     PeekPtr     -> liftEToB $ pk2CVar x <-- let [a]       = aExprs in Ind `pre` a
     PokePtr     -> liftEToB $               let [a, b]    = aExprs in Ind `pre` a <-- b
-    Malloc      -> liftEToB $ pk2CVar x <-- cmalloc (sizeOfDecl (decl ty' (cDeclr "__hapi_house") Nothing))
+    Malloc      -> liftEToB $ pk2CVar x <-- cmalloc (sizeOfTy ty)
     MallocBytes -> liftEToB $ pk2CVar x <-- let [a]       = aExprs in cmalloc a
     Free        -> liftEToB $ pk2CVar x <-- let [a]       = aExprs in cfree a
     where

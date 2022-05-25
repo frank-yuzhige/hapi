@@ -51,7 +51,7 @@ instance TyConstC Char where
 
 instance TyConstC CChar where
   toCConst  = cIntConst . fromIntegral
-  toCType _ = (CIntType undefNode, id)
+  toCType _ = (CCharType undefNode, id)
 
 instance TyConstC String where
   toCConst  = cStrConst

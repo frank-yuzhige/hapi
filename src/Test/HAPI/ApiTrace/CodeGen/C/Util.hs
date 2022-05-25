@@ -292,6 +292,9 @@ infixl 8 !:
 sizeOfDecl :: CDecl -> CExpr
 sizeOfDecl decl = CSizeofType decl undefNode
 
+sizeOfTy :: CTypeSpec -> CExpr
+sizeOfTy ty = CSizeofType (CDecl [CTypeSpec ty] [] undefNode) undefNode
+
 cmalloc :: CExpr -> CExpr
 cmalloc expr = fromString "malloc" # [expr]
 
