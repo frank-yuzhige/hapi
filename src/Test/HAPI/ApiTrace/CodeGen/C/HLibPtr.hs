@@ -20,17 +20,17 @@ import Test.HAPI.PState (PKey(..))
 
 
 instance Entry2BlockC HLibPtr where
-  entry2Block :: forall c. (CMembers CCodeGen c) => ApiTraceEntry HLibPtr c -> CBlockItem
+  entry2Block :: forall c. (CMembers CCodeGen c) => ApiTraceEntry HLibPtr c -> [CBlockItem]
   entry2Block a@TraceAssert {} = entry2BlockDefault a
   entry2Block a@(TraceCall (x :: PKey a) f args) = case f of
-    CastPtr     -> liftEToB $ pk2CVar x <-- let [a]       = aExprs in castTo a (decl ty' justPtr Nothing)
-    PlusPtr     -> liftEToB $ pk2CVar x <-- let [a, b]    = aExprs in cOp CAddOp a b
-    MinusPtr    -> liftEToB $ pk2CVar x <-- let [a, b]    = aExprs in cOp CSubOp a b
-    PeekPtr     -> liftEToB $ pk2CVar x <-- let [a]       = aExprs in Ind `pre` a
-    PokePtr     -> liftEToB $               let [a, b]    = aExprs in Ind `pre` a <-- b
-    Malloc      -> liftEToB $ pk2CVar x <-- cmalloc (sizeOfTy ty)
-    MallocBytes -> liftEToB $ pk2CVar x <-- let [a]       = aExprs in cmalloc a
-    Free        -> liftEToB $ pk2CVar x <-- let [a]       = aExprs in cfree a
+    CastPtr     -> [liftEToB $ pk2CVar x <-- let [a]       = aExprs in castTo a (decl ty' justPtr Nothing)]
+    PlusPtr     -> [liftEToB $ pk2CVar x <-- let [a, b]    = aExprs in cOp CAddOp a b]
+    MinusPtr    -> [liftEToB $ pk2CVar x <-- let [a, b]    = aExprs in cOp CSubOp a b]
+    PeekPtr     -> [liftEToB $ pk2CVar x <-- let [a]       = aExprs in Ind `pre` a]
+    PokePtr     -> [liftEToB $               let [a, b]    = aExprs in Ind `pre` a <-- b]
+    Malloc      -> [liftEToB $ pk2CVar x <-- cmalloc (sizeOfTy ty)]
+    MallocBytes -> [liftEToB $ pk2CVar x <-- let [a]       = aExprs in cmalloc a]
+    Free        -> [liftEToB $ pk2CVar x <-- let [a]       = aExprs in cfree a]
     where
       aExprs = dirAttrs2CExprs @c args
       (ty, _) = toCType x \\ mapDict (productC @CCodeGen) (Dict @(c a))

@@ -20,12 +20,12 @@ import Test.HAPI.HLib.HLibCString (HLibCString (..))
 
 
 instance Entry2BlockC HLibCString where
-  entry2Block :: forall c. (CMembers CCodeGen c) => ApiTraceEntry HLibCString c -> CBlockItem
+  entry2Block :: forall c. (CMembers CCodeGen c) => ApiTraceEntry HLibCString c -> [CBlockItem]
   entry2Block a@TraceAssert {} = entry2BlockDefault a
   entry2Block a@(TraceCall (x :: PKey a) f args) = case f of
-    PeekCString    -> liftEToB undefined
-    PeekCStringLen -> liftEToB undefined
-    NewCString     -> liftEToB $ pk2CVar x <-- let [a] = aExprs in a
+    PeekCString    -> [liftEToB undefined]
+    PeekCStringLen -> [liftEToB undefined]
+    NewCString     -> [liftEToB $ pk2CVar x <-- let [a] = aExprs in a]
     where
       aExprs = dirAttrs2CExprs @c args
       (ty, _) = toCType x \\ mapDict (productC @CCodeGen) (Dict @(c a))

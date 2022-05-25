@@ -153,7 +153,7 @@ runFuzzTrace aastg bs
         $ runEntropyAC
         $ runTrav @api @c execEntropyTraceHandler
         stub
-      let fn = show $ pretty $ C.entryFun "main" trace
+      let fn = show $ pretty $ C.traceMain trace
       liftIO $ putStrLn fn
       return ()
   where

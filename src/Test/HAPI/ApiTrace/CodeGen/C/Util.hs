@@ -304,6 +304,12 @@ cfree expr = fromString "free" # [expr]
 cAssert :: CExpr -> CExpr
 cAssert expr = fromString "assert" # [expr]
 
+cFailure :: CExpr
+cFailure = fromString "exit" # [cIntConst 1]
+
+cAssertIf :: CExpr -> CStat
+cAssertIf expr = CIf (CUnary CNegOp expr undefNode) (liftE cFailure) Nothing undefNode
+
 castTo :: CExpr -> CDecl -> CExpr
 exp `castTo` ty = CCast ty exp undefNode
 

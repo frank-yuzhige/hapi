@@ -36,15 +36,15 @@ import Type.Reflection (typeRep)
 import Data.Maybe (isJust)
 
 class (ApiName api) => Entry2BlockC (api :: ApiDefinition) where
-  entry2Block :: forall c. (CMembers CCodeGen c) => ApiTraceEntry api c -> CBlockItem
+  entry2Block :: forall c. (CMembers CCodeGen c) => ApiTraceEntry api c -> [CBlockItem]
   entry2Block = entry2BlockDefault
 
-entry2BlockDefault :: forall api c. (CMembers CCodeGen c) => ApiTraceEntry api c -> CBlockItem
+entry2BlockDefault :: forall api c. (CMembers CCodeGen c) => ApiTraceEntry api c -> [CBlockItem]
 entry2BlockDefault (TraceCall (x :: PKey a) api args) = case testEquality (typeRep @a) (typeRep @()) of
-  Nothing    -> liftEToB $ pk2CVar x <-- (api2CVar api # dirAttrs2CExprs @c args)
-  Just proof -> liftEToB $ api2CVar api # dirAttrs2CExprs @c args
+  Nothing    -> [liftEToB $ pk2CVar x <-- (api2CVar api # dirAttrs2CExprs @c args)]
+  Just proof -> [liftEToB $ api2CVar api # dirAttrs2CExprs @c args]
 
-entry2BlockDefault (TraceAssert p)                    = liftEToB $ cAssert (dirAttr2CExpr p)
+entry2BlockDefault (TraceAssert p) = [CBlockStmt $ cAssertIf (dirAttr2CExpr p)]
 
 
 traceDecls :: forall api c. (CMembers CCodeGen c) => [ApiTraceEntry api c] -> [CBlockItem]
@@ -62,7 +62,6 @@ traceDecls xs = concat $ TM.toListWith (\(PKeySetEntry s) -> [makeDecl k \\ mapD
       where
         (ty, f) = toCType x
 
-
 entryFun :: forall api c.
           ( CMembers CCodeGen c
           , Entry2BlockC api)
@@ -73,8 +72,15 @@ entryFun fn trace = fun [intTy] fn [] body
   where
     body = CCompound [] blocks undefNode
     blocks = traceDecls (trace2List trace)
-          <> map entry2Block (trace2List trace)
+          <> concatMap entry2Block (trace2List trace)
           <> [CBlockStmt $ creturn $ cIntConst 0]
+
+traceMain :: forall api c.
+           ( CMembers CCodeGen c
+           , Entry2BlockC api)
+        => ApiTrace api c
+        -> CExtDecl
+traceMain trace = CFDefExt $ entryFun "main" trace
 
 isVoidTy :: forall a proxy. (Typeable a) => Bool
 isVoidTy = isJust $ testEquality (typeRep @a) (typeRep @())
@@ -97,7 +103,7 @@ dirAttrs2CExprs ((a :: DirectAttribute a) :* as)
 -- instance {-# OVERLAPPABLE #-} (ApiName api) => Entry2BlockC api
 
 instance (Entry2BlockC f, Entry2BlockC g) => Entry2BlockC (f :$$: g) where
-  entry2Block :: forall c. (CMembers CCodeGen c) => ApiTraceEntry (f :$$: g) c -> CBlockItem
+  entry2Block :: forall c. (CMembers CCodeGen c) => ApiTraceEntry (f :$$: g) c -> [CBlockItem]
   entry2Block (TraceCall x (ApiL f) args) = entry2Block @f @c (TraceCall x f args)
   entry2Block (TraceCall x (ApiR g) args) = entry2Block @g @c (TraceCall x g args)
   entry2Block a                           = entry2BlockDefault a  -- TODO f or g when assert?
