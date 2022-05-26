@@ -43,6 +43,7 @@ instance Show PropertyError where
 
 data PropertyA (m :: * -> *) a where
   AssertA   :: DirectAttribute Bool -> PropertyA m ()
+  ChecksA   :: DirectAttribute Bool -> PropertyA m Bool
   FailedA   :: PropertyA m ()
 
 class Property (prop :: PropertyType) err pstate | prop -> err pstate where
@@ -53,7 +54,7 @@ instance Property PropertyA PropertyError PState where
   evalProperty s (AssertA d)
     | evalDirect s d = Right ()
     | otherwise      = Left (AssertError d)
-
+  evalProperty s (ChecksA d) = Right $ evalDirect s d
 
 newtype PropertyAC (prop :: PropertyType) err m a = PropertyAC { runPropertyAC :: m a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadFail)
@@ -89,6 +90,8 @@ instance ( Algebra sig m
     L (AssertA a)  -> do
       tell (traceAssert @api @c a)
       return (ctx $> ())
+    L (ChecksA a) -> do
+      return (ctx $> True)
     L FailedA      -> do
       tell (traceAssert @api @c (Value False))
       return (ctx $> ())

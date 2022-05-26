@@ -11,7 +11,7 @@ import Test.HAPI.Effect.Api (Api, mkCall)
 import Test.HAPI.Effect.QVS (QVS(..), attributes2QVSs, qvs2m, qvs2Direct, qvs2Directs, mkQVS)
 import Control.Effect.State (State, modify)
 import Test.HAPI.PState (PState, PStateSupports (record, forget), PKey (PKey))
-import Test.HAPI.Effect.Property (PropertyA (AssertA))
+import Test.HAPI.Effect.Property (PropertyA (..))
 import Test.HAPI.AASTG.Core (AASTG (AASTG, getStart), Edge (..), endNode, NodeID, edgesFrom)
 import Test.HAPI.Args (getVar, Attribute (..))
 
@@ -46,7 +46,8 @@ synthOneStep (Update s e k a) = do
   modify @PState (record k v)
   return NO_RESULT
 synthOneStep (ContIf s e p) = do
-  return HALT
+  continue <- send (ChecksA p)
+  return $ if continue then NO_RESULT else HALT
 synthOneStep (Assert s e p) = do
   send (AssertA p)
   return NO_RESULT

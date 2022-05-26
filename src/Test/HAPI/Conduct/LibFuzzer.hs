@@ -127,9 +127,10 @@ runFuzzTest aastg bs
       $ runEntropyAC
       $ runTrav @api @c execEntropyFuzzerHandler
         stub
-    case qvsErr of
-      Nothing -> return ()
-      Just x  -> liftIO $ print "bad libfuzzer input causes QVS to exhaust"
+    return ()
+    -- case qvsErr of
+      -- Nothing -> return ()
+      -- Just x  -> liftIO $ print "bad libfuzzer input causes QVS to exhaust"
   where
     stub           = synthEntropyStub @api @c aastg
     supply         = mkEQBS bs
