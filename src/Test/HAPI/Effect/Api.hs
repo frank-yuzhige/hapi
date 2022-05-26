@@ -85,7 +85,7 @@ instance ( Algebra sig m
     L (MkCall k call attrs) -> do
       s <- get @PState
       let args = evalDirects s attrs
-      liftIO $ putStrLn $ showApiFromPat call (args2Pat args)
+      -- liftIO $ putStrLn $ showApiFromPat call (args2Pat args)
       r <- evalForeign call args
       return (ctx $> Just r)
     R other -> alg (runApiFFIAC . hdl) other ctx

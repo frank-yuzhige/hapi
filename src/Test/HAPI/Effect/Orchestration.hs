@@ -35,11 +35,12 @@ import Test.HAPI.Util.ByteSupplier (ByteSupplier (eatBytes), BiDir, eatForward, 
 import Data.Either.Combinators (mapLeft)
 import Test.HAPI.Effect.Eff
 import Text.Printf (printf)
+import Data.Typeable (typeRep, typeOf, Typeable)
 
 data Orchestration label (m :: Type -> Type) a where
-  NextInstruction :: (Serialize a, Show a) => S.Get a -> Orchestration label m (Maybe a)
+  NextInstruction :: (Serialize a, Show a, Typeable a) => S.Get a -> Orchestration label m (Maybe a)
 
-nextInstruction :: forall label a c sig m. (Has (Orchestration label) sig m, Serialize a, Show a) => S.Get a -> m (Maybe a)
+nextInstruction :: forall label a c sig m. (Has (Orchestration label) sig m, Serialize a, Show a, Typeable a) => S.Get a -> m (Maybe a)
 nextInstruction = send . NextInstruction @a @label
 
 newtype OrchestrationError = OrchestrationError String
@@ -67,7 +68,7 @@ instance ( Alg sig m
   alg hdl sig ctx = OrchestrationViaBytesAC $ case sig of
     L (NextInstruction get) -> do
       e <- gets @supply (eatBytes (labelConsumeDir @label) get)
-      -- debug $ printf "%s: e = %s" (show 'alg) (show e)
+      -- debug $ printf "%s: getting %s: e = %s" (show 'alg) (show $ typeRep get) (show e)
       case e of
         Left err          -> return (ctx $> Nothing)
         Right (a, supply) -> put supply >> return (ctx $> Just a)

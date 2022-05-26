@@ -16,7 +16,7 @@
 
 module Test.HAPI.AASTG.Effect.Build where
 import Data.Kind (Type, Constraint)
-import Test.HAPI.Args (Attribute (..), Attributes, DirectAttribute (Value, Get))
+import Test.HAPI.Args (Attribute (..), Attributes, DirectAttribute (..))
 import Test.HAPI.PState (PKey(PKey))
 import Test.HAPI.Effect.Eff (Algebra(alg), type (:+:) (..), Alg, send, runEnv, Eff)
 import Test.HAPI.AASTG.Core (AASTG, Edge (Update, APICall, Assert, Redirect, ContIf), newAASTG, NodeID, IsValidCall)
@@ -161,21 +161,21 @@ assert :: forall apis c sig m proxy.
        , Fuzzable Bool
        , c Bool
        , Typeable c)
-    => PKey Bool
+    => DirectAttribute Bool
     -> EdgeCon proxy apis c m ()
 assert k (s, e) _ = do
-  sNewEdge @apis @c (Assert s e (Get k))
+  sNewEdge @apis @c (Assert s e k)
   sSetNode @apis @c e
 
-if_ :: forall apis c sig m proxy.
-    ( Has (BuildAASTG apis c) sig m
-    , Fuzzable Bool
-    , c Bool
-    , Typeable c)
- => PKey Bool
- -> EdgeCon proxy apis c m ()
-if_ k (s, e) _ = do
-  sNewEdge @apis @c (ContIf s e (Get k))
+contIf :: forall apis c sig m proxy.
+        ( Has (BuildAASTG apis c) sig m
+        , Fuzzable Bool
+        , c Bool
+        , Typeable c)
+     => DirectAttribute Bool
+     -> EdgeCon proxy apis c m ()
+contIf k (s, e) _ = do
+  sNewEdge @apis @c (ContIf s e k)
   sSetNode @apis @c e
 
 redirect :: forall apis c sig m proxy.
@@ -218,10 +218,56 @@ assertTrue :: forall api apis c sig m p args proxy.
 assertTrue f args (s, e) p = do
   i <- sNewNode @apis @c
   b <- p <%(s, i)%> call f args
-  p <%(i, e)%> assert b
+  p <%(i, e)%> assert (Get b)
   return b
 
+assertFalse :: forall api apis c sig m p args proxy.
+             ( Has (BuildAASTG apis c) sig m
+             , ApiMember api apis
+             , IsValidCall c api p
+             , c Bool
+             , InjNP args (Attribute c) p
+             , Fuzzable Bool)
+           => api p Bool
+           -> args
+           -> EdgeCon proxy apis c m (PKey Bool)
+assertFalse f args (s, e) p = do
+  i <- sNewNode @apis @c
+  b <- p <%(s, i)%> call f args
+  p <%(i, e)%> assert (DNot (Get b))
+  return b
 
+ifTrue :: forall api apis c sig m p args proxy.
+            ( Has (BuildAASTG apis c) sig m
+            , ApiMember api apis
+            , IsValidCall c api p
+            , c Bool
+            , InjNP args (Attribute c) p
+            , Fuzzable Bool)
+          => api p Bool
+          -> args
+          -> EdgeCon proxy apis c m (PKey Bool)
+ifTrue f args (s, e) p = do
+  i <- sNewNode @apis @c
+  b <- p <%(s, i)%> call f args
+  p <%(i, e)%> contIf (Get b)
+  return b
+
+ifFalse :: forall api apis c sig m p args proxy.
+             ( Has (BuildAASTG apis c) sig m
+             , ApiMember api apis
+             , IsValidCall c api p
+             , c Bool
+             , InjNP args (Attribute c) p
+             , Fuzzable Bool)
+           => api p Bool
+           -> args
+           -> EdgeCon proxy apis c m (PKey Bool)
+ifFalse f args (s, e) p = do
+  i <- sNewNode @apis @c
+  b <- p <%(s, i)%> call f args
+  p <%(i, e)%> contIf (DNot (Get b))
+  return b
 
 
 instance ( Has (State [Edge api c]) sig m

@@ -4,11 +4,9 @@
 
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
 {-# LANGUAGE FlexibleInstances #-}
@@ -62,6 +60,7 @@ data Attribute c a where
 data DirectAttribute a where
   Value :: a -> DirectAttribute a
   Get   :: PKey a -> DirectAttribute a
+  DNot  :: DirectAttribute Bool -> DirectAttribute Bool
 
 data ExogenousAttribute c a where
   Anything :: (Typeable c, c a)   => ExogenousAttribute c a
@@ -108,6 +107,7 @@ args = QuasiQuoter {
 
 evalDirect :: Typeable a => PState -> DirectAttribute a -> a
 evalDirect s (Value v) = v
+evalDirect s (DNot  d) = not (evalDirect s d)
 evalDirect s (Get   k) = fromMaybe (fatalError 'evalDirect FATAL_ERROR $ printf "Cannot find %s in the scope" (show k))
                        $ lookUp k s
 
@@ -174,6 +174,8 @@ eqAttributes' a b = case testEquality (typeOf a) (typeOf b) of
 instance Show a => Show (DirectAttribute a) where
   show (Value a)  = show a
   show (Get   pk) = getPKeyID pk
+  show (DNot  v)  = "!" <> show v
+
 
 instance Show a => Show (ExogenousAttribute c a) where
   show Anything = "Anything"
@@ -195,7 +197,8 @@ instance Eq a => Eq (Attribute c a) where
 instance Hashable a => Hashable (DirectAttribute a) where
   hashWithSalt salt = \case
     Value a  -> salt `hashWithSalt` "value" `hashWithSalt` a
-    Get   pk -> salt `hashWithSalt` "value" `hashWithSalt` pk
+    Get   pk -> salt `hashWithSalt` "get" `hashWithSalt` pk
+    DNot  d  -> salt `hashWithSalt` "not" `hashWithSalt` d
 
 instance Hashable a => Hashable (ExogenousAttribute c a) where
   hashWithSalt salt = \case

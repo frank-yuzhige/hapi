@@ -36,7 +36,7 @@ import Test.HAPI.Common (Fuzzable)
 import Data.Maybe (fromJust)
 import Data.HList (HList (HNil), HMap,type  (:~:) (Refl))
 import Data.SOP ( Proxy(Proxy), NP(..), All, hcmap )
-import Test.HAPI.Args (Args, pattern (::*), Attribute (..), validate, DirectAttribute (..), ExogenousAttribute (..), Attributes)
+import Test.HAPI.Args (Args, pattern (::*), Attribute (..), validate, DirectAttribute (..), ExogenousAttribute (..), Attributes, evalDirect)
 import Data.SOP.Dict (mapAll)
 import Data.Serialize (Serialize)
 import Test.HAPI.Effect.Orchestration (Orchestration, nextInstruction, OrchestrationError)
@@ -105,11 +105,9 @@ instance (Algebra sig m, Members (State PState :+: GenA) sig, c :>>>: Arbitrary)
     R other -> alg (runQVSFuzzArbitraryAC . hdl) other ctx
     where
       resolveQVS (qvs :: QVS c n a) = case qvs of
-        QDirect (Get k)   -> do
-          v <- gets @PState (lookUp k)
-          return (ctx $> fromJust v)   -- TODO Exception
-        QDirect (Value v) -> do
-          return (ctx $> v)
+        QDirect d -> do
+          s <- get @PState
+          return (ctx $> evalDirect s d)
         QExogenous Anything     -> do
           v <- liftGenA (arbitrary \\ castC @Arbitrary (Dict @(c a)))
           return (ctx $> v)
@@ -164,14 +162,9 @@ instance ( Has (Orchestration QVSSupply) sig m
     R other -> alg (runQVSFromOrchestrationAC . hdl) other ctx
     where
       resolveQVS (qvs :: QVS c n a) = case qvs of
-        QDirect a@(Get k)   -> do
-          v <- gets @PState (lookUp k)
-          case v of
-            Nothing -> throwError (QVSError (show k) "Variable not in scope!")
-            Just a  -> return (ctx $> a)
-          return (ctx $> fromJust v)   -- TODO Exception
-        QDirect (Value v) -> do
-          return (ctx $> v)
+        QDirect d -> do
+          s <- get @PState
+          return (ctx $> evalDirect s d)
         QExogenous a@Anything     -> do
           v <- next (show a) \\ castC @Serialize (Dict @(c a))
           return (ctx $> v)
@@ -204,14 +197,9 @@ instance ( Has (Orchestration QVSSupply) sig m
     R other -> alg (runQVSFromOrchestrationAC . hdl) other ctx
     where
       resolveQVS (qvs :: QVS c n a) = case qvs of
-        QDirect a@(Get k)   -> do
-          v <- gets @PState (lookUp k)
-          case v of
-            Nothing -> throwError (QVSError (show k) "Variable not in scope!")
-            Just a  -> return (ctx $> a)
-          return (ctx $> fromJust v)   -- TODO Exception
-        QDirect (Value v) -> do
-          return (ctx $> v)
+        QDirect d -> do
+          s <- get @PState
+          return (ctx $> evalDirect s d)
         QExogenous a@Anything     -> do
           v <- next (show a) \\ castC @HSerialize (Dict @(c a))
           return (ctx $> v)

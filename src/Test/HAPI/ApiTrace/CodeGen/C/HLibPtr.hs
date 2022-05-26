@@ -26,6 +26,7 @@ instance Entry2BlockC HLibPtr where
     CastPtr     -> [liftEToB $ pk2CVar x <-- let [a]       = aExprs in castTo a (decl ty' justPtr Nothing)]
     PlusPtr     -> [liftEToB $ pk2CVar x <-- let [a, b]    = aExprs in cOp CAddOp a b]
     MinusPtr    -> [liftEToB $ pk2CVar x <-- let [a, b]    = aExprs in cOp CSubOp a b]
+    IsNullPtr   -> [liftEToB $ pk2CVar x <-- let [a]       = aExprs in cOp CEqOp a cNull]
     PeekPtr     -> [liftEToB $ pk2CVar x <-- let [a]       = aExprs in Ind `pre` a]
     PokePtr     -> [liftEToB $               let [a, b]    = aExprs in Ind `pre` a <-- b]
     Malloc      -> [liftEToB $ pk2CVar x <-- cmalloc (sizeOfTy ty)]

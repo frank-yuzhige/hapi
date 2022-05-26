@@ -310,6 +310,9 @@ cFailure = fromString "exit" # [cIntConst 1]
 cAssertIf :: CExpr -> CStat
 cAssertIf expr = CIf (CUnary CNegOp expr undefNode) (liftE cFailure) Nothing undefNode
 
+cNull :: CExpr
+cNull = fromString "NULL"
+
 castTo :: CExpr -> CDecl -> CExpr
 exp `castTo` ty = CCast ty exp undefNode
 

@@ -17,7 +17,6 @@ import Test.HAPI.Args (getVar, Attribute (..))
 
 import qualified Data.IntMap as IM
 import Test.HAPI.Effect.Fuzzer (Fuzzer, EntropyFuzzer, EntropyTracer)
-import Test.HAPI.Effect.Orchestration (Orchestration, nextInstruction)
 import Test.HAPI.Effect.Orchestration.Labels (EntropySupply)
 import Data.ByteString (ByteString)
 import Control.Lens (element, (^?))

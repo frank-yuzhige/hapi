@@ -3,6 +3,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE MagicHash #-}
+{-# LANGUAGE BangPatterns #-}
 module Test.HAPI.Serialize where
 
 import qualified Data.Serialize as S
@@ -71,18 +72,18 @@ instance HSerialize ShortByteString
 instance HSerialize ByteString where
   hget = do
     x <- hget @Int
-    bs <- S.getBytes (x `mod` 1024)
+    bs <- S.getBytes (abs $ x `mod` 1024)
     return $! B.copy bs
 instance HSerialize IntSet
 instance HSerialize a => HSerialize [a] where
   hget = do
     x <- hget @Word64
-    go [] (x `mod` 1024)
+    go [] (abs $ x `mod` 1024)
     where
     go as 0 = return $! reverse as
     go as i = do
-      x <- hget
-      x `seq` go (x:as) (i - 1)
+      !x <- hget
+      go (x:as) (i - 1)
 
 instance HSerialize (Ptr a)
 instance HSerialize a => HSerialize (Maybe a)

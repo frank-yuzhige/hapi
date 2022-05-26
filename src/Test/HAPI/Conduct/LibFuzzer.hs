@@ -41,7 +41,6 @@ import Test.HAPI.AASTG.Synth (synthEntropyStub, execEntropyFuzzerHandler)
 import Control.Carrier.Writer.Church (runWriter)
 import Test.HAPI.AASTG.Effect.Trav (runTrav)
 import qualified Test.HAPI.ApiTrace.CodeGen.C.Data as C
-import Data.Serialize (Serialize)
 import Data.Data (Typeable)
 import Test.HAPI.Serialize (HSerialize)
 
@@ -113,22 +112,24 @@ runFuzzTest :: forall api c sig m.
           -> m ()
 runFuzzTest aastg bs
   | entropy < 64 || qvs < 32 = return ()
-  | otherwise
-    = runEnvIO
-    $ void
-    $ runError @QVSError      (fail . show) pure
-    $ runError @PropertyError (fail . show) pure
-    $ runState (\s a -> return a) PS.emptyPState
-    $ runProperty @PropertyA
-    $ runForeign (fail . show)
-    $ runApiFFI @api @c
-    $ runState @EQSupplier (\s a -> return a) supply
-    $ runOrchestrationViaBytes @QVSSupply     @EQSupplier
-    $ runQVSFromOrchestrationAC @HSerialize @c
-    $ runOrchestrationViaBytes @EntropySupply @EQSupplier
-    $ runEntropyAC
-    $ runTrav @api @c execEntropyFuzzerHandler
-      stub
+  | otherwise = do
+    qvsErr <- runEnvIO
+      $ runError @QVSError      (return . Just . show) (return . const Nothing)
+      $ runError @PropertyError (fail . show) pure
+      $ runState (\s a -> return a) PS.emptyPState
+      $ runProperty @PropertyA
+      $ runForeign (fail . show)
+      $ runApiFFI @api @c
+      $ runState @EQSupplier (\s a -> return a) supply
+      $ runOrchestrationViaBytes @QVSSupply     @EQSupplier
+      $ runQVSFromOrchestrationAC @HSerialize @c
+      $ runOrchestrationViaBytes @EntropySupply @EQSupplier
+      $ runEntropyAC
+      $ runTrav @api @c execEntropyFuzzerHandler
+        stub
+    case qvsErr of
+      Nothing -> return ()
+      Just x  -> liftIO $ print "bad libfuzzer input causes QVS to exhaust"
   where
     stub           = synthEntropyStub @api @c aastg
     supply         = mkEQBS bs

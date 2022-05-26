@@ -5,7 +5,7 @@
 
 module Test.HAPI.HLib.HLibPtr where
 import Test.HAPI.Api (ApiDefinition, ApiName (..), HasForeignDef (..), implE, showApiFromPatDefault)
-import Foreign (Storable (poke, peek), Ptr, castPtr, plusPtr, minusPtr, malloc, mallocBytes, free)
+import Foreign (Storable (poke, peek), Ptr, castPtr, plusPtr, minusPtr, malloc, mallocBytes, free, nullPtr)
 import Data.SOP ( K(..), NP(..) )
 import Text.Printf (printf)
 import Control.Effect.State (gets)
@@ -14,9 +14,10 @@ import Control.Monad.IO.Class (liftIO)
 
 data HLibPtr :: ApiDefinition where
   -- Standard Ptr Operation
-  CastPtr  :: HLibPtr '[Ptr a]        (Ptr b)
-  PlusPtr  :: HLibPtr '[Ptr a, Int]   (Ptr a)
-  MinusPtr :: HLibPtr '[Ptr a, Ptr b] Int
+  CastPtr   :: HLibPtr '[Ptr a]        (Ptr b)
+  PlusPtr   :: HLibPtr '[Ptr a, Int]   (Ptr a)
+  MinusPtr  :: HLibPtr '[Ptr a, Ptr b] Int
+  IsNullPtr :: HLibPtr '[Ptr a]        Bool
 
   -- Ptr Marshalling
   PeekPtr :: (Storable a) => HLibPtr '[Ptr a]    a
@@ -52,6 +53,7 @@ instance HasForeignDef HLibPtr where
   evalForeign CastPtr     = implE $ return     . castPtr
   evalForeign PlusPtr     = implE $ (return .) . plusPtr
   evalForeign MinusPtr    = implE $ (return .) . minusPtr
+  evalForeign IsNullPtr   = implE $ \p -> return $ p == nullPtr
   evalForeign Malloc      = implE $ liftIO   malloc
   evalForeign MallocBytes = implE $ liftIO . mallocBytes
   evalForeign Free        = implE $ liftIO . free

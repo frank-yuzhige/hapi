@@ -159,7 +159,7 @@ cyc = runEnv $ runBuildAASTG $ do
   p <%(n4,n2)%> call Add (getVar x, value 3)
   p <%(n2,n3)%> call Add (getVar x, value 1)
   b  <- p <%(n4, n5)%> call (HLib.==) (getVar x, value 10)
-  p <%(n5, n6)%> assert b
+  p <%(n5, n6)%> assert (Get b)
   where p = Building @A @C
 
   -- newEdge @A @C (Redirect n2 n5)

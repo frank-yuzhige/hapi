@@ -94,6 +94,7 @@ api2CVar a = cVar $ apiNameUnder "C" a
 dirAttr2CExpr :: (CCodeGen a) => DirectAttribute a -> CExpr
 dirAttr2CExpr (Value a) = toCConst a
 dirAttr2CExpr (Get   x) = pk2CVar x
+dirAttr2CExpr (DNot  x) = CUnary CNegOp (dirAttr2CExpr x) undefNode
 
 dirAttrs2CExprs :: forall c p. (All c p, CMembers CCodeGen c) => DirAttributes p -> [CExpr]
 dirAttrs2CExprs Nil = []
