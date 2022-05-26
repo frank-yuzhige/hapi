@@ -24,12 +24,13 @@ import Control.Lens (element, (^?))
 import Data.Serialize (Serialize(put), runPut)
 import Test.HAPI.Effect.Eff ( send, debug, Alg )
 import Test.HAPI.Effect.Entropy (getEntropy)
-import Test.HAPI.AASTG.Effect.Trav (TravHandler (..), TravEvent (..), onEvent)
+import Test.HAPI.AASTG.Effect.Trav (TravHandler (..), TravEvent (..), onEvent, TravEventResult (..))
 import Control.Effect.Writer (tell)
 import Test.HAPI.ApiTrace (ApiTraceEntry(TraceCall), traceCall, traceAssert)
 import Data.Constraint ((\\), Dict (..))
 import Text.Printf (printf)
 import Data.Data (Typeable)
+import Control.Monad (when)
 
 -- | Synthesize fuzzer stubs
 synthStub :: forall api c sig m. (Has (Fuzzer api c) sig m, Typeable c) => AASTG api c -> [m ()]
@@ -40,16 +41,16 @@ synthStub (AASTG start edges _) = synth start
       Just [] -> [return ()]
       Just es -> concat [(synthOneStep edge >>) <$> synth (endNode edge) | edge <- es]
 
-synthOneStep :: forall api c sig m. (Has (Fuzzer api c) sig m, Typeable c) => Edge api c -> m ()
+synthOneStep :: forall api c sig m. (Has (Fuzzer api c) sig m, Typeable c) => Edge api c -> m TravEventResult
 synthOneStep (Update s e k a) = do
   v <- send (mkQVS @c a)
   modify @PState (record k v)
+  return NO_RESULT
 synthOneStep (ContIf s e p) = do
-  return ()
-  -- v <- send (QVS @c (Direct p))
-  -- modify @PState (forget k)
+  return HALT
 synthOneStep (Assert s e p) = do
   send (AssertA p)
+  return NO_RESULT
 synthOneStep (APICall s e x api args) = do
   -- 1. Resolve Attributes (Into QVS)
   attrs <- qvs2Directs @c (attributes2QVSs args)
@@ -59,28 +60,13 @@ synthOneStep (APICall s e x api args) = do
   case mr of
     Nothing -> return ()
     Just  r -> modify @PState (record x r)
-synthOneStep (Redirect s e) = return ()
-
-traceOneStep :: forall api c sig m. (Has (EntropyTracer api c) sig m, Typeable c) => Edge api c -> m ()
-traceOneStep (Update s e k a) = do
-  v <- send (mkQVS @c a)
-  modify @PState (record k v)
-traceOneStep (ContIf s e k) = do
-  return ()
-  -- modify @PState (forget k)
-traceOneStep (Assert s e p) = do
-  v <- qvs2Direct (mkQVS @c (Direct p))
-  tell (traceAssert @api @c v)
-traceOneStep (APICall s e (x :: PKey a) api args) = do
-  args <- qvs2Directs @c (attributes2QVSs args)
-  tell (traceCall @api @c x api args)
-traceOneStep (Redirect s e) = do
-  return ()
+  return NO_RESULT
+synthOneStep (Redirect s e) = return NO_RESULT
 
 execEntropyFuzzerHandler :: forall api c sig m. (Has (Fuzzer api c) sig m, Typeable c) => TravHandler api c m
 execEntropyFuzzerHandler = TravHandler $ \case
   OnEdge e -> synthOneStep e
-  OnNode n -> return ()
+  OnNode n -> return NO_RESULT
 
 -- | Entropy
 type EntropyWord = Int
@@ -91,10 +77,6 @@ encodeEntropy e = runPut $ mapM_ put e
 
 lookupEdgeFromEntropy :: NodeID -> AASTG api c -> EntropyWord -> Maybe (Edge api c)
 lookupEdgeFromEntropy n aastg e = edgesFrom n aastg ^? element e
-
-data EntropyStubResult = EntropyStubResult {
-
-}
 
 synthEntropyStub :: forall api c sig m.
                   ( Has (EntropyFuzzer api c) sig m
@@ -114,5 +96,5 @@ synthEntropyStub aastg = go (getStart aastg)
               debug "[HAPI]: Entropy hits an invalid path."
               return ()
             Just e  -> do
-              onEvent (OnEdge e)
-              go (endNode e)
+              r <- onEvent (OnEdge e)
+              when (r /= HALT) $ go (endNode e)

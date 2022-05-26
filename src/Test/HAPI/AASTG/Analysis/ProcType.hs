@@ -76,6 +76,9 @@ data Action where
   ActAssert :: (Fuzzable Bool)
         => DirectAttribute Bool
         -> Action
+  ActContIf :: (Fuzzable Bool)
+        => DirectAttribute Bool
+        -> Action
 
 data SubTypeCtx = SubTypeCtx {
   _checkedPairs :: HashSet (ProcType, ProcType),
@@ -159,8 +162,8 @@ edge2Act :: (ApiName api) => Edge api c -> ProcType -> ProcType
 edge2Act edge t = case edge of
   Update s e k a ->
     Act (ActGen k a) t
-  ContIf s e x   ->
-    fatalError 'inferProcType FATAL_ERROR "Unsupported construct 'forget'"
+  ContIf s e p   ->
+    Act (ActContIf p) t
   Assert s e p ->
     Act (ActAssert p) t
   APICall s e mx api args ->
@@ -391,6 +394,8 @@ instance Show Action where
   show (ActGen x a)
     = printf "%s=%s" (getPKeyID x) (show a)
   show (ActAssert p)
+    = printf "?{%s}" (show p)
+  show (ActContIf p)
     = printf "?%s" (show p)
 
 deriving instance Eq ProcType
@@ -415,6 +420,9 @@ instance Hashable Action where
     `hashWithSalt` a
   hashWithSalt salt (ActAssert p) = salt
     `hashWithSalt` "Assert"
+    `hashWithSalt` p
+  hashWithSalt salt (ActContIf p) = salt
+    `hashWithSalt` "ContIf"
     `hashWithSalt` p
 
 deriving instance Generic ProcType

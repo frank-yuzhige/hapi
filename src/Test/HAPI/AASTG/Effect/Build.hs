@@ -19,7 +19,7 @@ import Data.Kind (Type, Constraint)
 import Test.HAPI.Args (Attribute (..), Attributes, DirectAttribute (Value, Get))
 import Test.HAPI.PState (PKey(PKey))
 import Test.HAPI.Effect.Eff (Algebra(alg), type (:+:) (..), Alg, send, runEnv, Eff)
-import Test.HAPI.AASTG.Core (AASTG, Edge (Update, APICall, Assert, Redirect), newAASTG, NodeID, IsValidCall)
+import Test.HAPI.AASTG.Core (AASTG, Edge (Update, APICall, Assert, Redirect, ContIf), newAASTG, NodeID, IsValidCall)
 import Test.HAPI.Api (ApiName, ApiDefinition, ApiMember (injApi), newVPtr)
 import Test.HAPI.Common (Fuzzable)
 import Control.Effect.Sum (Members, Member)
@@ -165,6 +165,17 @@ assert :: forall apis c sig m proxy.
     -> EdgeCon proxy apis c m ()
 assert k (s, e) _ = do
   sNewEdge @apis @c (Assert s e (Get k))
+  sSetNode @apis @c e
+
+if_ :: forall apis c sig m proxy.
+    ( Has (BuildAASTG apis c) sig m
+    , Fuzzable Bool
+    , c Bool
+    , Typeable c)
+ => PKey Bool
+ -> EdgeCon proxy apis c m ()
+if_ k (s, e) _ = do
+  sNewEdge @apis @c (ContIf s e (Get k))
   sSetNode @apis @c e
 
 redirect :: forall apis c sig m proxy.

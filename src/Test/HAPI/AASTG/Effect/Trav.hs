@@ -22,15 +22,20 @@ import Data.Foldable (sequenceA_, traverse_)
 import qualified Data.Vector as V
 
 data Trav api c (m :: Type -> Type) a where
-  OnEvent :: TravEvent api c -> Trav api c m ()
+  OnEvent :: TravEvent api c -> Trav api c m TravEventResult
 
 data TravEvent api c = OnEdge (Edge api c) | OnNode NodeID
 
-newtype TravHandler api c m = TravHandler { runTravHandler :: TravEvent api c -> m () }
+data TravEventResult
+  = NO_RESULT
+  | HALT
+  deriving (Eq, Ord, Show, Enum)
+
+newtype TravHandler api c m = TravHandler { runTravHandler :: TravEvent api c -> m TravEventResult }
 
 newtype TravCA api c m a = TravCA { runTravCA :: TravHandler api c m -> m a }
 
-onEvent :: Has (Trav api c) sig m => TravEvent api c -> m ()
+onEvent :: Has (Trav api c) sig m => TravEvent api c -> m TravEventResult
 onEvent = send . OnEvent
 
 runTrav :: TravHandler api c m -> TravCA api c m a -> m a
@@ -71,6 +76,6 @@ instance Monad m => Monad (TravCA api c m) where
 instance (Algebra sig m) => Algebra (Trav api c :+: sig) (TravCA api c m) where
   alg hdl sig ctx = TravCA $ \th -> case sig of
     L (OnEvent e) -> do
-      runTravHandler th e
-      return (ctx $> ())
+      r <- runTravHandler th e
+      return (ctx $> r)
     R other       -> alg ((`runTravCA` th) . hdl) other ctx

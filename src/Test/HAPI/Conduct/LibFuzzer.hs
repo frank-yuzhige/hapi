@@ -53,7 +53,7 @@ data LibFuzzerConduct = LibFuzzerConduct
 
 libFuzzerConductViaAASTG :: ( ValidApiDef api
                             , Entry2BlockC api
-                            , CMembers (HSerialize :<>:  CCodeGen) c
+                            , CMembers (HSerialize :<>: CCodeGen) c
                             , c Bool
                             , Typeable c)
                          => AASTG api c -> LibFuzzerConduct
