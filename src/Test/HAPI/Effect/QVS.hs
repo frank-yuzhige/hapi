@@ -58,17 +58,13 @@ import qualified Data.Serialize as S
 data QVS (c :: Type -> Constraint) (m :: Type -> Type) a where
   QDirect    :: (Typeable a) => DirectAttribute a      -> QVS c m a
   QExogenous :: (Fuzzable a) => ExogenousAttribute c a -> QVS c m a
-  -- QList      :: (All Typeable p) => NP (QVS c m) p -> QVS c m (Args p)
 
 data QVSError = QVSError { causedAttribute :: String, errorMessage :: String }
   deriving Show
 
 mkQVS :: forall c a m. Typeable c => Attribute c a -> QVS c m a
-mkQVS (Direct d) = QDirect d
-mkQVS (Exogenous (e :: ExogenousAttribute c1 a)) = case testEquality (typeOf e) (typeRep @(ExogenousAttribute c a)) of
-  Nothing    -> fatalError 'mkQVS FATAL_ERROR "TODO fix me"
-  Just proof -> QExogenous $ castWith proof e
-
+mkQVS (Direct    d) = QDirect d
+mkQVS (Exogenous e) = QExogenous e
 
 -- | Convert attribute to QVS
 attributes2QVSs :: forall c p m. Typeable c => Attributes c p -> NP (QVS c m) p

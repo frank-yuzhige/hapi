@@ -17,7 +17,7 @@ import Test.HAPI.ApiTrace.Core ( ApiTrace )
 import Control.Effect.Writer (Writer)
 
 -- | Type Synonym of a fuzzer for an API set.
-type Fuzzer api c = (Api api :+: QVS c :+: State PState :+: PropertyA)
+type Fuzzer api c = (Api api c :+: QVS c :+: State PState :+: PropertyA)
 
 type EntropyFuzzer api c = (Fuzzer api c :+: EntropySupplier :+: Trav api c)
 

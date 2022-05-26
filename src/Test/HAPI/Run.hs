@@ -14,7 +14,7 @@ import Test.HAPI.Effect.Property
 import Test.HAPI.Api (runForeign, HasForeignDef, ApiName, ValidApiDef)
 import qualified Test.HAPI.PState as PS
 import Test.HAPI.Effect.Eff (debug, runEnvIO, Algebra)
-import Test.HAPI.AASTG.Synth (synthStub, synthEntropyStub, execEntropyFuzzerHandler, execEntropyTraceHandler)
+import Test.HAPI.AASTG.Synth (synthStub, synthEntropyStub, execEntropyFuzzerHandler)
 import Test.HAPI.AASTG.Analysis.Path (outPaths)
 import Control.Monad (forM_, void)
 import Test.HAPI.Effect.Gen (runGenIO)
@@ -52,12 +52,12 @@ runFuzzTestNonDet aastg = runEnvIO $ do
   forM_ s $ \stub -> do id
     $ runGenIO
     $ runError @PropertyError (fail . show) pure
+    $ runState (\s a -> return a) PS.emptyPState
     $ runProperty @PropertyA
     $ runWriter @(ApiTrace api Arbitrary) (\w _ -> return w)
     $ IGNORING.runTrace
     $ runForeign (fail . show)
-    $ runApiFFI @api
-    $ runState (\s a -> return a) PS.emptyPState
+    $ runApiFFI @api @c
     $ runQVSFuzzArbitraryAC @c stub
 
 

@@ -33,11 +33,14 @@ import Data.SOP (NP (Nil, (:*)), All, Compose, I (I), K (K), hcmap, unI, Top)
 import Data.List (intercalate)
 import Language.Haskell.Meta (parseExp)
 import Test.HAPI.Common (Fuzzable)
-import Test.HAPI.PState (PKey (..))
+import Test.HAPI.PState (PKey (..), PState (PState), PStateSupports (lookUp))
 import Data.Data (Typeable)
 import Data.Type.Equality (testEquality, castWith)
 import Type.Reflection (typeOf)
 import Data.Hashable (Hashable (hashWithSalt))
+import Data.Maybe (fromMaybe)
+import Test.HAPI.Util.TH (fatalError, FatalErrorKind (FATAL_ERROR))
+import Text.Printf (printf)
 
 type Args          a = NP I          a
 type Attributes c  a = NP (Attribute c) a
@@ -102,6 +105,15 @@ args = QuasiQuoter {
       Left err -> fail err
       Right r  -> [e|I $(return r) :* $(exp xs)|]
 
+
+evalDirect :: Typeable a => PState -> DirectAttribute a -> a
+evalDirect s (Value v) = v
+evalDirect s (Get   k) = fromMaybe (fatalError 'evalDirect FATAL_ERROR $ printf "Cannot find %s in the scope" (show k))
+                       $ lookUp k s
+
+evalDirects :: (All Fuzzable p) => PState -> DirAttributes p -> Args p
+evalDirects _ Nil       = Nil
+evalDirects s (a :* as) = I (evalDirect s a) :* evalDirects s as
 
 -- | Check if the provided value satisfies the attribute
 validate :: Attribute c a -> a -> Bool

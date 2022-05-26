@@ -11,7 +11,7 @@ import Test.HAPI.Effect.Api (Api, mkCall)
 import Test.HAPI.Effect.QVS (QVS(..), attributes2QVSs, qvs2m, qvs2Direct, qvs2Directs, mkQVS)
 import Control.Effect.State (State, modify)
 import Test.HAPI.PState (PState, PStateSupports (record, forget), PKey (PKey))
-import Test.HAPI.Effect.Property (PropertyA, shouldBe)
+import Test.HAPI.Effect.Property (PropertyA (AssertA))
 import Test.HAPI.AASTG.Core (AASTG (AASTG, getStart), Edge (..), endNode, NodeID, edgesFrom)
 import Test.HAPI.Args (getVar, Attribute (..))
 
@@ -49,15 +49,16 @@ synthOneStep (ContIf s e p) = do
   -- v <- send (QVS @c (Direct p))
   -- modify @PState (forget k)
 synthOneStep (Assert s e p) = do
-  v <- send (mkQVS @c (Direct p))
-  v `shouldBe` True
+  send (AssertA p)
 synthOneStep (APICall s e x api args) = do
   -- 1. Resolve Attributes (Into QVS)
-  args <- qvs2m @c (attributes2QVSs args)
+  attrs <- qvs2Directs @c (attributes2QVSs args)
   -- 2. Make APICall using qvs
-  r <- mkCall api args
+  mr <- mkCall @c x api attrs
   -- 3. Store return value in state
-  modify @PState (record x r)
+  case mr of
+    Nothing -> return ()
+    Just  r -> modify @PState (record x r)
 synthOneStep (Redirect s e) = return ()
 
 traceOneStep :: forall api c sig m. (Has (EntropyTracer api c) sig m, Typeable c) => Edge api c -> m ()
@@ -80,11 +81,6 @@ execEntropyFuzzerHandler :: forall api c sig m. (Has (Fuzzer api c) sig m, Typea
 execEntropyFuzzerHandler = TravHandler $ \case
   OnEdge e -> synthOneStep e
   OnNode n -> return ()
-
-execEntropyTraceHandler :: forall api c sig m. (Has (EntropyTracer api c) sig m, Typeable c) => TravHandler api c m
-execEntropyTraceHandler = TravHandler $ \case
-   OnEdge e -> traceOneStep e
-   OnNode n -> return ()
 
 -- | Entropy
 type EntropyWord = Int
