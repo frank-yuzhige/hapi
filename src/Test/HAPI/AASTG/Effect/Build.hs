@@ -20,7 +20,7 @@ import Test.HAPI.Args (Attribute (..), Attributes, DirectAttribute (..), var, va
 import Test.HAPI.PState (PKey(PKey))
 import Test.HAPI.Effect.Eff (Algebra(alg), type (:+:) (..), Alg, send, runEnv, Eff)
 import Test.HAPI.AASTG.Core (AASTG, Edge (Update, APICall, Assert, Redirect, ContIf), newAASTG, NodeID, IsValidCall)
-import Test.HAPI.Api (ApiName, ApiDefinition, ApiMember (injApi), newVPtr)
+import Test.HAPI.Api (ApiName, ApiDefinition, ApiMember (injApi))
 import Test.HAPI.Common (Fuzzable)
 import Control.Effect.Sum (Members, Member)
 import Control.Effect.State ( State, modify, get, put )

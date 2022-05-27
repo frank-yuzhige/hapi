@@ -47,6 +47,7 @@ library
       Test.HAPI.AASTG.LLVM.Extract
       Test.HAPI.AASTG.Synth
       Test.HAPI.Api
+      Test.HAPI.ApiMeta
       Test.HAPI.ApiTrace
       Test.HAPI.ApiTrace.CodeGen.C
       Test.HAPI.ApiTrace.CodeGen.C.Data

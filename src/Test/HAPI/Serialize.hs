@@ -27,6 +27,7 @@ import Data.Map (Map)
 import qualified Data.ByteString as B
 import GHC.Generics (Generic)
 import GHC.Exts (Ptr(..), int2Addr#, addr2Int#, Int (..))
+import Foreign.C
 
 -- A Serialize class with a bit more "sanity" when dealing with random bytes
 class S.Serialize a => HSerialize a where
@@ -50,7 +51,8 @@ castPtr2Int (Ptr a) = I# (addr2Int# a)
 
 -- TODO implement as necessary
 instance HSerialize Bool
-instance HSerialize Char
+instance HSerialize Char where
+  hget = castCCharToChar . CChar <$> S.get @Int8   -- avoid those chars which cannot be represented using CChar
 instance HSerialize Double
 instance HSerialize Float
 instance HSerialize Int

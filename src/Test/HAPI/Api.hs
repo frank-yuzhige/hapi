@@ -38,7 +38,7 @@ import Test.HAPI.Common (Fuzzable)
 import Data.SOP (All, NP (..), Compose, K (K), I (..))
 import Test.HAPI.VPtr (VPtr (VPtr), VPtrTable (VPtrTable), ptr2VPtr, storePtr, vPtr2Ptr)
 import Foreign (Ptr)
-import Control.Effect.State (State, modify, gets)
+import Control.Effect.State (State, modify, gets, state)
 import Control.Effect.Fail (Fail)
 import Control.Carrier.Fresh.Church (Fresh (Fresh), fresh, runFresh, FreshC)
 import Data.Data (Typeable)
@@ -51,6 +51,9 @@ import Control.Carrier.Error.Church (runError, ErrorC)
 import qualified Data.DList     as DL
 import qualified Test.HAPI.VPtr as VP
 import Text.Casing (quietSnake)
+import Data.TypeRepMap (TypeRepMap)
+import qualified Data.TypeRepMap as TM
+import Data.HashMap.Internal.Array (map')
 
 
 -- TODO: make a data class
@@ -62,7 +65,7 @@ type ValidApiDef api = (HasForeignDef api, ApiName api)
 
 -- | Given API spec has a FFI
 type HasForeign sig m =
-  ( Has (State VPtrTable :+: Error ApiError) sig m
+  ( Has (State ApiMetasState :+: Error ApiError) sig m
   , HasLabelled F Fresh sig m
   , MonadIO m)
 
@@ -131,22 +134,22 @@ showApiFromPatDefault f args = apiName f <> "(" <> showArgs args <> ")"
     showArgs (K s :* as)  = s <> ", " <> showArgs as
     {-# INLINE showArgs #-}
 
-newVPtr :: forall t m sig. (Typeable t, HasForeign sig m) => Ptr t -> m (VPtr t)
-newVPtr p = do
-  i <- sendLabelled @F Fresh
-  let name = "p" <> show i
-  modify @VPtrTable (storePtr name p)
-  a <- gets @VPtrTable (ptr2VPtr p)
-  case a of
-    Nothing -> throwError "Should not be here"
-    Just vp -> return vp
+-- newVPtr :: forall t m sig. (Typeable t, HasForeign sig m) => Ptr t -> m (VPtr t)
+-- newVPtr p = do
+--   i <- sendLabelled @F Fresh
+--   let name = "p" <> show i
+--   modify @VPtrTable (storePtr name p)
+--   a <- gets @VPtrTable (ptr2VPtr p)
+--   case a of
+--     Nothing -> throwError "Should not be here"
+--     Just vp -> return vp
 
-getPtr :: forall t m sig. (Typeable t, HasForeign sig m) => VPtr t -> m (Ptr t)
-getPtr v = do
-  p <- gets @VPtrTable (vPtr2Ptr v)
-  case p of
-    Nothing -> throwError "Ptr not in there"
-    Just ptr -> return ptr
+-- getPtr :: forall t m sig. (Typeable t, HasForeign sig m) => VPtr t -> m (Ptr t)
+-- getPtr v = do
+--   p <- gets @VPtrTable (vPtr2Ptr v)
+--   case p of
+--     Nothing -> throwError "Ptr not in there"
+--     Just ptr -> return ptr
 
 apiEq :: (ApiName api, ApiName api2, Typeable p, Typeable a, Typeable q, Typeable b) => api p a -> api2 q b -> Bool
 apiEq a b = case testEquality (typeOf a) (typeOf b) of
@@ -164,16 +167,16 @@ apiEqProofs a b = do
 
 runForeign' :: (ApiError -> m b)
             -> (a1 -> m b)
-            -> (VPtrTable -> a2 -> ErrorC ApiError m a1)
-            -> (Int -> a3 -> StateC VPtrTable (ErrorC ApiError m) a2)
-            -> VPtrTable
+            -> (ApiMetasState -> a2 -> ErrorC ApiError m a1)
+            -> (Int -> a3 -> StateC ApiMetasState (ErrorC ApiError m) a2)
+            -> ApiMetasState
             -> Int
-            -> Labelled F FreshC (StateC VPtrTable (ErrorC ApiError m)) a3
+            -> Labelled F FreshC (StateC ApiMetasState (ErrorC ApiError m)) a3
             -> m b
 runForeign' fe fa fs ff s i x = runError fe fa $ runState fs s $ runFresh ff i $ runLabelled @F $ x
 
-runForeign :: Monad m => (ApiError -> m b) -> Labelled F FreshC (StateC VPtrTable (ErrorC ApiError m)) b -> m b
-runForeign fe = runForeign' fe return (\s a -> return a) (\s a -> return a) VP.emptyVPTable 0
+runForeign :: Monad m => (ApiError -> m b) -> Labelled F FreshC (StateC ApiMetasState (ErrorC ApiError m)) b -> m b
+runForeign fe = runForeign' fe return (\s a -> return a) (\s a -> return a) emptyApiMetasState 0
 
 isExternalPure :: ApiName api => api p a -> Bool
 isExternalPure n = EXTERNAL_PURE `elem` apiMetaAttributes n
@@ -278,4 +281,43 @@ instance {-# OVERLAPPABLE #-}
 
 class (ApiName api) => HaskellIOCall (api :: ApiDefinition) where
   readOut  :: api p a -> String -> Maybe a
+
+
+-- Meta Attributes maintained during runtime
+
+newtype LiftApiMeta api = LiftApiMeta { toApiMeta :: Meta api }
+
+newtype ApiMetasState = ApiMetasState (TypeRepMap LiftApiMeta)
+
+class ApiName api => HasApiMeta (api :: ApiDefinition)  where
+  type Meta api :: Type
+  initApiMeta :: Meta api
+
+emptyApiMetasState :: ApiMetasState
+emptyApiMetasState = ApiMetasState TM.empty
+
+apiMeta' :: forall a. (Typeable a, HasApiMeta a) => ApiMetasState -> (ApiMetasState, Meta a)
+apiMeta' s@(ApiMetasState ms) = case TM.lookup @a ms of
+  Nothing              -> let i = initApiMeta @a in (ApiMetasState (TM.insert @a (LiftApiMeta i) ms), i)
+  Just (LiftApiMeta m) -> (s, m)
+
+insertMeta' :: forall a. (Typeable a, HasApiMeta a) => Meta a -> ApiMetasState -> ApiMetasState
+insertMeta' m s@(ApiMetasState ms) = ApiMetasState (TM.insert @a (LiftApiMeta m) ms)
+
+updateMeta' :: forall a. (Typeable a, HasApiMeta a) => (Meta a -> Meta a) -> ApiMetasState -> ApiMetasState
+updateMeta' f s = insertMeta' @a (f m) s'
+  where
+    (s', m) = apiMeta' @a s
+
+apiMeta :: forall a sig m. (Typeable a, HasApiMeta a, Has (State ApiMetasState) sig m) => m (Meta a)
+apiMeta = state (apiMeta' @a)
+
+getsMeta :: forall a b sig m. (Typeable a, HasApiMeta a, Has (State ApiMetasState) sig m) => (Meta a -> b) -> m b
+getsMeta f = f <$> apiMeta @a
+
+insertMeta :: forall a sig m. (Typeable a, HasApiMeta a, Has (State ApiMetasState) sig m) => Meta a -> m ()
+insertMeta m = modify (insertMeta' @a m)
+
+updateMeta :: forall a sig m. (Typeable a, HasApiMeta a, Has (State ApiMetasState) sig m) => (Meta a -> Meta a) -> m ()
+updateMeta f = modify (updateMeta' @a f)
 
