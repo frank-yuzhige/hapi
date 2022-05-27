@@ -11,7 +11,7 @@
 {-# LANGUAGE BangPatterns #-}
 module Test.HAPI.AASTG.Analysis.ProcType where
 
-import Test.HAPI.Args (Attributes, Attribute (..), eqAttributes, attrs2Pat, DirectAttribute (..), eqAttributes')
+import Test.HAPI.Args (Attributes, Attribute (..), eqAttributes, attrs2Pat, DirectAttribute (..), eqAttributes', repEq)
 import Test.HAPI.Common (Fuzzable)
 import Test.HAPI.PState (PKey(..))
 import Test.HAPI.Api (ApiName (..), apiEqProofs, isExternalPure)
@@ -73,11 +73,11 @@ data Action where
         => PKey a
         -> Attribute c a
         -> Action
-  ActAssert :: (Fuzzable Bool)
-        => DirectAttribute Bool
+  ActAssert :: (Fuzzable Bool, Typeable c)
+        => DirectAttribute c Bool
         -> Action
-  ActContIf :: (Fuzzable Bool)
-        => DirectAttribute Bool
+  ActContIf :: (Fuzzable Bool, Typeable c)
+        => DirectAttribute c Bool
         -> Action
 
 data SubTypeCtx = SubTypeCtx {
@@ -93,8 +93,8 @@ data ProcType
   | Zero
 
 data Dep c t where
-  DepAttr ::                                              Attribute c t                       -> Dep c t
-  DepCall :: (ApiName api, Typeable p, All Fuzzable p) => PKey t -> api p t -> Attributes c p -> Dep c t
+  DepAttr :: (Typeable c) =>                                             Attribute c t                       -> Dep c t
+  DepCall :: (ApiName api, Typeable p, All Fuzzable p, Typeable c) => PKey t -> api p t -> Attributes c p -> Dep c t
 
 $(makeLenses ''SubTypeCtx)
 
@@ -385,7 +385,9 @@ instance Eq Action where
     Nothing    -> False
     Just proof -> castWith (apply Refl $ inner proof) x == y
                && castWith proof a == b
-  ActAssert p   == ActAssert q = p == q
+  ActAssert p   == ActAssert q = case testEquality (typeOf p) (typeOf q) of
+    Nothing    -> False
+    Just proof -> castWith proof p == q
   _ == _ = False
 
 instance Show Action where

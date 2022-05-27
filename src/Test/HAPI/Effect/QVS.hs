@@ -36,7 +36,7 @@ import Test.HAPI.Common (Fuzzable)
 import Data.Maybe (fromJust)
 import Data.HList (HList (HNil), HMap,type  (:~:) (Refl))
 import Data.SOP ( Proxy(Proxy), NP(..), All, hcmap )
-import Test.HAPI.Args (Args, pattern (::*), Attribute (..), validate, DirectAttribute (..), ExogenousAttribute (..), Attributes, evalDirect)
+import Test.HAPI.Args (Args, pattern (::*), Attribute (..), validate, DirectAttribute (..), ExogenousAttribute (..), Attributes, evalDirect, DirAttributes)
 import Data.SOP.Dict (mapAll)
 import Data.Serialize (Serialize)
 import Test.HAPI.Effect.Orchestration (Orchestration, nextInstruction, OrchestrationError)
@@ -56,8 +56,8 @@ import qualified Data.Serialize as S
 
 -- Quantified Value Supplier
 data QVS (c :: Type -> Constraint) (m :: Type -> Type) a where
-  QDirect    :: (Typeable a) => DirectAttribute a      -> QVS c m a
-  QExogenous :: (Fuzzable a) => ExogenousAttribute c a -> QVS c m a
+  QDirect    :: (Typeable a, c a) => DirectAttribute c a    -> QVS c m a
+  QExogenous :: (Fuzzable a, c a) => ExogenousAttribute c a -> QVS c m a
 
 data QVSError = QVSError { causedAttribute :: String, errorMessage :: String }
   deriving Show
@@ -79,16 +79,17 @@ qvs2m (qvs :* q) = do
   s <- qvs2m q
   return (a ::* s)
 
-qvs2Direct :: (Has (QVS c :+: State PState) sig m) => QVS c m a -> m (DirectAttribute a)
+qvs2Direct :: (Has (QVS c :+: State PState) sig m) => QVS c m a -> m (DirectAttribute c a)
 qvs2Direct qvs = case qvs of
     QDirect (Get x) -> do
       r <- gets @PState (lookUp x)
       case r of
         Nothing -> return (Get x)
         Just v  -> return (Value v)
-    _              -> Value <$> send qvs
+    QDirect {}         -> Value <$> send qvs
+    QExogenous {}      -> Value <$> send qvs
 
-qvs2Directs :: (Has (QVS c :+: State PState) sig m) => NP (QVS c m) p -> m (NP DirectAttribute p)
+qvs2Directs :: (Has (QVS c :+: State PState) sig m) => NP (QVS c m) p -> m (DirAttributes c p)
 qvs2Directs Nil = return Nil
 qvs2Directs (qvs :* q) = do
   d <- qvs2Direct qvs

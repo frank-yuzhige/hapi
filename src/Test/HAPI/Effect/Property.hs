@@ -34,22 +34,22 @@ import Test.HAPI.ApiTrace.Core ( ApiTrace, traceAssert )
 type PropertyType = (* -> *) -> * -> *
 
 data PropertyError where
-  AssertError   :: DirectAttribute Bool -> PropertyError
+  AssertError   :: DirectAttribute c Bool -> PropertyError
   FailedError   :: PropertyError
 
 instance Show PropertyError where
   show (AssertError b)     = "Error: " <> show b <> " is false"
   show FailedError         = "Error: Expect the property not to reach this point"
 
-data PropertyA (m :: * -> *) a where
-  AssertA   :: DirectAttribute Bool -> PropertyA m ()
-  ChecksA   :: DirectAttribute Bool -> PropertyA m Bool
-  FailedA   :: PropertyA m ()
+data PropertyA (c :: Type -> Constraint) (m :: * -> *) a where
+  AssertA   :: DirectAttribute c Bool -> PropertyA c m ()
+  ChecksA   :: DirectAttribute c Bool -> PropertyA c m Bool
+  FailedA   :: PropertyA c m ()
 
 class Property (prop :: PropertyType) err pstate | prop -> err pstate where
   evalProperty :: pstate -> prop m a -> Either err a
 
-instance Property PropertyA PropertyError PState where
+instance Property (PropertyA c) PropertyError PState where
   evalProperty _ FailedA     = Left FailedError
   evalProperty s (AssertA d)
     | evalDirect s d = Right ()
@@ -84,8 +84,8 @@ instance ( Algebra sig m
          , Has (Error err) sig m
          , Has (State PState) sig m
          , Has (Writer (ApiTrace api c)) sig m
-         , Property PropertyA err PState
-         , c Bool) => Algebra (PropertyA :+: sig) (PropertyTraceAC err api c m) where
+         , Property (PropertyA c) err PState
+         , c Bool) => Algebra (PropertyA c :+: sig) (PropertyTraceAC err api c m) where
   alg hdl sig ctx = PropertyTraceAC $ case sig of
     L (AssertA a)  -> do
       tell (traceAssert @api @c a)

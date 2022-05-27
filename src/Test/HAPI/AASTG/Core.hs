@@ -51,13 +51,13 @@ data Edge apis c where
   ContIf   :: forall a api c. (Fuzzable Bool, Typeable c, c Bool)  -- TODO: Not yet supported
            => NodeID            -- From
            -> NodeID            -- To
-           -> DirectAttribute Bool
+           -> DirectAttribute c Bool
            -> Edge api c
   -- TODO better assertion
   Assert   :: forall a api c. (Fuzzable Bool, Typeable c, c Bool)
            => NodeID               -- From
            -> NodeID               -- To
-           -> DirectAttribute Bool
+           -> DirectAttribute c Bool
            -> Edge api c
   APICall  :: forall a sig api p c. (Fuzzable a, IsValidCall c api p, c a)
            => NodeID             -- From

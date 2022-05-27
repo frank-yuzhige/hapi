@@ -53,7 +53,7 @@ runFuzzTestNonDet aastg = runEnvIO $ do
     $ runGenIO
     $ runError @PropertyError (fail . show) pure
     $ runState (\s a -> return a) PS.emptyPState
-    $ runProperty @PropertyA
+    $ runProperty @(PropertyA c)
     $ runWriter @(ApiTrace api Arbitrary) (\w _ -> return w)
     $ IGNORING.runTrace
     $ runForeign (fail . show)

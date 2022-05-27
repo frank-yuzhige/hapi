@@ -13,7 +13,7 @@ module Test.HAPI.ApiTrace.Core where
 import Test.HAPI.Api (ApiDefinition, ApiName (..), ValidApiDef)
 import Data.SOP (All, NP)
 import Test.HAPI.Common (Fuzzable)
-import Test.HAPI.Args (Args, Attributes, attrs2Pat, DirectAttribute, dirAttrs2Pat)
+import Test.HAPI.Args (Args, Attributes, attrs2Pat, DirectAttribute, dirAttrs2Pat, DirAttributes)
 import Data.DList (DList)
 import qualified Data.DList as DL
 import Test.HAPI.PState (PKey)
@@ -23,9 +23,9 @@ import Data.Data (Typeable)
 
 data ApiTraceEntry (api :: ApiDefinition) (c :: Type -> Constraint) where
   TraceCall   :: (ApiName api, All Fuzzable p, All c p, c a, Typeable a)
-              => PKey a -> api p a -> NP DirectAttribute p -> ApiTraceEntry api c
+              => PKey a -> api p a -> DirAttributes c p -> ApiTraceEntry api c
   TraceAssert :: (c Bool)
-              => DirectAttribute Bool -> ApiTraceEntry api c
+              => DirectAttribute c Bool -> ApiTraceEntry api c
 
 instance ApiName api => Show (ApiTraceEntry api c) where
   show (TraceCall   k api args) = show k <> "=" <> showApiFromPat api (dirAttrs2Pat args)
@@ -43,10 +43,10 @@ traceCall :: forall api c p a.
            , All c p
            , c a
            , Typeable a)
-          => PKey a -> api p a -> NP DirectAttribute p -> ApiTrace api c
+          => PKey a -> api p a -> DirAttributes c p -> ApiTrace api c
 traceCall k api args = apiTrace $ TraceCall k api args
 
-traceAssert :: forall api c. (c Bool) => DirectAttribute Bool -> ApiTrace api c
+traceAssert :: forall api c. (c Bool) => DirectAttribute c Bool -> ApiTrace api c
 traceAssert p = apiTrace $ TraceAssert @c @api p
 
 trace2List :: ApiTrace api c -> [ApiTraceEntry api c]

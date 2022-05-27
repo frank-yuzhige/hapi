@@ -13,7 +13,7 @@ import Control.Effect.State (State, modify)
 import Test.HAPI.PState (PState, PStateSupports (record, forget), PKey (PKey))
 import Test.HAPI.Effect.Property (PropertyA (..))
 import Test.HAPI.AASTG.Core (AASTG (AASTG, getStart), Edge (..), endNode, NodeID, edgesFrom)
-import Test.HAPI.Args (getVar, Attribute (..))
+import Test.HAPI.Args (Attribute (..))
 
 import qualified Data.IntMap as IM
 import Test.HAPI.Effect.Fuzzer (Fuzzer, EntropyFuzzer, EntropyTracer)

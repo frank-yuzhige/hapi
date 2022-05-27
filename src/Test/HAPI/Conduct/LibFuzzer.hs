@@ -78,10 +78,12 @@ _traceMainM :: ( ValidApiDef api
             => AASTG api c -> IO ()
 _traceMainM aastg = do
   opt <- execParser opts
-  let path = crashPath opt
-  bs <- BS.readFile path
-  when (preview opt) (previewAASTG aastg)
-  runFuzzTrace aastg bs
+  when (previewGraph opt) (previewAASTG aastg)
+  case bsFilePath opt of
+    ""   -> return ()
+    path -> do
+      bs <- BS.readFile path
+      runFuzzTrace aastg bs
   where
     opts = info (traceOpt <**> helper)
       (  fullDesc
@@ -89,13 +91,13 @@ _traceMainM aastg = do
       <> header   "HAPI LibFuzzer Tracer" )
 
 data TraceOpt = TraceOpt
-  { crashPath :: !FilePath
-  , preview   :: !Bool
+  { bsFilePath   :: !FilePath
+  , previewGraph :: !Bool
   }
 
 traceOpt :: Parser TraceOpt
 traceOpt = TraceOpt
-  <$> strArgument (metavar "PATH" <> help "LibFuzzer generated crash file location")
+  <$> strArgument (metavar "PATH" <> help "LibFuzzer generated crash file location" <> value "")
   <*> switch      (long "preview" <> short 'p' <> help "To preview AASTG" <> showDefault)
 
 
@@ -117,7 +119,7 @@ runFuzzTest aastg bs
       $ runError @QVSError      (return . Just . show) (return . const Nothing)
       $ runError @PropertyError (fail . show) pure
       $ runState (\s a -> return a) PS.emptyPState
-      $ runProperty @PropertyA
+      $ runProperty @(PropertyA c)
       $ runForeign (fail . show)
       $ runApiFFI @api @c
       $ runState @EQSupplier (\s a -> return a) supply
@@ -157,7 +159,7 @@ runFuzzTrace aastg bs
         $ runError @PropertyError (fail . show) pure
         $ runState (\s a -> return a) PS.emptyPState
         $ runWriter @(ApiTrace api c) (\w _ -> return w)
-        $ (runPropertyTrace @PropertyError @api @c)
+        $ runPropertyTrace @PropertyError @api @c
         $ runApiTrace @api @c
         $ runState @EQSupplier (\s a -> return a) supply
         $ runOrchestrationViaBytes @QVSSupply     @EQSupplier

@@ -42,10 +42,10 @@ import Test.HAPI.PState (PState, PKey)
 -- | Wrapper to the original Api
 data Api (api :: ApiDefinition) (c :: Type -> Constraint) (m :: Type -> Type) a where
   MkCall :: (ApiName api, All Fuzzable p, Fuzzable a, All c p, c a)
-         => PKey a -> api p a -> DirAttributes p -> Api api c m (Maybe a)
+         => PKey a -> api p a -> DirAttributes c p -> Api api c m (Maybe a)
 
 mkCall :: forall c api sig m p a. (Has (Api api c) sig m, ApiName api, All Fuzzable p, Fuzzable a, All c p, c a)
-       => PKey a -> api p a -> DirAttributes p -> m (Maybe a)
+       => PKey a -> api p a -> DirAttributes c p -> m (Maybe a)
 mkCall k f a = send $ MkCall @_ @_ @_ @c k f a
 
 -- | Haskell IO Orchestration

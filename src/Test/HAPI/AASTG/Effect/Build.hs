@@ -16,7 +16,7 @@
 
 module Test.HAPI.AASTG.Effect.Build where
 import Data.Kind (Type, Constraint)
-import Test.HAPI.Args (Attribute (..), Attributes, DirectAttribute (..))
+import Test.HAPI.Args (Attribute (..), Attributes, DirectAttribute (..), var, value)
 import Test.HAPI.PState (PKey(PKey))
 import Test.HAPI.Effect.Eff (Algebra(alg), type (:+:) (..), Alg, send, runEnv, Eff)
 import Test.HAPI.AASTG.Core (AASTG, Edge (Update, APICall, Assert, Redirect, ContIf), newAASTG, NodeID, IsValidCall)
@@ -118,11 +118,11 @@ p <%> ec = do
 
 val :: forall t api c sig m proxy. (Has (BuildAASTG api c) sig m, Fuzzable t, c t, Typeable c)
     => t -> EdgeCon proxy api c m (PKey t)
-val v = var (Direct $ Value v)
+val v = decl (value v)
 
-var :: forall t api c sig m proxy. (Has (BuildAASTG api c) sig m, Fuzzable t, c t, Typeable c)
+decl :: forall t api c sig m proxy. (Has (BuildAASTG api c) sig m, Fuzzable t, c t, Typeable c)
     => Attribute c t -> EdgeCon proxy api c m (PKey t)
-var attr (s, e) _ = do
+decl attr (s, e) _ = do
   x <- sNewVar @api @c
   sNewEdge @api @c (Update s e x attr)
   sSetNode @api @c e
@@ -161,7 +161,7 @@ assert :: forall apis c sig m proxy.
        , Fuzzable Bool
        , c Bool
        , Typeable c)
-    => DirectAttribute Bool
+    => DirectAttribute c Bool
     -> EdgeCon proxy apis c m ()
 assert k (s, e) _ = do
   sNewEdge @apis @c (Assert s e k)
@@ -172,7 +172,7 @@ contIf :: forall apis c sig m proxy.
         , Fuzzable Bool
         , c Bool
         , Typeable c)
-     => DirectAttribute Bool
+     => DirectAttribute c Bool
      -> EdgeCon proxy apis c m ()
 contIf k (s, e) _ = do
   sNewEdge @apis @c (ContIf s e k)

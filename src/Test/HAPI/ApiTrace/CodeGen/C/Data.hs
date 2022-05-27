@@ -24,7 +24,7 @@ import Data.SOP (All, NP (..))
 import Test.HAPI.Constraint (type (:>>>:), castC, CMembers, productC)
 import Data.Constraint ((\\), Dict (..), mapDict)
 import Test.HAPI.Common (Fuzzable)
-import Test.HAPI.Args (DirectAttribute (..), DirAttributes)
+import Test.HAPI.Args (DirectAttribute (..), DirAttributes, DACompOp (..))
 import Test.HAPI.ApiTrace.CodeGen.C.DataType (CCodeGen, TyConstC (..))
 import Test.HAPI.ApiTrace.TyConst (TyConst(..))
 import Data.List (nub)
@@ -91,15 +91,31 @@ pk2CVar = cVar . getPKeyID
 api2CVar :: ApiName api => api p a -> CExpr
 api2CVar a = cVar $ apiNameUnder "C" a
 
-dirAttr2CExpr :: (CCodeGen a) => DirectAttribute a -> CExpr
-dirAttr2CExpr (Value a) = toCConst a
-dirAttr2CExpr (Get   x) = pk2CVar x
-dirAttr2CExpr (DNot  x) = CUnary CNegOp (dirAttr2CExpr x) undefNode
+dirAttr2CExpr :: forall c a. (CMembers CCodeGen c) => DirectAttribute c a -> CExpr
+dirAttr2CExpr (Value a)   = toCConst a \\ mapDict (productC @CCodeGen) (Dict @(c a))
+dirAttr2CExpr (Get   x)   = pk2CVar x
+dirAttr2CExpr (DNot  x)   = CUnary  CNegOp (dirAttr2CExpr x) undefNode
+dirAttr2CExpr (DNeg  x)   = CUnary  CMinOp (dirAttr2CExpr x) undefNode
+dirAttr2CExpr (DAnd  x y) = CBinary CAndOp (dirAttr2CExpr x) (dirAttr2CExpr y) undefNode
+dirAttr2CExpr (DOr   x y) = CBinary COrOp  (dirAttr2CExpr x) (dirAttr2CExpr y) undefNode
+dirAttr2CExpr (DEq b x y) = CBinary op     (dirAttr2CExpr x) (dirAttr2CExpr y) undefNode
+  where op = if b then CEqOp else CNeqOp
+dirAttr2CExpr (DPlus  x y) = CBinary CAddOp (dirAttr2CExpr x) (dirAttr2CExpr y) undefNode
+dirAttr2CExpr (DMinus x y) = CBinary CSubOp (dirAttr2CExpr x) (dirAttr2CExpr y) undefNode
+dirAttr2CExpr (DMul   x y) = CBinary CMulOp (dirAttr2CExpr x) (dirAttr2CExpr y) undefNode
+dirAttr2CExpr (DDiv   x y) = CBinary CDivOp (dirAttr2CExpr x) (dirAttr2CExpr y) undefNode
+dirAttr2CExpr (DFDiv  x y) = CBinary CDivOp (dirAttr2CExpr x) (dirAttr2CExpr y) undefNode
+dirAttr2CExpr (DCmp c x y) = CBinary op    (dirAttr2CExpr x) (dirAttr2CExpr y) undefNode
+  where op = case c of
+          DGt  -> CGrOp
+          DGte -> CGeqOp
+          DLt  -> CLeOp
+          DLte -> CLeqOp
 
-dirAttrs2CExprs :: forall c p. (All c p, CMembers CCodeGen c) => DirAttributes p -> [CExpr]
+dirAttrs2CExprs :: forall c p. (All c p, CMembers CCodeGen c) => DirAttributes c p -> [CExpr]
 dirAttrs2CExprs Nil = []
-dirAttrs2CExprs ((a :: DirectAttribute a) :* as)
-  = (dirAttr2CExpr a \\ mapDict (productC @CCodeGen) (Dict @(c a))) : dirAttrs2CExprs @c as
+dirAttrs2CExprs ((a :: DirectAttribute c a) :* as)
+  = dirAttr2CExpr a : dirAttrs2CExprs @c as
 
 -- instance {-# OVERLAPPABLE #-} (ApiName api) => Entry2BlockC api
 

@@ -42,7 +42,7 @@ import Text.Printf (printf)
 
 type Args          a = NP I          a
 type Attributes c  a = NP (Attribute c) a
-type DirAttributes a = NP DirectAttribute a
+type DirAttributes c a = NP (DirectAttribute c) a
 type ArgPattern    a = NP (K String) a
 
 pattern (::*) :: x -> Args xs -> Args (x : xs)
@@ -52,15 +52,32 @@ infixr 2 ::*
 
 
 data Attribute c a where
-  Direct    :: forall a c. (Fuzzable a) => DirectAttribute a -> Attribute c a
+  Direct    :: forall a c. (Fuzzable a, c a, Typeable c) => DirectAttribute c a -> Attribute c a
   Exogenous :: forall c a. (Fuzzable a, c a, Typeable c) => ExogenousAttribute c a -> Attribute c a
-  -- AnyOf    :: (Fuzzable a) => [Attribute a] -> Attribute a
 
 
-data DirectAttribute a where
-  Value :: a -> DirectAttribute a
-  Get   :: PKey a -> DirectAttribute a
-  DNot  :: DirectAttribute Bool -> DirectAttribute Bool
+data DACompOp
+  = DGt
+  | DGte
+  | DLt
+  | DLte
+  deriving (Eq, Ord, Show, Enum, Bounded)
+
+data DirectAttribute c a where
+  Value   :: (c a) => a -> DirectAttribute c a
+  Get     :: (c a) => PKey a -> DirectAttribute c a
+  -- Basic Calculations, easy translatable into C (or other language) code
+  DNot    :: (c Bool) => DirectAttribute c Bool -> DirectAttribute c Bool
+  DAnd    :: (c Bool) => DirectAttribute c Bool -> DirectAttribute c Bool -> DirectAttribute c Bool
+  DOr     :: (c Bool) => DirectAttribute c Bool -> DirectAttribute c Bool -> DirectAttribute c Bool
+  DPlus   :: (c a, Num a) => DirectAttribute c a -> DirectAttribute c a -> DirectAttribute c a
+  DMinus  :: (c a, Num a) => DirectAttribute c a -> DirectAttribute c a -> DirectAttribute c a
+  DMul    :: (c a, Num a) => DirectAttribute c a -> DirectAttribute c a -> DirectAttribute c a
+  DDiv    :: (c a, Num a, Integral a) => DirectAttribute c a -> DirectAttribute c a -> DirectAttribute c a
+  DFDiv   :: (c a, Num a, Fractional a) => DirectAttribute c a -> DirectAttribute c a -> DirectAttribute c a
+  DNeg    :: (c a, Num a) => DirectAttribute c a -> DirectAttribute c a
+  DCmp    :: (c a, Fuzzable a, Ord a) => DACompOp -> DirectAttribute c a -> DirectAttribute c a -> DirectAttribute c Bool
+  DEq     :: (c a, Fuzzable a, Eq  a) => Bool     -> DirectAttribute c a -> DirectAttribute c a -> DirectAttribute c Bool
 
 data ExogenousAttribute c a where
   Anything :: (Typeable c, c a)   => ExogenousAttribute c a
@@ -70,11 +87,11 @@ data ExogenousAttribute c a where
 
 -- Smart constructor
 
-value :: (Fuzzable a) => a -> Attribute c a
+value :: (c a, Fuzzable a, Typeable c) => a -> Attribute c a
 value = Direct . Value
 
-getVar :: (Fuzzable a) => PKey a -> Attribute c a
-getVar = Direct . Get
+var :: (c a, Fuzzable a, Typeable c) => PKey a -> Attribute c a
+var = Direct . Get
 
 anything :: forall c a. (Fuzzable a, c a, Typeable c) => Attribute c a
 anything = Exogenous @c Anything
@@ -105,13 +122,29 @@ args = QuasiQuoter {
       Right r  -> [e|I $(return r) :* $(exp xs)|]
 
 
-evalDirect :: Typeable a => PState -> DirectAttribute a -> a
+evalDirect :: Typeable a => PState -> DirectAttribute c a -> a
 evalDirect s (Value v) = v
 evalDirect s (DNot  d) = not (evalDirect s d)
 evalDirect s (Get   k) = fromMaybe (fatalError 'evalDirect FATAL_ERROR $ printf "Cannot find %s in the scope" (show k))
                        $ lookUp k s
+evalDirect s (DAnd da1 da2)   = evalDirect s da1 && evalDirect s da2
+evalDirect s (DOr  da1 da2)   = evalDirect s da1 || evalDirect s da2
+evalDirect s (DPlus da1 da2)  = evalDirect s da1 + evalDirect s da2
+evalDirect s (DMinus da1 da2) = evalDirect s da1 - evalDirect s da2
+evalDirect s (DMul da1 da2)   = evalDirect s da1 * evalDirect s da2
+evalDirect s (DDiv da1 da2)   = evalDirect s da1 `quot` evalDirect s da2
+evalDirect s (DFDiv da1 da2)  = evalDirect s da1 / evalDirect s da2
+evalDirect s (DNeg  da')      = negate $ evalDirect s da'
+evalDirect s (DCmp c da1 da2) = evalDirect s da1 <=> evalDirect s da2
+  where
+    (<=>) = case c of
+      DGt  -> (>)
+      DGte -> (>=)
+      DLt  -> (<)
+      DLte -> (<=)
+evalDirect s (DEq b da1 da2) = (evalDirect s da1 == evalDirect s da2) == b
 
-evalDirects :: (All Fuzzable p) => PState -> DirAttributes p -> Args p
+evalDirects :: (All Fuzzable p) => PState -> DirAttributes c p -> Args p
 evalDirects _ Nil       = Nil
 evalDirects s (a :* as) = I (evalDirect s a) :* evalDirects s as
 
@@ -145,10 +178,10 @@ repEq a b = case testEquality (typeOf a) (typeOf b) of
 attrs2Pat :: forall p c. All Fuzzable p => Attributes c p -> ArgPattern p
 attrs2Pat = hcmap (Proxy @Fuzzable) (K . show)
 
-dirAttrs2Pat :: forall p. All Fuzzable p => DirAttributes p -> ArgPattern p
+dirAttrs2Pat :: forall c p. All Fuzzable p => DirAttributes c p -> ArgPattern p
 dirAttrs2Pat = hcmap (Proxy @Fuzzable) (K . show)
 
-eqAttributes :: (All Fuzzable p) => Attributes c p -> Attributes c p -> Bool
+eqAttributes :: (Typeable c, All Fuzzable p) => Attributes c p -> Attributes c p -> Bool
 eqAttributes Nil       Nil       = True
 eqAttributes (a :* as) (b :* bs) = a == b && eqAttributes as bs
 
@@ -156,25 +189,26 @@ eqAttributes' :: (All Fuzzable p, Typeable p, Typeable c, Typeable c1) => Attrib
 eqAttributes' a b = case testEquality (typeOf a) (typeOf b) of
   Nothing    -> False
   Just proof -> castWith proof a `eqAttributes` b
--- Hoist
--- attrInt2Bool :: (Integral i, Fuzzable i) => Attribute i -> Attribute Bool
--- attrInt2Bool (Direct (Value i))   = value (i /= 0)
--- attrInt2Bool (Exogenous Anything) = Exogenous Anything
--- attrInt2Bool (Exogenous (IntRange l r))
---   | l == 0 && r == 0 = value False
---   | l <= 0 && 0 <= r = Exogenous $ Range False True
---   | otherwise        = value True
--- attrInt2Bool (Exogenous (Range l r))
---   | l == 0 && r == 0 = value False
---   | l <= 0 && 0 <= r = Exogenous $ Range False True
---   | otherwise        = value True
--- attrInt2Bool (Direct (Get pk))       = getVar (PKey $ getPKeyID pk)
--- attrInt2Bool (AnyOf ats)    = AnyOf (map attrInt2Bool ats)
 
-instance Show a => Show (DirectAttribute a) where
-  show (Value a)  = show a
-  show (Get   pk) = getPKeyID pk
-  show (DNot  v)  = "!" <> show v
+instance Show a => Show (DirectAttribute c a) where
+  show (Value a)        = show a
+  show (Get pk)         = getPKeyID pk
+  show (DNot da')       = "!" <> show da'
+  show (DAnd da1 da2)   = printf "(%s && %s)" (show da1) (show da2)
+  show (DOr  da1 da2)   = printf "(%s || %s)" (show da1) (show da2)
+  show (DPlus da1 da2)  = printf "(%s + %s)" (show da1) (show da2)
+  show (DMinus da1 da2) = printf "(%s - %s)" (show da1) (show da2)
+  show (DMul da1 da2)   = printf "(%s * %s)" (show da1) (show da2)
+  show (DDiv da1 da2)   = printf "(%s // %s)" (show da1) (show da2)
+  show (DFDiv da1 da2)  = printf "(%s / %s)" (show da1) (show da2)
+  show (DNeg da')       = printf "-%s" (show da')
+  show (DCmp c da1 da2) = printf "(%s %s %s)" (showCmp c) (show da1) (show da2)
+    where
+      showCmp DGt  = ">"
+      showCmp DGte = ">="
+      showCmp DLt  = "<"
+      showCmp DLte = "<="
+  show (DEq b da1 da2)  = printf "(%s %s %s)" (if b then "==" else "/=") (show da1) (show da2)
 
 
 instance Show a => Show (ExogenousAttribute c a) where
@@ -185,21 +219,45 @@ instance Show a => Show (Attribute c a) where
   show (Direct    d) = show d
   show (Exogenous d) = show d
 
-deriving instance Eq a => Eq (DirectAttribute a)
+instance (Typeable c, Eq a) => Eq (DirectAttribute c a) where
+  (Value a)        == (Value a')          = a == a'
+  (Get a)          == (Get a')            = a == a'
+  (DNot a)         == (DNot a')           = a == a'
+  (DAnd a1 a2)     == (DAnd a1' a2')      = a1 == a1' && a2 == a2'
+  (DOr  a1 a2)     == (DOr  a1' a2')      = a1 == a1' && a2 == a2'
+  (DPlus a1 a2)    == (DPlus a1' a2')     = a1 == a1' && a2 == a2'
+  (DMinus a1 a2)   == (DMinus a1' a2')    = a1 == a1' && a2 == a2'
+  (DMul a1 a2)     == (DMul a1' a2')      = a1 == a1' && a2 == a2'
+  (DDiv a1 a2)     == (DDiv a1' a2')      = a1 == a1' && a2 == a2'
+  (DNeg da)        == (DNeg da')          = da == da'
+  (DCmp c a1 a2)   == (DCmp c' a1' a2')   = c == c' && a1 `repEq` a1' && a2 `repEq` a2'
+  (DEq  b a1 a2)   == (DEq  b' a1' a2')   = b == b' && a1 `repEq` a1' && a2 `repEq` a2'
+  _ == _ = False
+
+
 deriving instance Eq a => Eq (ExogenousAttribute c a)
-instance Eq a => Eq (Attribute c a) where
+instance (Typeable c, Eq a) => Eq (Attribute c a) where
   Direct    d1 == Direct d2    = d1 == d2
   Exogenous e1 == Exogenous e2 = case testEquality (typeOf e1) (typeOf e2) of
     Nothing    -> False
     Just proof -> castWith proof e1 == e2
   _ == _ = False
 
-instance Hashable a => Hashable (DirectAttribute a) where
+instance Hashable a => Hashable (DirectAttribute c a) where
   hashWithSalt salt = \case
-    Value a  -> salt `hashWithSalt` "value" `hashWithSalt` a
-    Get   pk -> salt `hashWithSalt` "get" `hashWithSalt` pk
-    DNot  d  -> salt `hashWithSalt` "not" `hashWithSalt` d
-
+    Value a        -> salt `hashWithSalt` "value" `hashWithSalt` a
+    Get   pk       -> salt `hashWithSalt` "get" `hashWithSalt` pk
+    DNot  d        -> salt `hashWithSalt` "not" `hashWithSalt` d
+    DAnd da1 da2   -> salt `hashWithSalt` "and" `hashWithSalt` da1 `hashWithSalt` da2
+    DOr  da1 da2   -> salt `hashWithSalt` "or" `hashWithSalt` da1 `hashWithSalt` da2
+    DPlus da1 da2  -> salt `hashWithSalt` "plus" `hashWithSalt` da1 `hashWithSalt` da2
+    DMinus da1 da2 -> salt `hashWithSalt` "min" `hashWithSalt` da1 `hashWithSalt` da2
+    DMul da1 da2   -> salt `hashWithSalt` "mul" `hashWithSalt` da1 `hashWithSalt` da2
+    DDiv da1 da2   -> salt `hashWithSalt` "div" `hashWithSalt` da1 `hashWithSalt` da2
+    DFDiv da1 da2  -> salt `hashWithSalt` "fdiv" `hashWithSalt` da1 `hashWithSalt` da2
+    DNeg  da'      -> salt `hashWithSalt` "neg" `hashWithSalt` da'
+    DCmp c da1 da2 -> salt `hashWithSalt` "cmp" `hashWithSalt` fromEnum c `hashWithSalt` da1 `hashWithSalt` da2
+    DEq  b da1 da2 -> salt `hashWithSalt` "eq" `hashWithSalt` b `hashWithSalt` da1 `hashWithSalt` da2
 instance Hashable a => Hashable (ExogenousAttribute c a) where
   hashWithSalt salt = \case
     Anything     -> salt `hashWithSalt` "any"

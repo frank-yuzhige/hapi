@@ -79,52 +79,52 @@ type C = Fuzzable :<>: CCodeGen
 graph1 :: AASTG A C
 graph1 = runEnv $ runBuildAASTG $ do
   a <- p <%> val @Int 10
-  b <- p <%> var @Int anything
-  p <%> call Add (getVar a, getVar b)
+  b <- p <%> decl @Int anything
+  p <%> call Add (var a, var b)
   where p = Building @A @C
 
 graph2 :: AASTG A C
 graph2 = runEnv $ runBuildAASTG $ do
-  a <- p <%> var anything
-  b <- p <%> var anything
-  p <%> call Add (getVar a, getVar b)
+  a <- p <%> decl anything
+  b <- p <%> decl anything
+  p <%> call Add (var a, var b)
   where p = Building @A @C
 
 graph3 :: AASTG A C
 graph3 = runEnv $ runBuildAASTG $ do
-  a <- p <%> var (anything @C @Int)
-  b <- p <%> var (anything @C @Int)
-  c <- p <%> call Add (getVar b, getVar a)
-  p <%> call Add (getVar a, getVar c)
+  a <- p <%> decl (anything @C @Int)
+  b <- p <%> decl (anything @C @Int)
+  c <- p <%> call Add (var b, var a)
+  p <%> call Add (var a, var c)
   where p = Building @A @C
 
 graph4 :: AASTG A C
 graph4 = runEnv $ runBuildAASTG $ do
-  a <- p <%> var (anything @C @Int)
-  b <- p <%> var (anything @C @Int)
-  c <- p <%> call Add (getVar a, getVar b)
-  d <- p <%> call Add (getVar a, getVar c)
-  p <%> call Add (getVar c, getVar d)
+  a <- p <%> decl (anything @C @Int)
+  b <- p <%> decl (anything @C @Int)
+  c <- p <%> call Add (var a, var b)
+  d <- p <%> call Add (var a, var c)
+  p <%> call Add (var c, var d)
   where p = Building @A @C
 
 graph5 :: AASTG A C
 graph5 = runEnv $ runBuildAASTG $ do
-  a <- p <%> var (anything @C @Int)
-  b <- p <%> var (anything @C @Int)
-  c <- p <%> call Add (getVar a, getVar b)
-  d <- p <%> call Sub (getVar a, getVar c)
-  p <%> call Add (getVar c, getVar d)
+  a <- p <%> decl (anything @C @Int)
+  b <- p <%> decl (anything @C @Int)
+  c <- p <%> call Add (var a, var b)
+  d <- p <%> call Sub (var a, var c)
+  p <%> call Add (var c, var d)
   where p = Building @A @C
 
 graph6 :: AASTG A C
 graph6 = runEnv $ runBuildAASTG $ do
-  a <- p <%> var (anything @C @Int)
-  b <- p <%> var (anything @C @Int)
-  c <- p <%> call Add (getVar a, getVar b)
-  d <- p <%> call Add (getVar a, getVar c)
-  fork p $ p <%> call Neg (getVar c)
-  fork p $ p <%> call (HLib.+) (getVar c, getVar c)
-  p <%> call Mul (getVar a, getVar d)
+  a <- p <%> decl (anything @C @Int)
+  b <- p <%> decl (anything @C @Int)
+  c <- p <%> call Add (var a, var b)
+  d <- p <%> call Add (var a, var c)
+  fork p $ p <%> call Neg (var c)
+  fork p $ p <%> call (HLib.+) (var c, var c)
+  p <%> call Mul (var a, var d)
   where p = Building @A @C
 
 cograph :: AASTG A C
@@ -137,11 +137,11 @@ diamond = runEnv $ runBuildAASTG $ do
   n3 <- p <%> newNode
   n4 <- p <%> newNode
   n5 <- p <%> newNode
-  x <- p <%(n1,n2)%> var anything
-  p <%(n2,n3)%> call Add (getVar x, value 1)
-  p <%(n3,n5)%> call Add (getVar x, value 2)
-  p <%(n2,n4)%> call Add (getVar x, value 3)
-  p <%(n4,n5)%> call Add (getVar x, value 4)
+  x <- p <%(n1,n2)%> decl anything
+  p <%(n2,n3)%> call Add (var x, value 1)
+  p <%(n3,n5)%> call Add (var x, value 2)
+  p <%(n2,n4)%> call Add (var x, value 3)
+  p <%(n4,n5)%> call Add (var x, value 4)
   where p = Building @A @C
 
 
@@ -153,12 +153,12 @@ cyc = runEnv $ runBuildAASTG $ do
   n4 <- p <%> newNode
   n5 <- p <%> newNode
   n6 <- p <%> newNode
-  x  <- p <%(n1,n2)%> var anything
-  p <%(n4,n3)%> call Add (getVar x, value 4)
-  p <%(n3,n4)%> call Add (getVar x, value 2)
-  p <%(n4,n2)%> call Add (getVar x, value 3)
-  p <%(n2,n3)%> call Add (getVar x, value 1)
-  b  <- p <%(n4, n5)%> call (HLib.==) (getVar x, value 10)
+  x  <- p <%(n1,n2)%> decl anything
+  p <%(n4,n3)%> call Add (var x, value 4)
+  p <%(n3,n4)%> call Add (var x, value 2)
+  p <%(n4,n2)%> call Add (var x, value 3)
+  p <%(n2,n3)%> call Add (var x, value 1)
+  b  <- p <%(n4, n5)%> call (HLib.==) (var x, value 10)
   p <%(n5, n6)%> assert (Get b)
   where p = Building @A @C
 
@@ -170,10 +170,10 @@ cyc2 = runEnv $ runBuildAASTG $ do
   n2 <- p <%> newNode
   n3 <- p <%> newNode
   n4 <- p <%> newNode
-  x <- p <%(n1,n2)%> var anything
-  p <%(n2,n3)%> call Add (getVar x, value 1)
-  p <%(n3,n4)%> call Add (getVar x, value 2)
-  p <%(n4,n2)%> call Add (getVar x, value 3)
+  x <- p <%(n1,n2)%> decl anything
+  p <%(n2,n3)%> call Add (var x, value 1)
+  p <%(n3,n4)%> call Add (var x, value 2)
+  p <%(n4,n2)%> call Add (var x, value 3)
   where p = Building @A @C
 
 cyc3 :: AASTG A C
@@ -182,12 +182,12 @@ cyc3 = runEnv $ runBuildAASTG $ do
   n2 <- p <%> newNode
   n3 <- p <%> newNode
   n4 <- p <%> newNode
-  x <- p <%(n1,n2)%> var anything
-  p <%(n2,n3)%> call Add (getVar x, value 1)
-  p <%(n3,n4)%> call Sub (getVar x, value 2)
-  p <%(n4,n2)%> call Add (getVar x, value 3)
-  p <%(n4,n3)%> call Add (getVar x, value 4)
-  p <%(n4,n3)%> call Add (getVar x, value 5)
+  x <- p <%(n1,n2)%> decl anything
+  p <%(n2,n3)%> call Add (var x, value 1)
+  p <%(n3,n4)%> call Sub (var x, value 2)
+  p <%(n4,n2)%> call Add (var x, value 3)
+  p <%(n4,n3)%> call Add (var x, value 4)
+  p <%(n4,n3)%> call Add (var x, value 5)
   where p = Building @A @C
 
 cyc4 :: AASTG A C
@@ -195,9 +195,9 @@ cyc4 = runEnv $ runBuildAASTG $ do
   n1 <- p <%> currNode
   n2 <- p <%> newNode
   n3 <- p <%> newNode
-  x <- p <%(n1,n2)%> var anything
-  p <%(n2,n3)%> call Add (getVar x, value 1)
-  p <%(n3,n2)%> call Sub (getVar x, value 2)
+  x <- p <%(n1,n2)%> decl anything
+  p <%(n2,n3)%> call Add (var x, value 1)
+  p <%(n3,n2)%> call Sub (var x, value 2)
   where p = Building @A @C
 
 invalid :: AASTG A C
@@ -206,10 +206,10 @@ invalid = runEnv $ runBuildAASTG $ do
   n2 <- p <%> newNode
   n3 <- p <%> newNode
   n4 <- p <%> newNode
-  x <- p <%(n1,n2)%> var anything
-  y <- p <%(n3,n2)%> call Sub (getVar x, value 2)
-  p <%(n2,n3)%> call Add (getVar x, getVar y)
-  p <%(n2,n4)%> assertTrue (HLib.==) (getVar x, getVar y)
+  x <- p <%(n1,n2)%> decl anything
+  y <- p <%(n3,n2)%> call Sub (var x, value 2)
+  p <%(n2,n3)%> call Add (var x, var y)
+  p <%(n2,n4)%> assertTrue (HLib.==) (var x, var y)
   where p = Building @A @C
 
 
@@ -218,11 +218,11 @@ addComp = runEnv $ runBuildAASTG $ do
   -- p <%> redirect
 
   s <- p <%> currNode
-  a <- p <%> var @Int anything
-  b <- p <%> var @Int anything
-  x <- p <%> call Add (getVar a, getVar b)
-  y <- p <%> call (HLib.+) (getVar a, getVar b)
-  p <%> assertTrue (HLib.==) (getVar x, getVar y)
+  a <- p <%> decl @Int anything
+  b <- p <%> decl @Int anything
+  x <- p <%> call Add (var a, var b)
+  y <- p <%> call (HLib.+) (var a, var b)
+  p <%> assertTrue (HLib.==) (var x, var y)
   -- s' <- p <%> currNode
   -- p <%(s', s)%> redirect
   where p = Building @A @C
@@ -242,11 +242,11 @@ addAssoc :: AASTG A C
 addAssoc = runEnv $ runBuildAASTG $ do
   p <%> redirect
   s <- p <%> currNode
-  a <- p <%> var @Int anything
-  b <- p <%> var @Int anything
-  x <- p <%> call Add (getVar a, getVar b)
-  y <- p <%> call Add (getVar b, getVar a)
-  p <%> assertTrue (HLib.==) (getVar x, getVar y)
+  a <- p <%> decl @Int anything
+  b <- p <%> decl @Int anything
+  x <- p <%> call Add (var a, var b)
+  y <- p <%> call Add (var b, var a)
+  p <%> assertTrue (HLib.==) (var x, var y)
   s' <- p <%> currNode
   p <%(s', s)%> redirect
   where p = Building @A @C
@@ -255,11 +255,11 @@ addAssoc2 :: AASTG A C
 addAssoc2 = runEnv $ runBuildAASTG $ do
   -- p <%> redirect
   s <- p <%> currNode
-  a <- p <%> var @Int anything
-  b <- p <%> var @Int anything
-  x <- p <%> call Add (getVar b, getVar a)
-  y <- p <%> call Add (getVar a, getVar b)
-  p <%> assertTrue (HLib.==) (getVar x, getVar y)
+  a <- p <%> decl @Int anything
+  b <- p <%> decl @Int anything
+  x <- p <%> call Add (var b, var a)
+  y <- p <%> call Add (var a, var b)
+  p <%> assertTrue (HLib.==) (var x, var y)
   -- s' <- p <%> currNode
   -- p <%(s', s)%> redirect
   where p = Building @A @C
@@ -268,11 +268,11 @@ mulAssoc :: AASTG A C
 mulAssoc = runEnv $ runBuildAASTG $ do
   p <%> redirect
   s <- p <%> currNode
-  a <- p <%> var @Int anything
-  b <- p <%> var @Int anything
-  x <- p <%> call Mul (getVar a, getVar b)
-  y <- p <%> call Mul (getVar b, getVar a)
-  p <%> assertTrue (HLib.==) (getVar x, getVar y)
+  a <- p <%> decl @Int anything
+  b <- p <%> decl @Int anything
+  x <- p <%> call Mul (var a, var b)
+  y <- p <%> call Mul (var b, var a)
+  p <%> assertTrue (HLib.==) (var x, var y)
   s' <- p <%> currNode
   p <%(s', s)%> redirect
   where p = Building @A @C
