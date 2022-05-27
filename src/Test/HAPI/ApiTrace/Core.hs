@@ -26,10 +26,13 @@ data ApiTraceEntry (api :: ApiDefinition) (c :: Type -> Constraint) where
               => PKey a -> api p a -> DirAttributes c p -> ApiTraceEntry api c
   TraceAssert :: (c Bool)
               => DirectAttribute c Bool -> ApiTraceEntry api c
+  TraceContIf :: (c Bool)
+              => DirectAttribute c Bool -> ApiTraceEntry api c
 
 instance ApiName api => Show (ApiTraceEntry api c) where
   show (TraceCall   k api args) = show k <> "=" <> showApiFromPat api (dirAttrs2Pat args)
   show (TraceAssert p)          = "assert " <> show p
+  show (TraceContIf p)          = "contif " <> show p
 
 newtype ApiTrace (api :: ApiDefinition) (c :: Type -> Constraint) = ApiTrace { apiTrace2List :: DList (ApiTraceEntry api c) }
   deriving (Semigroup, Monoid)
@@ -48,6 +51,9 @@ traceCall k api args = apiTrace $ TraceCall k api args
 
 traceAssert :: forall api c. (c Bool) => DirectAttribute c Bool -> ApiTrace api c
 traceAssert p = apiTrace $ TraceAssert @c @api p
+
+traceContIf :: forall api c. (c Bool) => DirectAttribute c Bool -> ApiTrace api c
+traceContIf p = apiTrace $ TraceContIf @c @api p
 
 trace2List :: ApiTrace api c -> [ApiTraceEntry api c]
 trace2List (ApiTrace dl) = DL.toList dl

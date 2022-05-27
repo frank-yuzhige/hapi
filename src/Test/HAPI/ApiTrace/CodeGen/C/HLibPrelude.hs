@@ -8,7 +8,7 @@
 module Test.HAPI.ApiTrace.CodeGen.C.HLibPrelude where
 
 import Test.HAPI.HLib.HLibPrelude (HLibPrelude)
-import Test.HAPI.ApiTrace.CodeGen.C.Data (Entry2BlockC(..), entry2BlockDefault, pk2CVar, dirAttrs2CExprs)
+import Test.HAPI.ApiTrace.CodeGen.C.Data (Entry2BlockC(..),  pk2CVar, dirAttrs2CExprs, call2BlockDefault)
 import qualified Test.HAPI.HLib.HLibPrelude as HLib
 import Test.HAPI.PrimApi (Prim(..), Prim' (BinaryOp))
 import Test.HAPI.ApiTrace.CodeGen.C.Util
@@ -21,9 +21,7 @@ import Test.HAPI.ApiTrace.CodeGen.C.DataType (CCodeGen)
 import Test.HAPI.ApiTrace.Core (ApiTraceEntry (..))
 
 instance Entry2BlockC HLibPrelude where
-  entry2Block :: forall c. (CMembers CCodeGen c) => ApiTraceEntry HLibPrelude c -> [CBlockItem]
-  entry2Block a@TraceAssert {} = entry2BlockDefault a
-  entry2Block a@(TraceCall x (Prim s ar) args) = case (s, ar) of
+  call2Block x a@(Prim s ar) (args :: DirAttributes c p) = case (s, ar) of
     ("==", BinaryOp {})
       -> [liftEToB $ pk2CVar x <-- let [x, y] = dirAttrs2CExprs @c args in x ==: y]
     ("+", BinaryOp {})
@@ -33,4 +31,4 @@ instance Entry2BlockC HLibPrelude where
     ("*", BinaryOp {})
       -> [liftEToB $ pk2CVar x <-- let [x, y] = dirAttrs2CExprs @c args in cOp CMulOp x y]
     -- TODO
-    _    -> entry2BlockDefault a
+    _    -> call2BlockDefault x a args

@@ -1,5 +1,4 @@
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE RankNTypes #-}
@@ -9,9 +8,10 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ConstrainedClassMethods #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Test.HAPI.ApiTrace.CodeGen.C.Data where
 
@@ -36,16 +36,21 @@ import Type.Reflection (typeRep)
 import Data.Maybe (isJust)
 
 class (ApiName api) => Entry2BlockC (api :: ApiDefinition) where
-  entry2Block :: forall c. (CMembers CCodeGen c) => ApiTraceEntry api c -> [CBlockItem]
-  entry2Block = entry2BlockDefault
+  call2Block :: forall c p a. (CMembers CCodeGen c, ApiName api, All Fuzzable p, Typeable a, All c p, c a)
+             => PKey a -> api p a -> DirAttributes c p -> [CBlockItem]
+  call2Block = call2BlockDefault
 
-entry2BlockDefault :: forall api c. (CMembers CCodeGen c) => ApiTraceEntry api c -> [CBlockItem]
-entry2BlockDefault (TraceCall (x :: PKey a) api args) = case testEquality (typeRep @a) (typeRep @()) of
+call2BlockDefault :: forall api c p a. (CMembers CCodeGen c, ApiName api, All Fuzzable p, Typeable a, All c p, c a)
+                  => PKey a -> api p a -> DirAttributes c p -> [CBlockItem]
+call2BlockDefault x api args = case testEquality (typeRep @a) (typeRep @()) of
   Nothing    -> [liftEToB $ pk2CVar x <-- (api2CVar api # dirAttrs2CExprs @c args)]
   Just proof -> [liftEToB $ api2CVar api # dirAttrs2CExprs @c args]
 
-entry2BlockDefault (TraceAssert p) = [CBlockStmt $ cAssertIf (dirAttr2CExpr p)]
-
+entry2Block :: forall api c. (CMembers CCodeGen c, Entry2BlockC api) => ApiTraceEntry api c -> [CBlockItem]
+entry2Block = \case
+  TraceCall x api args -> call2Block x api args
+  TraceAssert da       -> [CBlockStmt $ cAssertIf (dirAttr2CExpr da)]
+  TraceContIf da       -> [CBlockStmt $ cContIf   (dirAttr2CExpr da)]
 
 traceDecls :: forall api c. (CMembers CCodeGen c) => [ApiTraceEntry api c] -> [CBlockItem]
 traceDecls xs = concat $ TM.toListWith (\(PKeySetEntry s) -> [makeDecl k \\ mapDict (productC @CCodeGen) d | (k, d) <- S.toList s]) $ collectVar xs
@@ -96,8 +101,8 @@ dirAttr2CExpr (Value a)   = toCConst a \\ mapDict (productC @CCodeGen) (Dict @(c
 dirAttr2CExpr (Get   x)   = pk2CVar x
 dirAttr2CExpr (DNot  x)   = CUnary  CNegOp (dirAttr2CExpr x) undefNode
 dirAttr2CExpr (DNeg  x)   = CUnary  CMinOp (dirAttr2CExpr x) undefNode
-dirAttr2CExpr (DAnd  x y) = CBinary CAndOp (dirAttr2CExpr x) (dirAttr2CExpr y) undefNode
-dirAttr2CExpr (DOr   x y) = CBinary COrOp  (dirAttr2CExpr x) (dirAttr2CExpr y) undefNode
+dirAttr2CExpr (DAnd  x y) = CBinary CLndOp (dirAttr2CExpr x) (dirAttr2CExpr y) undefNode
+dirAttr2CExpr (DOr   x y) = CBinary CLorOp (dirAttr2CExpr x) (dirAttr2CExpr y) undefNode
 dirAttr2CExpr (DEq b x y) = CBinary op     (dirAttr2CExpr x) (dirAttr2CExpr y) undefNode
   where op = if b then CEqOp else CNeqOp
 dirAttr2CExpr (DPlus  x y) = CBinary CAddOp (dirAttr2CExpr x) (dirAttr2CExpr y) undefNode
@@ -105,7 +110,7 @@ dirAttr2CExpr (DMinus x y) = CBinary CSubOp (dirAttr2CExpr x) (dirAttr2CExpr y) 
 dirAttr2CExpr (DMul   x y) = CBinary CMulOp (dirAttr2CExpr x) (dirAttr2CExpr y) undefNode
 dirAttr2CExpr (DDiv   x y) = CBinary CDivOp (dirAttr2CExpr x) (dirAttr2CExpr y) undefNode
 dirAttr2CExpr (DFDiv  x y) = CBinary CDivOp (dirAttr2CExpr x) (dirAttr2CExpr y) undefNode
-dirAttr2CExpr (DCmp c x y) = CBinary op    (dirAttr2CExpr x) (dirAttr2CExpr y) undefNode
+dirAttr2CExpr (DCmp c x y) = CBinary op     (dirAttr2CExpr x) (dirAttr2CExpr y) undefNode
   where op = case c of
           DGt  -> CGrOp
           DGte -> CGeqOp
@@ -120,7 +125,5 @@ dirAttrs2CExprs ((a :: DirectAttribute c a) :* as)
 -- instance {-# OVERLAPPABLE #-} (ApiName api) => Entry2BlockC api
 
 instance (Entry2BlockC f, Entry2BlockC g) => Entry2BlockC (f :$$: g) where
-  entry2Block :: forall c. (CMembers CCodeGen c) => ApiTraceEntry (f :$$: g) c -> [CBlockItem]
-  entry2Block (TraceCall x (ApiL f) args) = entry2Block @f @c (TraceCall x f args)
-  entry2Block (TraceCall x (ApiR g) args) = entry2Block @g @c (TraceCall x g args)
-  entry2Block a                           = entry2BlockDefault a  -- TODO f or g when assert?
+  call2Block x (ApiL f) args = call2Block x f args
+  call2Block x (ApiR g) args = call2Block x g args

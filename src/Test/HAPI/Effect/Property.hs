@@ -29,7 +29,7 @@ import Control.Effect.Writer (Writer, tell)
 import Test.HAPI.Api (ApiDefinition)
 import Data.Constraint (Constraint)
 import Data.Kind (Type)
-import Test.HAPI.ApiTrace.Core ( ApiTrace, traceAssert )
+import Test.HAPI.ApiTrace.Core ( ApiTrace, traceAssert, traceContIf )
 
 type PropertyType = (* -> *) -> * -> *
 
@@ -91,6 +91,7 @@ instance ( Algebra sig m
       tell (traceAssert @api @c a)
       return (ctx $> ())
     L (ChecksA a) -> do
+      tell (traceContIf @api @c a)
       return (ctx $> True)
     L FailedA      -> do
       tell (traceAssert @api @c (Value False))
