@@ -79,6 +79,9 @@ data DirectAttribute c a where
   DCmp    :: (c a, Fuzzable a, Ord a) => DACompOp -> DirectAttribute c a -> DirectAttribute c a -> DirectAttribute c Bool
   DEq     :: (c a, Fuzzable a, Eq  a) => Bool     -> DirectAttribute c a -> DirectAttribute c a -> DirectAttribute c Bool
 
+  DCastInt :: (c a, c b, Fuzzable a, Fuzzable b, Integral a, Integral b)
+           => DirectAttribute c a -> DirectAttribute c b
+
 data ExogenousAttribute c a where
   Anything :: (Typeable c, c a)   => ExogenousAttribute c a
   IntRange :: (Typeable c, c Int) => Int -> Int -> ExogenousAttribute c Int
@@ -143,10 +146,27 @@ evalDirect s (DCmp c da1 da2) = evalDirect s da1 <=> evalDirect s da2
       DLt  -> (<)
       DLte -> (<=)
 evalDirect s (DEq b da1 da2) = (evalDirect s da1 == evalDirect s da2) == b
+evalDirect s (DCastInt a) = fromIntegral (evalDirect s a)
 
 evalDirects :: (All Fuzzable p) => PState -> DirAttributes c p -> Args p
 evalDirects _ Nil       = Nil
 evalDirects s (a :* as) = I (evalDirect s a) :* evalDirects s as
+
+simplifyDirect :: Typeable a => PState -> DirectAttribute c a -> DirectAttribute c a
+simplifyDirect s (Value v)        = Value v
+simplifyDirect s (DNot  d)        = DNot   (simplifyDirect s d)
+simplifyDirect s (Get   k)        = maybe  (Get k) Value (lookUp k s)
+simplifyDirect s (DAnd da1 da2)   = DAnd   (simplifyDirect s da1) (simplifyDirect s da2)
+simplifyDirect s (DOr  da1 da2)   = DOr    (simplifyDirect s da1) (simplifyDirect s da2)
+simplifyDirect s (DPlus da1 da2)  = DPlus  (simplifyDirect s da1) (simplifyDirect s da2)
+simplifyDirect s (DMinus da1 da2) = DMinus (simplifyDirect s da1) (simplifyDirect s da2)
+simplifyDirect s (DMul da1 da2)   = DMul   (simplifyDirect s da1) (simplifyDirect s da2)
+simplifyDirect s (DDiv da1 da2)   = DDiv   (simplifyDirect s da1) (simplifyDirect s da2)
+simplifyDirect s (DFDiv da1 da2)  = DFDiv  (simplifyDirect s da1) (simplifyDirect s da2)
+simplifyDirect s (DNeg  da')      = DNeg   (simplifyDirect s da')
+simplifyDirect s (DCmp c da1 da2) = DCmp c (simplifyDirect s da1) (simplifyDirect s da2)
+simplifyDirect s (DEq b da1 da2)  = DEq  b (simplifyDirect s da1) (simplifyDirect s da2)
+simplifyDirect s (DCastInt a)     = DCastInt (simplifyDirect s a)
 
 -- | Check if the provided value satisfies the attribute
 validate :: Attribute c a -> a -> Bool
@@ -208,7 +228,8 @@ instance Show a => Show (DirectAttribute c a) where
       showCmp DGte = ">="
       showCmp DLt  = "<"
       showCmp DLte = "<="
-  show (DEq b da1 da2)  = printf "(%s %s %s)" (if b then "==" else "/=") (show da1) (show da2)
+  show (DEq b da1 da2)  = printf "(%s %s %s)" (show da1) (if b then "==" else "/=") (show da2)
+  show (DCastInt a)     = printf "(%s as int)" (show a)
 
 
 instance Show a => Show (ExogenousAttribute c a) where
@@ -258,6 +279,7 @@ instance Hashable a => Hashable (DirectAttribute c a) where
     DNeg  da'      -> salt `hashWithSalt` "neg" `hashWithSalt` da'
     DCmp c da1 da2 -> salt `hashWithSalt` "cmp" `hashWithSalt` fromEnum c `hashWithSalt` da1 `hashWithSalt` da2
     DEq  b da1 da2 -> salt `hashWithSalt` "eq" `hashWithSalt` b `hashWithSalt` da1 `hashWithSalt` da2
+    DCastInt x     -> salt `hashWithSalt` "casti" `hashWithSalt` x
 instance Hashable a => Hashable (ExogenousAttribute c a) where
   hashWithSalt salt = \case
     Anything     -> salt `hashWithSalt` "any"

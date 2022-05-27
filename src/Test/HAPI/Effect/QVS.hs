@@ -36,7 +36,7 @@ import Test.HAPI.Common (Fuzzable)
 import Data.Maybe (fromJust)
 import Data.HList (HList (HNil), HMap,type  (:~:) (Refl))
 import Data.SOP ( Proxy(Proxy), NP(..), All, hcmap )
-import Test.HAPI.Args (Args, pattern (::*), Attribute (..), validate, DirectAttribute (..), ExogenousAttribute (..), Attributes, evalDirect, DirAttributes)
+import Test.HAPI.Args (Args, pattern (::*), Attribute (..), validate, DirectAttribute (..), ExogenousAttribute (..), Attributes, evalDirect, DirAttributes, simplifyDirect)
 import Data.SOP.Dict (mapAll)
 import Data.Serialize (Serialize)
 import Test.HAPI.Effect.Orchestration (Orchestration, nextInstruction, OrchestrationError)
@@ -81,13 +81,8 @@ qvs2m (qvs :* q) = do
 
 qvs2Direct :: (Has (QVS c :+: State PState) sig m) => QVS c m a -> m (DirectAttribute c a)
 qvs2Direct qvs = case qvs of
-    QDirect (Get x) -> do
-      r <- gets @PState (lookUp x)
-      case r of
-        Nothing -> return (Get x)
-        Just v  -> return (Value v)
-    QDirect {}         -> Value <$> send qvs
-    QExogenous {}      -> Value <$> send qvs
+    QDirect d     -> gets (`simplifyDirect` d)
+    QExogenous {} -> Value <$> send qvs
 
 qvs2Directs :: (Has (QVS c :+: State PState) sig m) => NP (QVS c m) p -> m (DirAttributes c p)
 qvs2Directs Nil = return Nil

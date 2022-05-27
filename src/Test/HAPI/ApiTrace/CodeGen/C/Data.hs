@@ -116,6 +116,7 @@ dirAttr2CExpr (DCmp c x y) = CBinary op     (dirAttr2CExpr x) (dirAttr2CExpr y) 
           DGte -> CGeqOp
           DLt  -> CLeOp
           DLte -> CLeqOp
+dirAttr2CExpr (DCastInt x) = castTy (dirAttr2CExpr x) intSpec
 
 dirAttrs2CExprs :: forall c p. (All c p, CMembers CCodeGen c) => DirAttributes c p -> [CExpr]
 dirAttrs2CExprs Nil = []
