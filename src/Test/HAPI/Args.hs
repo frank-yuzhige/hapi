@@ -39,6 +39,8 @@ import Data.Hashable (Hashable (hashWithSalt))
 import Data.Maybe (fromMaybe)
 import Test.HAPI.Util.TH (fatalError, FatalErrorKind (FATAL_ERROR))
 import Text.Printf (printf)
+import qualified Data.Serialize as S
+import Foreign (Ptr, nullPtr)
 
 type Args          a = NP I          a
 type Attributes c  a = NP (Attribute c) a
@@ -82,9 +84,13 @@ data DirectAttribute c a where
   DCastInt :: (c a, c b, Fuzzable a, Fuzzable b, Integral a, Integral b)
            => DirectAttribute c a -> DirectAttribute c b
 
+  DNullptr :: DirectAttribute c (Ptr a)
+
 data ExogenousAttribute c a where
-  Anything :: (Typeable c, c a)   => ExogenousAttribute c a
-  IntRange :: (Typeable c, c Int) => Int -> Int -> ExogenousAttribute c Int
+  Anything :: (Typeable c, c a)
+           => ExogenousAttribute c a
+  IntRange :: (Typeable c, c Int)
+           => Int -> Int -> ExogenousAttribute c Int
   Range    :: (Typeable c, Enum a, Ord a, c a)
            => a -> a -> ExogenousAttribute c a
 
@@ -146,7 +152,8 @@ evalDirect s (DCmp c da1 da2) = evalDirect s da1 <=> evalDirect s da2
       DLt  -> (<)
       DLte -> (<=)
 evalDirect s (DEq b da1 da2) = (evalDirect s da1 == evalDirect s da2) == b
-evalDirect s (DCastInt a) = fromIntegral (evalDirect s a)
+evalDirect s (DCastInt a)    = fromIntegral (evalDirect s a)
+evalDirect s DNullptr        = nullPtr
 
 evalDirects :: (All Fuzzable p) => PState -> DirAttributes c p -> Args p
 evalDirects _ Nil       = Nil
@@ -167,6 +174,7 @@ simplifyDirect s (DNeg  da')      = DNeg   (simplifyDirect s da')
 simplifyDirect s (DCmp c da1 da2) = DCmp c (simplifyDirect s da1) (simplifyDirect s da2)
 simplifyDirect s (DEq b da1 da2)  = DEq  b (simplifyDirect s da1) (simplifyDirect s da2)
 simplifyDirect s (DCastInt a)     = DCastInt (simplifyDirect s a)
+simplifyDirect s DNullptr         = DNullptr
 
 -- | Check if the provided value satisfies the attribute
 validate :: Attribute c a -> a -> Bool
@@ -230,6 +238,7 @@ instance Show a => Show (DirectAttribute c a) where
       showCmp DLte = "<="
   show (DEq b da1 da2)  = printf "(%s %s %s)" (show da1) (if b then "==" else "/=") (show da2)
   show (DCastInt a)     = printf "(%s as int)" (show a)
+  show DNullptr         = printf "NULL"
 
 
 instance Show a => Show (ExogenousAttribute c a) where
@@ -280,6 +289,7 @@ instance Hashable a => Hashable (DirectAttribute c a) where
     DCmp c da1 da2 -> salt `hashWithSalt` "cmp" `hashWithSalt` fromEnum c `hashWithSalt` da1 `hashWithSalt` da2
     DEq  b da1 da2 -> salt `hashWithSalt` "eq" `hashWithSalt` b `hashWithSalt` da1 `hashWithSalt` da2
     DCastInt x     -> salt `hashWithSalt` "casti" `hashWithSalt` x
+    DNullptr       -> salt `hashWithSalt` "null"
 instance Hashable a => Hashable (ExogenousAttribute c a) where
   hashWithSalt salt = \case
     Anything     -> salt `hashWithSalt` "any"

@@ -43,6 +43,8 @@ import Test.HAPI.AASTG.Effect.Trav (runTrav)
 import qualified Test.HAPI.ApiTrace.CodeGen.C.Data as C
 import Data.Data (Typeable)
 import Test.HAPI.Serialize (HSerialize)
+import qualified Test.HAPI.ApiTrace.CodeGen.C.Emit as C
+import qualified Data.Text.IO as T
 
 data LibFuzzerConduct = LibFuzzerConduct
   { llvmFuzzerTestOneInputM :: CString -> CSize -> IO CInt
@@ -55,10 +57,10 @@ libFuzzerConductViaAASTG :: ( ValidApiDef api
                             , CMembers (HSerialize :<>: CCodeGen) c
                             , c Bool
                             , Typeable c)
-                         => AASTG api c -> LibFuzzerConduct
-libFuzzerConductViaAASTG aastg = LibFuzzerConduct
+                         => [String] -> AASTG api c -> LibFuzzerConduct
+libFuzzerConductViaAASTG headers aastg = LibFuzzerConduct
   { llvmFuzzerTestOneInputM = _llvmFuzzerTestOneInputM aastg
-  , mainM                   = _traceMainM aastg
+  , mainM                   = _traceMainM headers aastg
   }
 
 _llvmFuzzerTestOneInputM :: ( ValidApiDef api
@@ -75,15 +77,15 @@ _traceMainM :: ( ValidApiDef api
                , Typeable c
                , c Bool
                , Entry2BlockC api)
-            => AASTG api c -> IO ()
-_traceMainM aastg = do
+            => [String] -> AASTG api c -> IO ()
+_traceMainM headers aastg = do
   opt <- execParser opts
   when (previewGraph opt) (previewAASTG aastg)
   case bsFilePath opt of
     ""   -> return ()
     path -> do
       bs <- BS.readFile path
-      runFuzzTrace aastg bs
+      runFuzzTrace aastg bs headers
   where
     opts = info (traceOpt <**> helper)
       (  fullDesc
@@ -149,8 +151,9 @@ runFuzzTrace :: forall api c sig m.
               , Entry2BlockC api)
            => AASTG api c
            -> ByteString
+           -> [String]
            -> m ()
-runFuzzTrace aastg bs
+runFuzzTrace aastg bs headers
   | entropy < 64 || qvs < 32 = return ()
   | otherwise
     = do
@@ -168,8 +171,8 @@ runFuzzTrace aastg bs
         $ runEntropyAC
         $ runTrav @api @c execEntropyFuzzerHandler
         stub
-      let fn = show $ pretty $ C.traceMain trace
-      liftIO $ putStrLn fn
+      let fn = C.emitCCode headers trace
+      liftIO $ T.putStrLn fn
       return ()
   where
     stub           = synthEntropyStub @api @c aastg

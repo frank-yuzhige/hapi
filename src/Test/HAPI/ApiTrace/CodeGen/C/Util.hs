@@ -55,6 +55,9 @@ boolTy = CTypeSpec $ CBoolType undefNode
 voidTy :: CDeclSpec
 voidTy = CTypeSpec $ CVoidType undefNode
 
+fileTy :: CDeclSpec
+fileTy = CTypeSpec $ CTypeDef (fromString "FILE") undefNode
+
 voidSpec :: CTypeSpec
 voidSpec = CVoidType undefNode
 
@@ -306,6 +309,18 @@ cAssert expr = fromString "assert" # [expr]
 
 cFailure :: CExpr
 cFailure = fromString "exit" # [cIntConst 1]
+
+cStrlen :: CExpr -> CExpr
+cStrlen str = fromString "strlen" # [str]
+
+cFOpen :: CExpr -> CExpr -> CExpr
+cFOpen path mode = fromString "fopen" # [path, mode]
+
+cFClose :: CExpr -> CExpr
+cFClose path = fromString "fclose" # [path]
+
+cFPuts :: CExpr -> CExpr -> CExpr
+cFPuts str stream = fromString "fputs" # [str, stream]
 
 cAssertIf :: CExpr -> CStat
 cAssertIf expr = CIf (CUnary CNegOp expr undefNode) (liftE cFailure) Nothing undefNode

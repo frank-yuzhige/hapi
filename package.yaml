@@ -67,6 +67,7 @@ dependencies:
 - either >= 5.0.2
 - language-c >= 0.9.1
 - primitive == 0.7.4.0
+- raw-strings-qq == 1.1
 # - llvm-hs == 9.0.1
 
 # ghc-options:

@@ -13,6 +13,7 @@ data HLibCString :: ApiDefinition where
   PeekCString    :: HLibCString '[Ptr CChar]      String
   PeekCStringLen :: HLibCString '[Ptr CChar, Int] String
   NewCString     :: HLibCString '[String]         (Ptr CChar)
+  StringLen      :: HLibCString '[String]         Int
 
 deriving instance Show (HLibCString p a)
 deriving instance Eq   (HLibCString p a)
@@ -22,3 +23,4 @@ instance HasForeignDef HLibCString where
   evalForeign PeekCString    = implE $ liftIO . peekCString
   evalForeign PeekCStringLen = implE $ \p l -> liftIO $ peekCStringLen (p, l)
   evalForeign NewCString     = implE $ liftIO . newCString
+  evalForeign StringLen      = implE $ return . length

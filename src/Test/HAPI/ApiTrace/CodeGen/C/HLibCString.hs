@@ -32,6 +32,7 @@ instance Entry2BlockC HLibCString where
     PeekCString    -> [liftEToB undefined]
     PeekCStringLen -> [liftEToB undefined]
     NewCString     -> [liftEToB $ pk2CVar x <-- let [a] = aExprs in a]
+    StringLen      -> [liftEToB $ pk2CVar x <-- let [a] = aExprs in cStrlen a]
     where
       aExprs = dirAttrs2CExprs @c args
       (ty, _) = toCType x \\ mapDict (productC @CCodeGen) (Dict @(c a))

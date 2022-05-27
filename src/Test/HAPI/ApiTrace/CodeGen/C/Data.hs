@@ -40,6 +40,10 @@ class (ApiName api) => Entry2BlockC (api :: ApiDefinition) where
              => PKey a -> api p a -> DirAttributes c p -> [CBlockItem]
   call2Block = call2BlockDefault
 
+  extraDecls :: forall c p a. (CMembers CCodeGen c, ApiName api, All Fuzzable p, Typeable a, All c p, c a)
+            => PKey a -> api p a -> DirAttributes c p -> [CDecl]
+  extraDecls _ _ _ = []
+
 call2BlockDefault :: forall api c p a. (CMembers CCodeGen c, ApiName api, All Fuzzable p, Typeable a, All c p, c a)
                   => PKey a -> api p a -> DirAttributes c p -> [CBlockItem]
 call2BlockDefault x api args = case testEquality (typeRep @a) (typeRep @()) of
@@ -52,15 +56,22 @@ entry2Block = \case
   TraceAssert da       -> [CBlockStmt $ cAssertIf (dirAttr2CExpr da)]
   TraceContIf da       -> [CBlockStmt $ cContIf   (dirAttr2CExpr da)]
 
-traceDecls :: forall api c. (CMembers CCodeGen c) => [ApiTraceEntry api c] -> [CBlockItem]
-traceDecls xs = concat $ TM.toListWith (\(PKeySetEntry s) -> [makeDecl k \\ mapDict (productC @CCodeGen) d | (k, d) <- S.toList s]) $ collectVar xs
+traceDecls :: forall api c. (CMembers CCodeGen c, Entry2BlockC api) => [ApiTraceEntry api c] -> [CBlockItem]
+traceDecls xs = fromExtras <> fromVars
   where
+    fromExtras = collectExtra xs
+    fromVars   = concat $ TM.toListWith (\(PKeySetEntry s) -> [makeDecl k \\ mapDict (productC @CCodeGen) d | (k, d) <- S.toList s]) $ collectVar xs
     collectVar :: [ApiTraceEntry api c] -> PKeySet c
     collectVar [] = emptyPKeySet
     collectVar (TraceCall (x :: PKey a) _ _ : xs)
       | isVoidTy @a = collectVar xs
       | otherwise   = addPKey2Set x \\ castC @Typeable (Dict @(c a)) $ collectVar xs
     collectVar (_                           : xs) = collectVar xs
+
+    collectExtra :: [ApiTraceEntry api c] -> [CBlockItem]
+    collectExtra []                     = []
+    collectExtra (TraceCall x f a : xs) = map CBlockDecl (extraDecls x f a) <> collectExtra xs
+    collectExtra (_ : xs)               = collectExtra xs
 
     makeDecl :: (CCodeGen a) => PKey a -> CBlockItem
     makeDecl (x :: PKey a) = CBlockDecl $ decl (CTypeSpec ty) (f $ cDeclr $ getPKeyID x) Nothing
@@ -117,6 +128,7 @@ dirAttr2CExpr (DCmp c x y) = CBinary op     (dirAttr2CExpr x) (dirAttr2CExpr y) 
           DLt  -> CLeOp
           DLte -> CLeqOp
 dirAttr2CExpr (DCastInt x) = castTy (dirAttr2CExpr x) intSpec
+dirAttr2CExpr DNullptr     = cNull
 
 dirAttrs2CExprs :: forall c p. (All c p, CMembers CCodeGen c) => DirAttributes c p -> [CExpr]
 dirAttrs2CExprs Nil = []
@@ -128,3 +140,5 @@ dirAttrs2CExprs ((a :: DirectAttribute c a) :* as)
 instance (Entry2BlockC f, Entry2BlockC g) => Entry2BlockC (f :$$: g) where
   call2Block x (ApiL f) args = call2Block x f args
   call2Block x (ApiR g) args = call2Block x g args
+  extraDecls x (ApiL f) args = extraDecls x f args
+  extraDecls x (ApiR g) args = extraDecls x g args
