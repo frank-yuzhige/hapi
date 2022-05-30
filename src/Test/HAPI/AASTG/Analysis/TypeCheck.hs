@@ -82,7 +82,7 @@ typeCheck :: forall api c sig m.
         -> m (TypedAASTG api c)
 typeCheck aastg = do
   pts  <- inferProcTypeUB aastg
-  debug $ printf "%s: pts = %s" (show 'typeCheck) (show pts)
+  -- debug $ printf "%s: pts = %s" (show 'typeCheck) (show pts)
   ctxs <- deriveProcCtxsUB pts
   forM_ (allNodes aastg) (check ctxs)
   return $ TypedAASTG (TypeCheckCtx pts ctxs) aastg

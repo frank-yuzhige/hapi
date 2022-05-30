@@ -56,7 +56,7 @@ import qualified Data.Serialize as S
 
 -- Quantified Value Supplier
 data QVS (c :: Type -> Constraint) (m :: Type -> Type) a where
-  QDirect    :: (Typeable a, c a) => DirectAttribute c a    -> QVS c m a
+  QDirect    :: (Typeable a) => DirectAttribute c a    -> QVS c m a
   QExogenous :: (Fuzzable a, c a) => ExogenousAttribute c a -> QVS c m a
 
 data QVSError = QVSError { causedAttribute :: String, errorMessage :: String }

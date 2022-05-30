@@ -54,7 +54,7 @@ infixr 2 ::*
 
 
 data Attribute c a where
-  Direct    :: forall a c. (Fuzzable a, c a, Typeable c) => DirectAttribute c a -> Attribute c a
+  Direct    :: forall a c. (Fuzzable a, Typeable c) => DirectAttribute c a -> Attribute c a
   Exogenous :: forall c a. (Fuzzable a, c a, Typeable c) => ExogenousAttribute c a -> Attribute c a
 
 
@@ -262,39 +262,41 @@ instance (Typeable c, Eq a) => Eq (DirectAttribute c a) where
   (DNeg da)        == (DNeg da')          = da == da'
   (DCmp c a1 a2)   == (DCmp c' a1' a2')   = c == c' && a1 `repEq` a1' && a2 `repEq` a2'
   (DEq  b a1 a2)   == (DEq  b' a1' a2')   = b == b' && a1 `repEq` a1' && a2 `repEq` a2'
+  (DCastInt a)     == (DCastInt b)        = a `repEq` b
+  DNullptr         == DNullptr            = True
   _ == _ = False
 
 
 deriving instance Eq a => Eq (ExogenousAttribute c a)
 instance (Typeable c, Eq a) => Eq (Attribute c a) where
   Direct    d1 == Direct d2    = d1 == d2
-  Exogenous e1 == Exogenous e2 = case testEquality (typeOf e1) (typeOf e2) of
-    Nothing    -> False
-    Just proof -> castWith proof e1 == e2
+  Exogenous e1 == Exogenous e2 = e1 == e2
   _ == _ = False
 
 instance Hashable a => Hashable (DirectAttribute c a) where
   hashWithSalt salt = \case
     Value a        -> salt `hashWithSalt` "value" `hashWithSalt` a
-    Get   pk       -> salt `hashWithSalt` "get" `hashWithSalt` pk
-    DNot  d        -> salt `hashWithSalt` "not" `hashWithSalt` d
-    DAnd da1 da2   -> salt `hashWithSalt` "and" `hashWithSalt` da1 `hashWithSalt` da2
-    DOr  da1 da2   -> salt `hashWithSalt` "or" `hashWithSalt` da1 `hashWithSalt` da2
-    DPlus da1 da2  -> salt `hashWithSalt` "plus" `hashWithSalt` da1 `hashWithSalt` da2
-    DMinus da1 da2 -> salt `hashWithSalt` "min" `hashWithSalt` da1 `hashWithSalt` da2
-    DMul da1 da2   -> salt `hashWithSalt` "mul" `hashWithSalt` da1 `hashWithSalt` da2
-    DDiv da1 da2   -> salt `hashWithSalt` "div" `hashWithSalt` da1 `hashWithSalt` da2
-    DFDiv da1 da2  -> salt `hashWithSalt` "fdiv" `hashWithSalt` da1 `hashWithSalt` da2
-    DNeg  da'      -> salt `hashWithSalt` "neg" `hashWithSalt` da'
-    DCmp c da1 da2 -> salt `hashWithSalt` "cmp" `hashWithSalt` fromEnum c `hashWithSalt` da1 `hashWithSalt` da2
-    DEq  b da1 da2 -> salt `hashWithSalt` "eq" `hashWithSalt` b `hashWithSalt` da1 `hashWithSalt` da2
+    Get   pk       -> salt `hashWithSalt` "get"   `hashWithSalt` pk
+    DNot  d        -> salt `hashWithSalt` "not"   `hashWithSalt` d
+    DAnd da1 da2   -> salt `hashWithSalt` "and"   `hashWithSalt` da1 `hashWithSalt` da2
+    DOr  da1 da2   -> salt `hashWithSalt` "or"    `hashWithSalt` da1 `hashWithSalt` da2
+    DPlus da1 da2  -> salt `hashWithSalt` "plus"  `hashWithSalt` da1 `hashWithSalt` da2
+    DMinus da1 da2 -> salt `hashWithSalt` "min"   `hashWithSalt` da1 `hashWithSalt` da2
+    DMul da1 da2   -> salt `hashWithSalt` "mul"   `hashWithSalt` da1 `hashWithSalt` da2
+    DDiv da1 da2   -> salt `hashWithSalt` "div"   `hashWithSalt` da1 `hashWithSalt` da2
+    DFDiv da1 da2  -> salt `hashWithSalt` "fdiv"  `hashWithSalt` da1 `hashWithSalt` da2
+    DNeg  da'      -> salt `hashWithSalt` "neg"   `hashWithSalt` da'
+    DCmp c da1 da2 -> salt `hashWithSalt` "cmp"   `hashWithSalt` fromEnum c `hashWithSalt` da1 `hashWithSalt` da2
+    DEq  b da1 da2 -> salt `hashWithSalt` "eq"    `hashWithSalt` b `hashWithSalt` da1 `hashWithSalt` da2
     DCastInt x     -> salt `hashWithSalt` "casti" `hashWithSalt` x
     DNullptr       -> salt `hashWithSalt` "null"
+
 instance Hashable a => Hashable (ExogenousAttribute c a) where
   hashWithSalt salt = \case
     Anything     -> salt `hashWithSalt` "any"
     IntRange n i -> salt `hashWithSalt` "irange" `hashWithSalt` n `hashWithSalt` i
-    Range a a'   -> salt `hashWithSalt` "range" `hashWithSalt` a `hashWithSalt` a
+    Range a a'   -> salt `hashWithSalt` "range" `hashWithSalt` a `hashWithSalt` a'
+
 instance Hashable a => Hashable (Attribute c a) where
   hashWithSalt salt = \case
     Direct d     -> salt `hashWithSalt` "dir" `hashWithSalt` d

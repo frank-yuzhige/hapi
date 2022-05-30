@@ -18,7 +18,7 @@ import qualified Data.ByteString as BS
 
 
 data HLibFS :: ApiDefinition where
-  NewFile :: HLibFS '[String] FilePath
+  NewFile  :: HLibFS '[String] FilePath
 
 newtype HLibMeta = HLibMeta {_fileId :: Int}
 $(makeLenses ''HLibMeta)

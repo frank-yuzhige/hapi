@@ -251,7 +251,7 @@ isSubTypeUB (UnboundedProcTypeMap uptm) sub sup
       checked <- gets (HS.member (a, b) . view checkedPairs)
       if checked then return emptyVarSub else do
         modify $ over checkedPairs $ HS.insert (a, b)
-        -- debug $ printf "%s: Checking ... \n>>  %s\n>>  %s" (show 'isSubTypeUB <> ":~<=~") (show a) (show b)
+        debug $ printf "%s: Checking ... \n>>  %s\n>>  %s" (show 'isSubTypeUB <> ":~<=~") (show a) (show b)
         case (a, b) of
           (Zero, Zero) ->
             return emptyVarSub
@@ -269,39 +269,49 @@ isSubTypeUB (UnboundedProcTypeMap uptm) sub sup
           (_, Par bs) -> checkAny bs
             where
               checkAny []         = empty
-              checkAny (b' : bs') = a ~<=~ b' <|> checkAny bs'
-          -- Ignoring variable from attributes and external-pure functions (e.g. Anything)
-          (Act (ActGen _ _) ta, _)
-            -> ta ~<=~ b
-          (_, Act (ActGen _ _) tb)
-            -> a ~<=~ tb
-          (Act (ActCall _ a _) ta, _) | isExternalPure a
-            -> ta ~<=~ b
-          (_, Act (ActCall _ b _) tb) | isExternalPure b
-            -> a ~<=~ tb
-          (Act a'@(ActCall xa a as) ta, Act b'@(ActCall xb b bs) tb) -> do
-            (_, !pp, pa) <- liftMaybe $ apiEqProofs a b
+              checkAny (b' : bs') = a ~<=~ b' <|> checkAny bs' --- ???
+          (Act a'@(ActGen xa ga) ta, Act b'@(ActGen xb gb) tb) -> do
+            debug $ printf "%s: here" (show 'isSubTypeUB)
+            proof <- liftMaybe $ testEquality (typeOf ga) (typeOf gb)
+            let s0 = singletonVarSub xb (castWith (apply Refl $ inner proof) xa)
+            s1 <- getVarSubFromArgs look look a b (castWith proof ga :* Nil) (gb :* Nil)
+            debug $ printf "%s: varsub ok" (show 'isSubTypeUB)
+            s2 <- liftMaybe $ s0 `unifyVarSubstitution` s1
+            s3 <- ta ~<=~ tb
+            liftMaybe $ s2 `unifyVarSubstitution` s3
+          (Act a'@(ActCall xa fa as) ta, Act b'@(ActCall xb fb bs) tb) -> do
+            (_, !pp, pa) <- liftMaybe $ apiEqProofs fa fb
             sproof <- liftMaybe $ testEquality (typeOf as) (typeOf bs)
             let as' = castWith sproof as
                 xa' = castWith (apply Refl pa) xa
                 s0  = singletonVarSub xb xa'
             -- debug $ printf "%s: API call is eq" (show 'isSubTypeUB)
-            s1 <- getVarSubFromArgs look look sub sup as' bs
+            s1 <- getVarSubFromArgs look look a b as' bs
             -- debug $ printf "%s: varsub ok" (show 'isSubTypeUB)
             s2 <- liftMaybe $ s0 `unifyVarSubstitution` s1
             -- debug $ printf "%s: unify ok" (show 'isSubTypeUB)
             s3 <- ta ~<=~ tb
             liftMaybe $ s2 `unifyVarSubstitution` s3
-          (Act a'@(ActAssert (Value a)) ta, Act b'@(ActAssert (Value b)) tb) -> do
-            if a == b then ta ~<=~ tb else empty
-          (Act a'@(ActAssert (Get xa)) ta, Act b'@(ActAssert (Get xb)) tb) -> do
-            let s0 = singletonVarSub xb xa
-            s1 <- ta ~<=~ tb
-            liftMaybe $ s0 `unifyVarSubstitution` s1
+          (Act a'@(ActAssert da) ta, Act b'@(ActAssert db) tb) -> do
+            proof <- liftMaybe $ testEquality (typeOf da) (typeOf db)
+            s1 <- getVarSubFromArgs look look a b (Direct (castWith proof da) :* Nil) (Direct db :* Nil)
+            s2 <- ta ~<=~ tb
+            liftMaybe $ unifyVarSubstitution s1 s2
+          (Act a'@(ActContIf da) ta, Act b'@(ActContIf db) tb) -> do
+            proof <- liftMaybe $ testEquality (typeOf da) (typeOf db)
+            s1 <- getVarSubFromArgs look look a b (Direct (castWith proof da) :* Nil) (Direct db :* Nil)
+            s2 <- ta ~<=~ tb
+            liftMaybe $ unifyVarSubstitution s1 s2
+            -- if a == b then ta ~<=~ tb else empty
+          -- (Act a'@(ActAssert (Get xa)) ta, Act b'@(ActAssert (Get xb)) tb) -> do
+          --   let s0 = singletonVarSub xb xa
+          --   s1 <- ta ~<=~ tb
+          --   liftMaybe $ s0 `unifyVarSubstitution` s1
           _ -> empty
 
 -- | Given 2 different procedure types and 2 attribute lists, attempt to find a unification (i.e. PKey substitution scheme)
 -- that makes all corresponding attributes in each list `effectively the same`.
+-- TODO use de brujin implicit (https://cs.stackexchange.com/questions/76616/algorithm-for-deciding-alpha-equivalence-of-terms-in-languages-with-bindings)
 getVarSubFromArgs :: forall p c sig m.
                    ( All Fuzzable p
                    , Eff NonDet sig m
@@ -320,33 +330,64 @@ getVarSubFromArgs look1 look2 d1 d2 (a :* as) (b :* bs) = do
   us <- getVarSubFromArgs look1 look2 d1 d2 as bs
   liftMaybe $ unifyVarSubstitution u us
   where
-    -- 2 variables are effectively the same, iff they point to some non-variable attribute that is the same.
-    unify (DepAttr (Direct (Get x1))) (DepAttr (Direct (Get x2))) = do
-      -- debug $ printf "%s: var start %s" (show 'getVarSubFromArgs <> ".unify") (show (x1, x2))
-      (_, dx1) <- unaliasVar look1 d1 x1
-      -- debug $ printf "%s: var %s;" (show 'getVarSubFromArgs <> ".unify") (show (x1, dx1))
-      (_, dx2) <- unaliasVar look2 d2 x2
-      -- debug $ printf "%s: var %s;" (show 'getVarSubFromArgs <> ".unify") (show (x2, dx2))
-      TM.adjust (SE . HM.insert x2 x1 . unSE) <$> unify dx1 dx2
-    -- Non-variable attributes are effectively the same, iff they are the same. (lol)
+    unify (DepAttr (Direct d1)) (DepAttr (Direct d2)) = unifyDirect d1 d2
+      where
+        go :: Fuzzable x => DirectAttribute c x -> DirectAttribute c x -> DirectAttribute c x -> DirectAttribute c x -> m VarSubstitution
+        go a a1 b b1 = do
+          x <- a `unifyDirect` a1
+          y <- b `unifyDirect` b1
+          liftMaybe (unifyVarSubstitution x y)
+        unifyDirect :: Fuzzable x => DirectAttribute c x -> DirectAttribute c x -> m VarSubstitution
+        (Get a)          `unifyDirect` (Get a')          = return (singletonVarSub a' a)
+        (DNot a)         `unifyDirect` (DNot a')         = a `unifyDirect` a'
+        (DAnd a1 a2)     `unifyDirect` (DAnd a1' a2')    = go a1 a1' a2 a2'
+        (DOr  a1 a2)     `unifyDirect` (DOr  a1' a2')    = go a1 a1' a2 a2'
+        (DPlus a1 a2)    `unifyDirect` (DPlus a1' a2')   = go a1 a1' a2 a2'
+        (DMinus a1 a2)   `unifyDirect` (DMinus a1' a2')  = go a1 a1' a2 a2'
+        (DMul a1 a2)     `unifyDirect` (DMul a1' a2')    = go a1 a1' a2 a2'
+        (DDiv a1 a2)     `unifyDirect` (DDiv a1' a2')    = go a1 a1' a2 a2'
+        (DNeg da)        `unifyDirect` (DNeg da')        = da `unifyDirect` da'
+        (DCmp c a1 a2)   `unifyDirect` (DCmp c' a1' a2') = case testEquality (typeOf a1) (typeOf a1') of
+          Just proof | c == c' -> go (castWith proof a1) a1' (castWith proof a2) a2'
+          _                    -> empty
+        (DEq  b a1 a2)   `unifyDirect` (DEq  b' a1' a2') = case testEquality (typeOf a1) (typeOf a1') of
+          Just proof | b == b' -> go (castWith proof a1) a1' (castWith proof a2) a2'
+          _                    -> empty
+        (DCastInt a)     `unifyDirect` (DCastInt a')     = case testEquality (typeOf a) (typeOf a') of
+          Just proof -> unifyDirect (castWith proof a) a'
+          _          -> empty
+        otherA `unifyDirect` otherB
+          | otherA == otherB = return TM.empty
+          | otherwise        = empty
     unify (DepAttr a) (DepAttr b)
       | a == b    = return TM.empty
       | otherwise = empty
+    -- -- 2 variables are effectively the same, iff they point to some non-variable attribute that is the same.
+    -- -- unify (DepAttr (Direct (Get x1))) (DepAttr (Direct (Get x2))) = do
+    --   -- debug $ printf "%s: var start %s" (show 'getVarSubFromArgs <> ".unify") (show (x1, x2))
+    --   -- dx1 <- lookupPKInType look1 x1 d1
+    --   -- debug $ printf "%s: var %s;" (show 'getVarSubFromArgs <> ".unify") (show (x1, dx1))
+    --   -- dx2 <- lookupPKInType look2 x2 d2
+    --   -- debug $ printf "%s: var %s;" (show 'getVarSubFromArgs <> ".unify") (show (x2, dx2))
+    --   -- TM.adjust (SE . HM.insert x2 x1 . unSE) <$> unify dx1 dx2
+    --   -- return (singletonVarSub x2 x1)
+    -- -- Non-variable attributes are effectively the same, iff they are the same. (lol)
+    -- unify (DepAttr a) (DepAttr b)
+    --   | a == b    = return TM.empty
+    --   | otherwise = empty
     -- Api calls are the same, iff the function they calls are the same, and all arguments are pairwise-effectively the same.
     unify (DepCall x1 f fa) (DepCall x2 g ga) = do
       (_, proof, _) <- liftMaybe $ f `apiEqProofs` g
-      TM.adjust (SE . HM.insert x2 x1 . unSE) <$> getVarSubFromArgs look1 look2 d1 d2 (castWith (apply Refl proof) fa) ga
+      s' <- getVarSubFromArgs look1 look2 d1 d2 (castWith (apply Refl proof) fa) ga
+      liftMaybe $ singletonVarSub x2 x1 `unifyVarSubstitution` s'
     -- Otherwise, not unifiable (e.g. x <-> some attr, not unifiable since x could be used in later context)
     unify _ _ = empty
 
-unaliasVar :: (Fuzzable p, Eff NonDet sig m, Typeable c) => (SVar -> ProcType) -> ProcType -> PKey p -> m (PKey p, Dep c p)
-unaliasVar look t x = do
-  n <- lookupPKInType look x t
-  case n of
-    (DepAttr (Direct (Get y))) -> unaliasVar look t y
-    other                      -> return (x, other)
-
-lookupPKInType :: forall t c sig m. (Fuzzable t, Eff NonDet sig m, Typeable c) => (SVar -> ProcType) -> PKey t -> ProcType -> m (Dep c t)
+lookupPKInType :: forall t c sig m. (Fuzzable t, Eff NonDet sig m, Typeable c)
+               => (SVar -> ProcType)
+               -> PKey t
+               -> ProcType
+               -> m [Dep c t]
 lookupPKInType look k t = do
   d <- go IS.empty t
   -- debug $ printf "%s: k = %s; v = %s" (show 'lookupPKInType) (show k) (show d)
@@ -355,24 +396,24 @@ lookupPKInType look k t = do
     go history = \case
       SVar x | IS.member x history -> empty
              | otherwise           -> go (IS.insert x history) (look x)
-      Act a t  -> case a of
+      Act a t -> case a of
         ActGen  x at -> do
           case inner <$> testEquality (typeOf x) (typeOf k) of
             Just proof | castWith (apply Refl proof) x == k
               -> let d = DepAttr at in case testEquality (typeOf d) (typeRep @(Dep c t)) of
-                Just cproof -> return $ castWith cproof d
+                Just cproof -> return [castWith cproof d]
                 Nothing     -> go history t
             _ -> go history t
         ActCall x api as -> do
           case inner <$> testEquality (typeOf x) (typeOf k) of
             Just proof | castWith (apply Refl proof) x == k
               -> let d = DepCall x api as in case testEquality (typeOf d) (typeRep @(Dep c t)) of
-                Just cproof -> return $ castWith cproof d
+                Just cproof -> return [castWith cproof d]
                 Nothing     -> go history t
             _ -> go history t
         _ -> do
           go history t
-      Par ts -> foldr ((<|>) . go history) empty ts
+      Par ts -> foldr (liftA2 (<>) . go history) empty ts
       Mu s t -> go history t
       Zero   -> empty
 

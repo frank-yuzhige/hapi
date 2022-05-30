@@ -27,7 +27,11 @@ data GenRule api c = GenRule
   , rulePost         :: ProcType
   , genRuleUBTypeMap :: UnboundedProcTypeMap
   }
-  deriving (Eq, Show)
+  deriving (Eq)
+
+instance Show (GenRule api c) where
+  show (GenRule pre gen post uptm) = printf "{\n%s; \n%s; \n%s\n}" (show (boundProcType uptm pre)) (show gen) (show (boundProcType uptm post))
+
 
 
 genRule4Edge :: Edge api c -> TypedAASTG api c -> GenRule api c
@@ -50,7 +54,7 @@ ruleApplicable i rule@(GenRule pre gen post uptm) aastg = do
   mv <- boundProcType uptm pre `isSubType'` boundProcType uptm2 ti
   case mv of
     Nothing  -> do
-      -- debug $ printf "%s: pre failed on %s! \n %s \n %s" (show 'ruleApplicable) (show i) (show (boundProcType uptm pre)) (show (boundProcType uptm2 ti))
+      debug $ printf "%s: pre failed on %s! \n %s \n %s" (show 'ruleApplicable) (show i) (show (boundProcType uptm pre)) (show (boundProcType uptm2 ti))
       return []
     Just vsb -> do
       let edge' = renameVarsInEdge vsb gen
@@ -61,7 +65,7 @@ ruleApplicable i rule@(GenRule pre gen post uptm) aastg = do
             -- debug $ printf "%s: ctx failed on %s!" (show 'ruleApplicable) (show i)
             return []
           Nothing  -> do
-            -- debug $ printf "%s: pre SAT!" (show 'ruleApplicable)
+            debug $ printf "%s: pre SAT! \n - edge=%s \n - type=%s \n - itype=%s" (show 'ruleApplicable) (show edge') (show (boundProcType uptm pre)) (show (boundProcType uptm2 ti))
             xs <- concat <$> traverse (checkPost vsb edge') (allNodes $ castAASTG aastg)
             if isRedirEdge gen
               then return xs

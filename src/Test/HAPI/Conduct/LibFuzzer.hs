@@ -45,6 +45,7 @@ import Data.Data (Typeable)
 import Test.HAPI.Serialize (HSerialize)
 import qualified Test.HAPI.ApiTrace.CodeGen.C.Emit as C
 import qualified Data.Text.IO as T
+import Text.Printf (printf)
 
 data LibFuzzerConduct = LibFuzzerConduct
   { llvmFuzzerTestOneInputM :: CString -> CSize -> IO CInt
@@ -138,7 +139,7 @@ runFuzzTest aastg bs
   where
     stub           = synthEntropyStub @api @c aastg
     supply         = mkEQBS bs
-    [entropy, qvs] = map (`remainLen` supply) [FW, BW]
+    [qvs, entropy] = map (`remainLen` supply) [FW, BW]
 
 runFuzzTrace :: forall api c sig m.
               ( MonadIO m
@@ -154,7 +155,11 @@ runFuzzTrace :: forall api c sig m.
            -> [String]
            -> m ()
 runFuzzTrace aastg bs headers
-  | entropy < 64 || qvs < 32 = return ()
+  | entropy < 64 || qvs < 32 = do
+    liftIO $ printf "The given bytestring input cannot instantiate a fuzz test\n"
+    liftIO $ printf "  - Entropy: %d (expect >= 64)\n"
+    liftIO $ printf "  - QVS    : %d (expect >= 32)\n"
+    return ()
   | otherwise
     = do
       trace <- runEnvIO
@@ -177,4 +182,4 @@ runFuzzTrace aastg bs headers
   where
     stub           = synthEntropyStub @api @c aastg
     supply         = mkEQBS bs
-    [entropy, qvs] = map (`remainLen` supply) [FW, BW]
+    [qvs, entropy] = map (`remainLen` supply) [FW, BW]

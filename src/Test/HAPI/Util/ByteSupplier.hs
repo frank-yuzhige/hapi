@@ -59,30 +59,31 @@ instance ByteSupplier BiDir FBSupplier where
   remainLen BW (FBSupplier _ bw) = BS.length bw
 
 -- Entropy + QVS Byte Supplier
-data EQSupplier = EQSupplier {eqFwBS :: ByteString, eqBwBS :: ByteString, originalBw :: ByteString}
+data EQSupplier = EQSupplier {eqFwBS :: ByteString, eqBwBS :: ByteString, originalFW :: ByteString}
 
 mkEQBS :: ByteString -> EQSupplier
-mkEQBS bs = EQSupplier fw bw' bw'
+mkEQBS bs = EQSupplier fw bw' fw
   where
     (fw, bw) = BS.breakEnd (== magicSeparator) bs
     bw' = BS.reverse bw
 
 instance ByteSupplier BiDir EQSupplier where
-  eatBytes FW getter (EQSupplier fw bw bwo) = case S.runGetState getter fw 0 of
-    Left err -> Left (CerealError err)
-    Right (a, fw') -> Right (a, EQSupplier fw' bw bwo)
-  eatBytes BW getter (EQSupplier fw bw bwo) = case S.runGetState getter bw 0 of
+  eatBytes FW getter (EQSupplier fw bw fwo) = case S.runGetState getter fw 0 of
     Left err
-      | BS.length bw >= 8192 -> Left (CerealError err)
-      | otherwise            -> eatBytes BW getter (EQSupplier fw (resample bw bwo) bwo)
-    Right (a, bw') -> Right (a, EQSupplier fw bw' bwo)
-    where
-      resample bw bwo = foldr ($!) bw (replicate ((1024 `quot` BS.length bwo) `max` 1) (<> bwo))
+      | BS.length fw >= 32768 -> Left (CerealError err)
+      | otherwise             -> eatBytes BW getter (EQSupplier (resample fw fwo) bw fwo)
+      where
+        resample bw bwo = foldr ($!) bw (replicate ((1024 `quot` BS.length bwo) `max` 1) (<> bwo))
+    Right (a, fw') -> Right (a, EQSupplier fw' bw fwo)
 
-  remainLen FW (EQSupplier fw _ _) = BS.length fw
-  remainLen BW (EQSupplier _ _ bwo)
-    | BS.null bwo = 0
-    | otherwise = maxBound -- Effectively infinite as we are reusing BW
+  eatBytes BW getter (EQSupplier fw bw fwo) = case S.runGetState getter bw 0 of
+    Left err       ->  Left (CerealError err)
+    Right (a, bw') -> Right (a, EQSupplier fw bw' fwo)
+
+  remainLen BW (EQSupplier _ bw _) = BS.length bw
+  remainLen FW (EQSupplier _ _ fwo)
+    | BS.null fwo = 0
+    | otherwise = maxBound -- Effectively infinite as we are reusing FW
 
 deriving instance Show EQSupplier
 

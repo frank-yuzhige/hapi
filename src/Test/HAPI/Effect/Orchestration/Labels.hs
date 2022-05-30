@@ -12,7 +12,7 @@ data QVSSupply
 data EntropySupply
 
 instance LabelConsumeDir QVSSupply BiDir where
-  labelConsumeDir = BW
+  labelConsumeDir = FW
 
 instance LabelConsumeDir EntropySupply BiDir where
-  labelConsumeDir = FW
+  labelConsumeDir = BW

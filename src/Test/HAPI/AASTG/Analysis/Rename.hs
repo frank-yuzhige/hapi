@@ -134,9 +134,25 @@ renameVarsInEdge vsb = \case
 
 renameVarsInAttr :: VarSubstitution -> Attribute c t -> Attribute c t
 renameVarsInAttr vsb = \case
-  Direct (Get k) -> Direct (Get (lookVar' k vsb))
-  -- AnyOf xs       -> AnyOf (map (renameVarsInAttr vsb) xs)
-  other          -> other
+  Direct d -> Direct (go d)
+  other    -> other
+  where
+    go :: Fuzzable a => DirectAttribute c a -> DirectAttribute c a
+    go d = case d of
+      Get pk          -> Get (lookVar' pk vsb)
+      DNot da         -> DNot (go da)
+      DAnd da da'     -> DAnd (go da) (go da')
+      DOr da da'      -> DOr  (go da) (go da')
+      DPlus da da'    -> DPlus (go da) (go da')
+      DMinus da da'   -> DMinus (go da) (go da')
+      DMul da da'     -> DMul (go da) (go da')
+      DDiv da da'     -> DDiv (go da) (go da')
+      DFDiv da da'    -> DFDiv (go da) (go da')
+      DNeg da         -> DNeg (go da)
+      DCmp dco da da' -> DCmp dco (go da) (go da')
+      DEq b da da'    -> DEq b (go da) (go da')
+      DCastInt da     -> DCastInt (go da)
+      _               -> d
 
 renameVarsInAttrs :: VarSubstitution -> Attributes c t -> Attributes c t
 renameVarsInAttrs _   Nil       = Nil

@@ -34,6 +34,7 @@ import Control.Monad (void)
 import Test.HAPI.Util.SOP (InjNP (injNP))
 import Data.Data (typeRep, Typeable)
 import Data.Char (toLower, isAlpha)
+import Test.HAPI.AASTG.Analysis.TypeCheck (typeCheck, typeCheck', TypedAASTG)
 
 {-
 do
@@ -71,6 +72,16 @@ runBuildAASTG = runState         (\s _ -> return $ newAASTG s) []
               . runFresh (\_ _ -> return ()) 0
               . runLabelled @VAR
               . runBuildAASTGCA @api @c
+
+
+runBuildTypedAASTG :: forall api c sig m a any. (Alg sig m, ApiName api)
+                   => (forall sig m. Eff (BuildAASTG api c) sig m => m any)
+                   -> m (TypedAASTG api c)
+runBuildTypedAASTG b = do
+  a <- runBuildAASTG @api @c @sig b
+  return $ typeCheck' a
+
+
 -- | Sender
 
 sNewVar :: forall api c a sig m. (Has (BuildAASTG api c) sig m, Fuzzable a) => m (PKey a)

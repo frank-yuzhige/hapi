@@ -185,8 +185,8 @@ coalesceRuleOneStep ::
                      , ApiName api
                      , Typeable c)
                      => TypedAASTG api c
-                     -> HashSet (GenRule api c)
-                     -> m (Maybe (NodeID, GenRule api c), TypedAASTG api c)
+                     -> [GenRule api c]
+                     -> m (Maybe (NodeID, GenRule api c, Int), TypedAASTG api c)
 coalesceRuleOneStep ta rules = do
   -- debug $ printf "%s: start one step" (show 'coalesceRuleOneStep)
   -- debug $ printf "%s: aastg=%s" (show 'coalesceRuleOneStep) (show aastg)
@@ -196,20 +196,20 @@ coalesceRuleOneStep ta rules = do
   where
     aastg      = castAASTG ta
     nodeDepths = nodeDepthMap aastg
-    candidates = [(b, r) | b <- sortBy (compare `on` (nodeDepths IM.!)) (allNodes aastg)
-                         , r <- HS.toList rules
-                         ]
+    candidates = [(b, r, i) | b <- sortBy (compare `on` (nodeDepths IM.!)) (allNodes aastg)
+                            , (r, i) <- rules `zip` [0..]
+                            ]
 
     go [] = return (Nothing, ta)
-    go ((i, rule) : xs) = do
+    go ((i, rule, ri) : xs) = do
       vsbs <- ruleApplicable i rule ta
       case vsbs of
         []           -> go xs
         ((j, s) : _) -> do
           x <- applyRuleOn (i, j) s rule ta
-          debug $ printf "%s: i=%s, rule: %s" (show 'coalesceRuleOneStep) (show i) (show rule)
-          debug $ printf "%s: x = %s" (show 'coalesceRuleOneStep) (show x)
-          return (Just (i, rule), fromJust x)
+          -- debug $ printf "%s: i=%s, rule: %s" (show 'coalesceRuleOneStep) (show i) (show rule)
+          -- debug $ printf "%s: x = %s" (show 'coalesceRuleOneStep) (show x)
+          return (Just (i, rule, ri), fromJust x)
       -- forM vsbs $ \(j, vsb) -> do
       --   _
       -- case mvsb of
@@ -223,7 +223,7 @@ autoCoalesceRule :: ( Alg sig m
                     , ApiName api
                     , Typeable c)
                     => Int
-                    -> HashSet (GenRule api c)
+                    -> [GenRule api c]
                     -> TypedAASTG api c
                     -> m ([(NodeID, GenRule api c)], TypedAASTG api c)
 autoCoalesceRule 0       _     aastg = return ([], aastg)
@@ -232,12 +232,18 @@ autoCoalesceRule maxStep rules aastg = do
   (!record, !aastg') <- coalesceRuleOneStep aastg rules
   debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.autoCoalesceRule: coalesce %s" (show record)
   -- let !aastg'' = normalizeNodes 0 aastg'
+  debugIO$ previewAASTG (castAASTG aastg')
   case record of
     Nothing -> return ([], aastg')
-    Just (x, r)  -> do
-      debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.autoCoalesceRule: next rule count: %s" (show (HS.fromList (HS.toList rules \\ [r])))
-      (history, ans) <- autoCoalesceRule (maxStep - 1) (HS.fromList (HS.toList rules \\ [r])) aastg'
+    Just (x, r, ri)  -> do
+      -- debug $ printf "Test.HAPI.AASTG.Analysis.Coalesce.autoCoalesceRule: next rule count: %s" (show (remove ri rules))
+      (history, ans) <- autoCoalesceRule (maxStep - 1) (remove ri rules) aastg'
       return ((x, r) : history, ans)
+  where
+    remove :: Int -> [a] -> [a]
+    remove _ [] = []
+    remove 0 (x:xs) = xs
+    remove n (x:xs) = x : remove (n-1) (xs)
 
 
 coalesceRuleAASTG ::
@@ -245,7 +251,7 @@ coalesceRuleAASTG ::
                , ApiName api
                , Typeable c) => Int -> TypedAASTG api c -> TypedAASTG api c -> m ([(NodeID, GenRule api c)], TypedAASTG api c)
 coalesceRuleAASTG n a1 a2 = do
-  autoCoalesceRule n (HS.fromList (genRules4AASTG a2)) a1
+  autoCoalesceRule n (genRules4AASTG a2) a1
 
 coalesceRuleAASTGs :: (Alg sig m, ApiName api, Typeable c) => Int -> [TypedAASTG api c] -> m (TypedAASTG api c)
 coalesceRuleAASTGs n = \case
