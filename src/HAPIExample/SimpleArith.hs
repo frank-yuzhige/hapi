@@ -62,6 +62,9 @@ instance ApiName  ArithApi where
   apiNameUnder "C" Neg = "limited_input_range_negate"
   apiNameUnder _   a   = apiName a
 
+  apiArgsAreValid Neg = implV $ \a -> if a > -42 && a < 65536 then Nothing else Just "123"
+  apiArgsAreValid _   = const Nothing
+
 instance Entry2BlockC ArithApi
 
 instance HasForeignDef ArithApi where

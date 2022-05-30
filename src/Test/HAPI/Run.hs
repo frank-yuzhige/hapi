@@ -56,7 +56,7 @@ runFuzzTestNonDet aastg = runEnvIO $ do
     $ runProperty @(PropertyA c)
     $ runWriter @(ApiTrace api Arbitrary) (\w _ -> return w)
     $ IGNORING.runTrace
-    $ runForeign (fail . show)
+    $ runForeign (fail . show) return
     $ runApiFFI @api @c
     $ runQVSFuzzArbitraryAC @c stub
 

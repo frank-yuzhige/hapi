@@ -33,6 +33,8 @@ instance (Typeable t, Show t, Eq t, Hashable t) => Fuzzable t
 
 -- type AllFuzzable p = (All Fuzzable p, All Compos)
 
+type ErrorMsg = String
+
 deriving instance Generic (ForeignPtr a)
 
 

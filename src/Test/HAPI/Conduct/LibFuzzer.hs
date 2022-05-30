@@ -123,7 +123,7 @@ runFuzzTest aastg bs
       $ runError @PropertyError (fail . show) pure
       $ runState (\s a -> return a) PS.emptyPState
       $ runProperty @(PropertyA c)
-      $ runForeign (fail . show)
+      $ runForeign (return . Just . show) (return . const Nothing)
       $ runApiFFI @api @c
       $ runState @EQSupplier (\s a -> return a) supply
       $ runOrchestrationViaBytes @QVSSupply     @EQSupplier

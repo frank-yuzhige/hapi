@@ -16,7 +16,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Test.HAPI.Effect.Api where
-import Test.HAPI.Api (ApiDefinition, HasHaskellDef (evalHaskell), HaskellIOCall (readOut), HasForeignDef (evalForeign), ApiName (apiName, showApiFromPat), ApiError, HasForeign, runForeign)
+import Test.HAPI.Api (ApiDefinition, HasHaskellDef (evalHaskell), HaskellIOCall (readOut), HasForeignDef (evalForeign), ApiName (..), ApiError (..), HasForeign, runForeign)
 import Data.Kind (Type, Constraint)
 import Test.HAPI.Args (Args, args2Pat, DirectAttribute, DirAttributes, evalDirects)
 import Test.HAPI.Common (Fuzzable)
@@ -85,9 +85,12 @@ instance ( Algebra sig m
     L (MkCall k call attrs) -> do
       s <- get @PState
       let args = evalDirects s attrs
+      case apiArgsAreValid call args of
+        Just err -> throwError (ApiError (showApiFromPat call (args2Pat args)) err)
+        Nothing  -> do
       -- liftIO $ putStrLn $ showApiFromPat call (args2Pat args)
-      r <- evalForeign call args
-      return (ctx $> Just r)
+          r <- evalForeign call args
+          return (ctx $> Just r)
     R other -> alg (runApiFFIAC . hdl) other ctx
 
 -- | Trace

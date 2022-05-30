@@ -34,7 +34,7 @@ import Control.Monad.Trans.Class (MonadTrans (lift))
 import Data.HList (HList (HNil, HCons), HBuild')
 import Test.HAPI.Args (Args, ArgPattern, args2Pat)
 import Data.Tuple.HList (HLst (toHList))
-import Test.HAPI.Common (Fuzzable)
+import Test.HAPI.Common (Fuzzable, ErrorMsg)
 import Data.SOP (All, NP (..), Compose, K (K), I (..))
 import Test.HAPI.VPtr (VPtr (VPtr), VPtrTable (VPtrTable), ptr2VPtr, storePtr, vPtr2Ptr)
 import Foreign (Ptr)
@@ -54,10 +54,14 @@ import Text.Casing (quietSnake)
 import Data.TypeRepMap (TypeRepMap)
 import qualified Data.TypeRepMap as TM
 import Data.HashMap.Internal.Array (map')
+import Text.Printf (printf)
 
 
 -- TODO: make a data class
-type ApiError = String
+data ApiError = ApiError
+  { errorApiWithArgs :: String
+  , apiErrorCause    :: ErrorMsg
+  }
 
 type ApiDefinition = [Type] -> Type -> Type
 
@@ -95,6 +99,8 @@ class (forall p a. Eq (api p a), Typeable api) => ApiName (api :: ApiDefinition)
   apiMetaAttributes   :: api p a -> [ApiMetaAttribute]
   apiNameUnder        :: String -> api p a -> String
 
+  apiArgsAreValid     :: api p a -> Args p -> Maybe ErrorMsg
+
   default apiName :: (forall p a. Show (api p a)) => api p a -> String
   apiName = quietSnake . show
   {-# inline apiName #-}
@@ -107,6 +113,8 @@ class (forall p a. Eq (api p a), Typeable api) => ApiName (api :: ApiDefinition)
 
   apiMetaAttributes _ = []
   {-# inline apiMetaAttributes #-}
+
+  apiArgsAreValid _ _ = Nothing
 
 
 -- | Given API spec has a direct mapping to its haskell pure implementation
@@ -125,6 +133,10 @@ implE :: (HasForeign sig m) => ApiEvalType p (m a) -> Args p -> m a
 implE = applyArgs
 {-# inline implE #-}
 
+implV :: ApiEvalType p (Maybe ErrorMsg) -> Args p -> Maybe ErrorMsg
+implV = applyArgs
+{-# inline implV #-}
+
 showApiFromPatDefault :: ApiName api => api p1 a -> ArgPattern p2 -> String
 showApiFromPatDefault f args = apiName f <> "(" <> showArgs args <> ")"
   where
@@ -133,23 +145,6 @@ showApiFromPatDefault f args = apiName f <> "(" <> showArgs args <> ")"
     showArgs (K s :* Nil) = s
     showArgs (K s :* as)  = s <> ", " <> showArgs as
     {-# INLINE showArgs #-}
-
--- newVPtr :: forall t m sig. (Typeable t, HasForeign sig m) => Ptr t -> m (VPtr t)
--- newVPtr p = do
---   i <- sendLabelled @F Fresh
---   let name = "p" <> show i
---   modify @VPtrTable (storePtr name p)
---   a <- gets @VPtrTable (ptr2VPtr p)
---   case a of
---     Nothing -> throwError "Should not be here"
---     Just vp -> return vp
-
--- getPtr :: forall t m sig. (Typeable t, HasForeign sig m) => VPtr t -> m (Ptr t)
--- getPtr v = do
---   p <- gets @VPtrTable (vPtr2Ptr v)
---   case p of
---     Nothing -> throwError "Ptr not in there"
---     Just ptr -> return ptr
 
 apiEq :: (ApiName api, ApiName api2, Typeable p, Typeable a, Typeable q, Typeable b) => api p a -> api2 q b -> Bool
 apiEq a b = case testEquality (typeOf a) (typeOf b) of
@@ -175,8 +170,8 @@ runForeign' :: (ApiError -> m b)
             -> m b
 runForeign' fe fa fs ff s i x = runError fe fa $ runState fs s $ runFresh ff i $ runLabelled @F $ x
 
-runForeign :: Monad m => (ApiError -> m b) -> Labelled F FreshC (StateC ApiMetasState (ErrorC ApiError m)) b -> m b
-runForeign fe = runForeign' fe return (\s a -> return a) (\s a -> return a) emptyApiMetasState 0
+runForeign :: Monad m => (ApiError -> m b) -> (a -> m b) -> Labelled F FreshC (StateC ApiMetasState (ErrorC ApiError m)) a -> m b
+runForeign fe fa = runForeign' fe fa (\s a -> return a) (\s a -> return a) emptyApiMetasState 0
 
 isExternalPure :: ApiName api => api p a -> Bool
 isExternalPure n = EXTERNAL_PURE `elem` apiMetaAttributes n
@@ -241,6 +236,9 @@ instance (ApiName f, ApiName g) => ApiName (f :$$: g) where
 
   apiNameUnder lang (ApiL f) = apiNameUnder lang f
   apiNameUnder lang (ApiR g) = apiNameUnder lang g
+
+  apiArgsAreValid (ApiL f) a = apiArgsAreValid f a
+  apiArgsAreValid (ApiR g) a = apiArgsAreValid g a
 
 instance (HasHaskellDef f, HasHaskellDef g) => HasHaskellDef (f :$$: g) where
   evalHaskell (ApiL f) args = evalHaskell f args
@@ -321,3 +319,7 @@ insertMeta m = modify (insertMeta' @a m)
 updateMeta :: forall a sig m. (Typeable a, HasApiMeta a, Has (State ApiMetasState) sig m) => (Meta a -> Meta a) -> m ()
 updateMeta f = modify (updateMeta' @a f)
 
+
+
+instance Show ApiError where
+  show (ApiError api cause) = printf "Api Error: when calling %s: \n    %s" api cause
