@@ -65,7 +65,9 @@ data EQSupplier = EQSupplier {eqFwBS :: ByteString, eqBwBS :: ByteString, origin
 mkEQBS :: ByteString -> EQSupplier
 mkEQBS bs = EQSupplier fw bw fw
   where
-    (fw, bw) = BS.breakEnd (== magicSeparator) bs
+    (fw', bw) = BS.breakEnd (== magicSeparator) bs
+    fw | BS.null fw' = ""
+       | otherwise   = BS.init fw'  -- remove trailing '/255' to add more randomness to QVS supply
 
 instance ByteSupplier BiDir EQSupplier where
   eatBytes FW getter (EQSupplier fw bw fwo) = case S.runGetState getter fw 0 of

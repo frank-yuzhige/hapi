@@ -37,6 +37,7 @@ import Test.HAPI.AASTG.Effect.Trav (runTrav)
 import Test.HAPI.Constraint (type (:<>:), type (:>>>:))
 import Test.HAPI.ApiTrace.CodeGen.C.DataType (CCodeGen)
 import Data.Data (Typeable)
+import Test.HAPI.Effect.VarUpdate (VarUpdateError(VarUpdateError), runVarUpdateEval)
 
 runFuzzTestNonDet :: forall api c sig m.
                    ( MonadIO m
@@ -52,12 +53,14 @@ runFuzzTestNonDet aastg = runEnvIO $ do
   forM_ s $ \stub -> do id
     $ runGenIO
     $ runError @PropertyError (fail . show) pure
+    $ runError @VarUpdateError (fail . show) pure
     $ runState (\s a -> return a) PS.emptyPState
     $ runProperty @(PropertyA c)
     $ runWriter @(ApiTrace api Arbitrary) (\w _ -> return w)
     $ IGNORING.runTrace
     $ runForeign (fail . show) return
     $ runApiFFI @api @c
+    $ runVarUpdateEval @api @c
     $ runQVSFuzzArbitraryAC @c stub
 
 

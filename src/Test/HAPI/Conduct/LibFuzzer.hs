@@ -46,6 +46,7 @@ import Test.HAPI.Serialize (HSerialize)
 import qualified Test.HAPI.ApiTrace.CodeGen.C.Emit as C
 import qualified Data.Text.IO as T
 import Text.Printf (printf)
+import Test.HAPI.Effect.VarUpdate (runVarUpdateTrace, VarUpdateError (VarUpdateError), runVarUpdateEval)
 
 data LibFuzzerConduct = LibFuzzerConduct
   { llvmFuzzerTestOneInputM :: CString -> CSize -> IO CInt
@@ -120,10 +121,12 @@ runFuzzTest aastg bs
   | otherwise = runEnvIO $ do
     qvsErr <- runError @QVSError      (return . Left . show) return
       $ runError @PropertyError (fail . show) pure
+      $ runError @VarUpdateError (fail . show) pure
       $ runState (\s a -> return a) PS.emptyPState
       $ runProperty @(PropertyA c)
       $ runForeign (return . Left . show) (return . Right)
       $ runApiFFI @api @c
+      $ runVarUpdateEval @api @c
       $ runState @EQSupplier (\s a -> return a) supply
       $ runOrchestrationViaBytes @QVSSupply     @EQSupplier
       $ runQVSFromOrchestrationAC @HSerialize @c
@@ -165,10 +168,12 @@ runFuzzTrace aastg bs headers
       trace <- runEnvIO
         $ runError @QVSError      (fail . show) pure
         $ runError @PropertyError (fail . show) pure
+        $ runError @VarUpdateError (fail . show) pure
         $ runState (\s a -> return a) PS.emptyPState
         $ runWriter @(ApiTrace api c) (\w _ -> return w)
         $ runPropertyTrace @PropertyError @api @c
         $ runApiTrace @api @c
+        $ runVarUpdateTrace @api @c
         $ runState @EQSupplier (\s a -> return a) supply
         $ runOrchestrationViaBytes @QVSSupply     @EQSupplier
         $ runQVSFromOrchestrationAC @HSerialize @c

@@ -42,7 +42,7 @@ type EdgeID = Int
 
 data Edge apis c where
   -- | Updates the value of a variable by the given attribute
-  Update   :: forall a api c. (Fuzzable a, Typeable c)
+  Update   :: forall a api c. (Fuzzable a, Typeable c, c a)
            => NodeID            -- From
            -> NodeID            -- To
            -> PKey a            -- Variable

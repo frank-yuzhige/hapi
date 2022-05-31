@@ -58,6 +58,10 @@ traceAssert p = apiTrace $ TraceAssert @c @api p
 traceContIf :: forall api c. (c Bool) => DirectAttribute c Bool -> ApiTrace api c
 traceContIf p = apiTrace $ TraceContIf @c @api p
 
+traceDirect :: forall api c a. (Fuzzable a, c a)
+            => PKey a -> DirectAttribute c a -> ApiTrace api c
+traceDirect p d = apiTrace $ TraceDirect @a @c @api p d
+
 trace2List :: ApiTrace api c -> [ApiTraceEntry api c]
 trace2List (ApiTrace dl) = DL.toList dl
 

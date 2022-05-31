@@ -76,6 +76,7 @@ library
       Test.HAPI.Effect.Orchestration.Labels
       Test.HAPI.Effect.Property
       Test.HAPI.Effect.QVS
+      Test.HAPI.Effect.VarUpdate
       Test.HAPI.HLib.HLibCString
       Test.HAPI.HLib.HLibFS
       Test.HAPI.HLib.HLibPrelude

@@ -85,7 +85,7 @@ data DirectAttribute c a where
   DCastInt :: (c a, c b, Fuzzable a, Fuzzable b, Integral a, Integral b)
            => DirectAttribute c a -> DirectAttribute c b
 
-  DNullptr :: DirectAttribute c (Ptr a)
+  DNullptr :: (a ~ Ptr b, c a) => DirectAttribute c (Ptr b)
 
 data ExogenousAttribute c a where
   Anything :: (Typeable c, c a)

@@ -15,9 +15,10 @@ import Test.HAPI.Effect.Entropy (EntropySupplier)
 import Test.HAPI.AASTG.Effect.Trav (Trav)
 import Test.HAPI.ApiTrace.Core ( ApiTrace )
 import Control.Effect.Writer (Writer)
+import Test.HAPI.Effect.VarUpdate (VarUpdate)
 
 -- | Type Synonym of a fuzzer for an API set.
-type Fuzzer api c = (Api api c :+: QVS c :+: State PState :+: PropertyA c)
+type Fuzzer api c = (Api api c :+: QVS c :+: State PState :+: PropertyA c :+: VarUpdate api c)
 
 type EntropyFuzzer api c = (Fuzzer api c :+: EntropySupplier :+: Trav api c)
 

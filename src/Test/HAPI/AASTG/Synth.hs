@@ -31,6 +31,7 @@ import Data.Constraint ((\\), Dict (..))
 import Text.Printf (printf)
 import Data.Data (Typeable)
 import Control.Monad (when)
+import Test.HAPI.Effect.VarUpdate (VarUpdate(VarUpdate))
 
 -- | Synthesize fuzzer stubs
 synthStub :: forall api c sig m. (Has (Fuzzer api c) sig m, Typeable c) => AASTG api c -> [m ()]
@@ -44,12 +45,8 @@ synthStub (AASTG start edges _) = synth start
 synthOneStep :: forall api c sig m. (Has (Fuzzer api c) sig m, Typeable c) => Edge api c -> m TravEventResult
 synthOneStep (Update s e k a) = do
   v <- qvs2Direct $ mkQVS @c a
-  s <- get @PState
-  case evalDirect' s v of
-    Left str -> return NO_RESULT
-    Right v' -> do
-      modify @PState (record k v')
-      return NO_RESULT
+  send (VarUpdate @_ @c @api k v)
+  return NO_RESULT
 synthOneStep (ContIf s e p) = do
   continue <- send (ChecksA p)
   return $ if continue then NO_RESULT else HALT
@@ -60,11 +57,8 @@ synthOneStep (APICall s e x api args) = do
   -- 1. Resolve Attributes (Into QVS)
   attrs <- qvs2Directs @c (attributes2QVSs args)
   -- 2. Make APICall using qvs
-  mr <- mkCall @c x api attrs
+  mkCall @c x api attrs
   -- 3. Store return value in state
-  case mr of
-    Nothing -> return ()
-    Just  r -> modify @PState (record x r)
   return NO_RESULT
 synthOneStep (Redirect s e) = return NO_RESULT
 

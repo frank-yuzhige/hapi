@@ -28,24 +28,24 @@ import Control.Carrier.Writer.Strict (Writer, tell, runWriter)
 import Control.Effect.Sum (Member, Members)
 import Control.Effect.Trace (Trace, trace)
 import Data.SOP (All)
-import Control.Carrier.State.Strict (State, StateC, get, runState, execState, evalState)
+import Control.Carrier.State.Strict (State, StateC, get, runState, execState, evalState, modify)
 import Test.HAPI.VPtr (VPtrTable)
 import qualified Test.HAPI.VPtr as VP
 import Control.Effect.Fresh ( Fresh )
 import Control.Effect.Error ( Error, throwError )
-import Test.HAPI.ApiTrace (ApiTrace, apiTrace, ApiTraceEntry (..), traceCall)
+import Test.HAPI.ApiTrace.Core ( ApiTrace, traceCall )
 import Control.Concurrent (newEmptyMVar, forkOS, putMVar, readMVar, takeMVar, newMVar)
 import Test.HAPI.Util.TH (fatalError, FatalErrorKind (FATAL_ERROR, HAPI_BUG))
 import Text.Printf (printf)
-import Test.HAPI.PState (PState, PKey)
+import Test.HAPI.PState (PState, PKey, record)
 
 -- | Wrapper to the original Api
 data Api (api :: ApiDefinition) (c :: Type -> Constraint) (m :: Type -> Type) a where
-  MkCall :: (ApiName api, All Fuzzable p, Fuzzable a, All c p, c a)
-         => PKey a -> api p a -> DirAttributes c p -> Api api c m (Maybe a)
+  MkCall   :: (ApiName api, All Fuzzable p, Fuzzable a, All c p, c a)
+           => PKey a -> api p a -> DirAttributes c p -> Api api c m ()
 
 mkCall :: forall c api sig m p a. (Has (Api api c) sig m, ApiName api, All Fuzzable p, Fuzzable a, All c p, c a)
-       => PKey a -> api p a -> DirAttributes c p -> m (Maybe a)
+       => PKey a -> api p a -> DirAttributes c p -> m ()
 mkCall k f a = send $ MkCall @_ @_ @_ @c k f a
 
 -- | Haskell IO Orchestration
@@ -56,14 +56,21 @@ newtype ApiIOAC (api :: ApiDefinition) (c :: Type -> Constraint)  m a = ApiIOAC 
 runApiIO :: ApiIOAC api c m a -> m a
 runApiIO = runApiIOAC
 
-instance (Algebra sig m, MonadIO m, MonadFail m, HaskellIOCall api) => Algebra (Api api c :+: sig) (ApiIOAC api c m) where
+instance ( Algebra sig m
+         , Has (State PState) sig m
+         , MonadIO m
+         , MonadFail m
+         , HaskellIOCall api)
+      => Algebra (Api api c :+: sig) (ApiIOAC api c m) where
   alg hdl sig ctx = ApiIOAC $ case sig of
     L (MkCall k call args) -> do
       liftIO $ putStrLn $ apiName call
       out <- liftIO (readOut call <$> getLine)
       case out of
         Nothing -> fail "Parse error"
-        Just o  -> return (ctx $> Just o)
+        Just o  -> do
+          modify @PState (record k o)
+          return (ctx $> ())
     R other -> alg (runApiIOAC . hdl) other ctx
 
 
@@ -80,7 +87,7 @@ instance ( Algebra sig m
          , HasForeign sig m
          , Has (State PState) sig m
          , MonadIO m)
-         => Algebra (Api api c :+: sig) (ApiFFIAC api c m) where
+      => Algebra (Api api c :+: sig) (ApiFFIAC api c m) where
   alg hdl sig ctx = ApiFFIAC $ case sig of
     L (MkCall k call attrs) -> do
       s <- get @PState
@@ -90,7 +97,8 @@ instance ( Algebra sig m
         Nothing  -> do
       -- liftIO $ putStrLn $ showApiFromPat call (args2Pat args)
           r <- evalForeign call args
-          return (ctx $> Just r)
+          modify @PState (record k r)
+          return (ctx $> ())
     R other -> alg (runApiFFIAC . hdl) other ctx
 
 -- | Trace
@@ -104,11 +112,10 @@ runApiTrace = runApiTraceAC
 instance ( Algebra sig m
          , HasForeignDef api
          , Has (State PState) sig m
-         , Has (Writer (ApiTrace api c)) sig m
-         )
-         => Algebra (Api api c :+: sig) (ApiTraceAC api c m) where
+         , Has (Writer (ApiTrace api c)) sig m)
+      => Algebra (Api api c :+: sig) (ApiTraceAC api c m) where
   alg hdl sig ctx = ApiTraceAC $ case sig of
     L (MkCall k call args) -> do
       tell (traceCall @api @c k call args)
-      return (ctx $> Nothing)
+      return (ctx $> ())
     R other -> alg (runApiTraceAC . hdl) other ctx
