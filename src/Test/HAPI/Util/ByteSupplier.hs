@@ -91,24 +91,3 @@ deriving instance Show EQSupplier
 
 magicSeparator :: Word8
 magicSeparator = 0xFF
-
-eq = mkEQBS $ "\255" <> "\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\164\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\229\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\&5555555555555555555\140\216\DC2\NUL\NUL\NUL\NUL\NUL555555555555554\NAK555iiiii555555\205\&55555555555*5$555555555555555550000000000089694392858552\140\216\DC2\NUL\NUL\NUL\NUL\NUL545\NAK5555555555\n"
--- tget :: S.Get String
--- tget = do
---   x <- HS.hget @Word64
---   go [] (abs $ x `mod` 64)
---   where
---   go as 0 = return $! reverse as
---   go as i = do
---     !x <- HS.hget
---     go (x:as) (i - 1)
-
-xx = do
-  (a1, b) <- eatBackward (S.get @Word8) eq
-  (a2, b) <- eatBackward (S.get @Word8) b
-  (a3, b) <- eatBackward (S.get @Word8) b
-  (a4, b) <- eatBackward (S.get @Word8) b
-  (a5, b) <- eatBackward (S.get @Word8) b
-  (a6, b) <- eatBackward (S.get @Word8) b
-  (a7, b) <- eatBackward (S.get @Word8) b
-  return (a1, a2, a3, a4, a5, a6, a7)
