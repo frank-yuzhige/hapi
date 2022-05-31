@@ -28,11 +28,14 @@ data ApiTraceEntry (api :: ApiDefinition) (c :: Type -> Constraint) where
               => DirectAttribute c Bool -> ApiTraceEntry api c
   TraceContIf :: (c Bool)
               => DirectAttribute c Bool -> ApiTraceEntry api c
+  TraceDirect :: (Fuzzable a, c a)
+              => PKey a -> DirectAttribute c a -> ApiTraceEntry api c
 
 instance ApiName api => Show (ApiTraceEntry api c) where
   show (TraceCall   k api args) = show k <> "=" <> showApiFromPat api (dirAttrs2Pat args)
   show (TraceAssert p)          = "assert " <> show p
   show (TraceContIf p)          = "contif " <> show p
+  show (TraceDirect k d)        = "direct " <> show k <> show d
 
 newtype ApiTrace (api :: ApiDefinition) (c :: Type -> Constraint) = ApiTrace { apiTrace2List :: DList (ApiTraceEntry api c) }
   deriving (Semigroup, Monoid)

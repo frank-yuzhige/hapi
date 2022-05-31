@@ -22,8 +22,8 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Algebra (Algebra)
 import Data.ByteString (ByteString)
 import Test.HAPI.Effect.Api ( runApiFFI, runApiTrace )
-import Test.HAPI.Effect.Eff ( runEnvIO )
-import Test.HAPI.Effect.Entropy ( EntropyAC(runEntropyAC) )
+import Test.HAPI.Effect.Eff ( runEnvIO, debug )
+import Test.HAPI.Effect.Entropy ( EntropyAC(runEntropyAC), EntropyCounter (EntropyCounter) )
 import Test.HAPI.Effect.Orchestration ( runOrchestrationViaBytes )
 import Test.HAPI.Effect.Property
     ( PropertyA, PropertyError, runProperty, runPropertyTrace )
@@ -34,10 +34,10 @@ import Test.HAPI.ApiTrace.Core ( ApiTrace )
 import qualified Control.Carrier.Trace.Printing as PRINTING
 import Test.HAPI.Util.ByteSupplier (EQSupplier (EQSupplier), mkEQBS, BiDir (..), ByteSupplier (remainLen))
 import qualified Test.HAPI.PState as PS
-import Test.HAPI.Effect.Orchestration.Labels (QVSSupply, EntropySupply)
+import Test.HAPI.Effect.Orchestration.Labels (QVSSupply, EntropySupply, LabelConsumeDir (labelConsumeDir))
 import Control.Carrier.Error.Church (runError)
 import Control.Carrier.State.Church (runState)
-import Test.HAPI.AASTG.Synth (synthEntropyStub, execEntropyFuzzerHandler)
+import Test.HAPI.AASTG.Synth (synthEntropyStub, execEntropyFuzzerHandler, EntropyStubResult (ENTROPY_EXHAUST))
 import Control.Carrier.Writer.Church (runWriter)
 import Test.HAPI.AASTG.Effect.Trav (runTrav)
 import qualified Test.HAPI.ApiTrace.CodeGen.C.Data as C
@@ -116,30 +116,30 @@ runFuzzTest :: forall api c sig m.
           -> ByteString
           -> m ()
 runFuzzTest aastg bs
-  | entropy < 64 || qvs < 32 = return ()
-  | otherwise = do
-    qvsErr <- runEnvIO
-      $ runError @QVSError      (return . Just . show) (return . const Nothing)
+  | entropy < 128 || qvs == 0 = return ()
+  | otherwise = runEnvIO $ do
+    qvsErr <- runError @QVSError      (return . Left . show) return
       $ runError @PropertyError (fail . show) pure
       $ runState (\s a -> return a) PS.emptyPState
       $ runProperty @(PropertyA c)
-      $ runForeign (return . Just . show) (return . const Nothing)
+      $ runForeign (return . Left . show) (return . Right)
       $ runApiFFI @api @c
       $ runState @EQSupplier (\s a -> return a) supply
       $ runOrchestrationViaBytes @QVSSupply     @EQSupplier
       $ runQVSFromOrchestrationAC @HSerialize @c
       $ runOrchestrationViaBytes @EntropySupply @EQSupplier
+      $ runState @EntropyCounter (\s a -> return a) 0
       $ runEntropyAC
       $ runTrav @api @c execEntropyFuzzerHandler
-        stub
-    return ()
-    -- case qvsErr of
-      -- Nothing -> return ()
-      -- Just x  -> liftIO $ print "bad libfuzzer input causes QVS to exhaust"
+      $ synthEntropyStub @api @c aastg
+    -- return ()
+    case qvsErr of
+      Right ENTROPY_EXHAUST -> debug $ printf "bad libfuzzer input causes entropy to exhaust, supply=%s" (show supply)
+      _ -> return ()
   where
-    stub           = synthEntropyStub @api @c aastg
+    -- stub           = synthEntropyStub @api @c aastg
     supply         = mkEQBS bs
-    [qvs, entropy] = map (`remainLen` supply) [FW, BW]
+    [qvs, entropy] = map (`remainLen` supply) [labelConsumeDir @QVSSupply, labelConsumeDir @EntropySupply]
 
 runFuzzTrace :: forall api c sig m.
               ( MonadIO m
@@ -173,6 +173,7 @@ runFuzzTrace aastg bs headers
         $ runOrchestrationViaBytes @QVSSupply     @EQSupplier
         $ runQVSFromOrchestrationAC @HSerialize @c
         $ runOrchestrationViaBytes @EntropySupply @EQSupplier
+        $ runState @EntropyCounter (\s a -> return a) 0
         $ runEntropyAC
         $ runTrav @api @c execEntropyFuzzerHandler
         stub

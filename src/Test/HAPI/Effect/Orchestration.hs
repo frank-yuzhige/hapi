@@ -24,18 +24,19 @@ import Data.ByteString (ByteString)
 import Data.Functor (($>))
 import Control.Effect.Error (Error, throwError, liftEither)
 import Control.Effect.Sum (Members)
-import Control.Effect.State (State (Get, Put), state, put)
+import Control.Effect.State (State (Get, Put), state, put, get)
 import Data.Serialize (Serialize)
 import Control.Carrier.Error.Church (runError, ErrorC)
 import Control.Carrier.State.Church (runState, StateC, gets)
 
 import qualified Data.Serialize as S
 import Test.HAPI.Effect.Orchestration.Labels (QVSSupply, LabelConsumeDir (..))
-import Test.HAPI.Util.ByteSupplier (ByteSupplier (eatBytes), BiDir, eatForward, EQSupplier)
+import Test.HAPI.Util.ByteSupplier (ByteSupplier (eatBytes), BiDir (..), eatForward, EQSupplier)
 import Data.Either.Combinators (mapLeft)
 import Test.HAPI.Effect.Eff
 import Text.Printf (printf)
 import Data.Typeable (typeRep, typeOf, Typeable)
+import Control.Monad (when)
 
 data Orchestration label (m :: Type -> Type) a where
   NextInstruction :: (Serialize a, Show a, Typeable a) => S.Get a -> Orchestration label m (Maybe a)
@@ -66,10 +67,13 @@ instance ( Alg sig m
          , Members (State supply) sig)
       => Algebra (Orchestration label :+: sig) (OrchestrationViaBytesAC label supply m) where
   alg hdl sig ctx = OrchestrationViaBytesAC $ case sig of
-    L (NextInstruction get) -> do
-      e <- gets @supply (eatBytes (labelConsumeDir @label) get)
-      -- debug $ printf "%s: getting %s: e = %s" (show 'alg) (show $ typeRep get) (show e)
+    L (NextInstruction getter) -> do
+      s <- get @supply
+      e <- gets @supply (eatBytes (labelConsumeDir @label) getter)
       case e of
-        Left err          -> return (ctx $> Nothing)
+        Left err          -> do
+          -- when (labelConsumeDir @label == BW) $
+            -- debug $ printf "%s: getting %s: err = %s, s = %s" (show 'alg) (show $ typeRep getter) (show err) (show s)
+          return (ctx $> Nothing)
         Right (a, supply) -> put supply >> return (ctx $> Just a)
     R other    -> alg (runOrchestrationViaBytesAC . hdl) other ctx

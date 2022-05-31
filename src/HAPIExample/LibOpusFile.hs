@@ -32,6 +32,7 @@ import Test.HAPI.HLib.HLibPrelude (HLibPrelude)
 import Test.HAPI.HLib.HLibPtr (HLibPtr)
 import Test.HAPI.HLib.HLibCString (HLibCString)
 import Test.HAPI.HLib.HLibFS (HLibFS)
+import qualified Data.ByteString as BS
 
 conduct :: LibFuzzerConduct
 conduct = libFuzzerConductViaAASTG ["opusfile"] $ castAASTG g
@@ -53,6 +54,10 @@ ggg = runEnvIO @IO $ do
   -- :: CString -> CSize -> IO CInt
 
 testOneInputM = llvmFuzzerTestOneInputM conduct
+
+testOne bs = BS.useAsCStringLen bs (\(d, s) -> testOneInputM d (fromIntegral s))
+
+runTestOne = testOne "Oggsdadasdlksd;laskd;akslkdakdsasdaskdlaskdlaskdl;sak;dakd;lak;dlsakdl;sak;ldskd;lakd;aslkdl;askd;slaksda;lkda;als;dkl;dkas;ldk\255sasdaldasldkalkdlskdsalkdsaldklkdsasdadsdadsdadsdadasddadassdaaldksakalkl"
 
 main = mainM conduct
 

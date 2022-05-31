@@ -16,7 +16,7 @@ import Test.HAPI.ApiTrace.CodeGen.C.Util
 import Data.Data (Typeable, Proxy (..))
 import Test.HAPI.Constraint (type (:<>:))
 import Foreign
-import Foreign.C (CInt(..), CChar(..), CIntPtr(..), CLong(..), CULong(..), CUChar(..), CPtrdiff(..), CLLong(..), CULLong(..), CUInt(..), CUIntPtr(..))
+import Foreign.C (CInt(..), CChar(..), CIntPtr(..), CLong(..), CULong(..), CUChar(..), CPtrdiff(..), CLLong(..), CULLong(..), CUInt(..), CUIntPtr(..), CSize(..))
 import Data.Hashable (Hashable)
 import Data.Serialize (Serialize)
 import Language.C.Data.Ident (internalIdent)
@@ -40,6 +40,10 @@ instance TyConstC Int where
 instance TyConstC CInt where
   toCConst  = cIntConst . fromIntegral
   toCType _ = (CIntType undefNode, id)
+
+instance TyConstC CSize where
+  toCConst  = cIntConst . fromIntegral
+  toCType _ = (ty (internalIdent "size_t"), id)
 
 instance TyConstC Bool where
   toCConst  = cBoolConst
@@ -102,6 +106,10 @@ deriving instance Hashable CUChar
 deriving instance Serialize CUChar
 instance HSerialize CUChar
 
+deriving instance Hashable CSize
+deriving instance Serialize CSize
+instance HSerialize CSize
+
 deriving instance Hashable CIntPtr
 deriving instance Serialize CIntPtr
 instance HSerialize CIntPtr
@@ -113,4 +121,3 @@ instance HSerialize CUIntPtr
 deriving instance Hashable CPtrdiff
 deriving instance Serialize CPtrdiff
 instance HSerialize CPtrdiff
-

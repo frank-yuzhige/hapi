@@ -41,7 +41,7 @@ class (ApiName api) => Entry2BlockC (api :: ApiDefinition) where
   call2Block = call2BlockDefault
 
   extraDecls :: forall c p a. (CMembers CCodeGen c, ApiName api, All Fuzzable p, Typeable a, All c p, c a)
-            => PKey a -> api p a -> DirAttributes c p -> [CDecl]
+             => PKey a -> api p a -> DirAttributes c p -> [CDecl]
   extraDecls _ _ _ = []
 
 call2BlockDefault :: forall api c p a. (CMembers CCodeGen c, ApiName api, All Fuzzable p, Typeable a, All c p, c a)
@@ -55,6 +55,7 @@ entry2Block = \case
   TraceCall x api args -> call2Block x api args
   TraceAssert da       -> [CBlockStmt $ cAssertIf (dirAttr2CExpr da)]
   TraceContIf da       -> [CBlockStmt $ cContIf   (dirAttr2CExpr da)]
+  TraceDirect x da     -> [liftEToB   $ pk2CVar x <-- dirAttr2CExpr da]
 
 traceDecls :: forall api c. (CMembers CCodeGen c, Entry2BlockC api) => [ApiTraceEntry api c] -> [CBlockItem]
 traceDecls xs = fromExtras <> fromVars
@@ -64,6 +65,9 @@ traceDecls xs = fromExtras <> fromVars
     collectVar :: [ApiTraceEntry api c] -> PKeySet c
     collectVar [] = emptyPKeySet
     collectVar (TraceCall (x :: PKey a) _ _ : xs)
+      | isVoidTy @a = collectVar xs
+      | otherwise   = addPKey2Set x \\ castC @Typeable (Dict @(c a)) $ collectVar xs
+    collectVar (TraceDirect (x :: PKey a) _ : xs)
       | isVoidTy @a = collectVar xs
       | otherwise   = addPKey2Set x \\ castC @Typeable (Dict @(c a)) $ collectVar xs
     collectVar (_                           : xs) = collectVar xs

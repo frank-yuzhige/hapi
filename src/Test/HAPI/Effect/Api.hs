@@ -18,7 +18,7 @@
 module Test.HAPI.Effect.Api where
 import Test.HAPI.Api (ApiDefinition, HasHaskellDef (evalHaskell), HaskellIOCall (readOut), HasForeignDef (evalForeign), ApiName (..), ApiError (..), HasForeign, runForeign)
 import Data.Kind (Type, Constraint)
-import Test.HAPI.Args (Args, args2Pat, DirectAttribute, DirAttributes, evalDirects)
+import Test.HAPI.Args (Args, args2Pat, DirectAttribute, DirAttributes, evalDirects, Attribute)
 import Test.HAPI.Common (Fuzzable)
 import Control.Algebra (Has, Algebra (alg), type (:+:) (L, R), send)
 import Control.Monad.IO.Class (MonadIO (liftIO))

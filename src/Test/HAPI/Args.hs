@@ -41,6 +41,7 @@ import Test.HAPI.Util.TH (fatalError, FatalErrorKind (FATAL_ERROR))
 import Text.Printf (printf)
 import qualified Data.Serialize as S
 import Foreign (Ptr, nullPtr)
+import Control.Applicative (liftA2)
 
 type Args          a = NP I          a
 type Attributes c  a = NP (Attribute c) a
@@ -132,46 +133,62 @@ args = QuasiQuoter {
 
 
 evalDirect :: Typeable a => PState -> DirectAttribute c a -> a
-evalDirect s (Value v) = v
-evalDirect s (DNot  d) = not (evalDirect s d)
-evalDirect s (Get   k) = fromMaybe (fatalError 'evalDirect FATAL_ERROR $ printf "Cannot find %s in the scope" (show k))
-                       $ lookUp k s
-evalDirect s (DAnd da1 da2)   = evalDirect s da1 && evalDirect s da2
-evalDirect s (DOr  da1 da2)   = evalDirect s da1 || evalDirect s da2
-evalDirect s (DPlus da1 da2)  = evalDirect s da1 + evalDirect s da2
-evalDirect s (DMinus da1 da2) = evalDirect s da1 - evalDirect s da2
-evalDirect s (DMul da1 da2)   = evalDirect s da1 * evalDirect s da2
-evalDirect s (DDiv da1 da2)   = evalDirect s da1 `quot` evalDirect s da2
-evalDirect s (DFDiv da1 da2)  = evalDirect s da1 / evalDirect s da2
-evalDirect s (DNeg  da')      = negate $ evalDirect s da'
-evalDirect s (DCmp c da1 da2) = evalDirect s da1 <=> evalDirect s da2
+evalDirect s k = case evalDirect' s k of
+  Left missing -> fatalError 'evalDirect FATAL_ERROR $ printf "Cannot find %s in the scope" (show missing)
+  Right a      -> a
+
+evalDirect' :: Typeable a => PState -> DirectAttribute c a -> Either String a
+evalDirect' s (Value v)        = Right v
+evalDirect' s (DNot  d)        = not <$> evalDirect' s d
+evalDirect' s (Get   k)        = case lookUp k s of
+  Nothing -> Left (show k)
+  Just  a -> Right a
+evalDirect' s (DAnd da1 da2)   = liftA2 (&&) (evalDirect' s da1) (evalDirect' s da2)
+evalDirect' s (DOr  da1 da2)   = liftA2 (||) (evalDirect' s da1) (evalDirect' s da2)
+evalDirect' s (DPlus da1 da2)  = liftA2 (+)  (evalDirect' s da1) (evalDirect' s da2)
+evalDirect' s (DMinus da1 da2) = liftA2 (-)  (evalDirect' s da1) (evalDirect' s da2)
+evalDirect' s (DMul da1 da2)   = liftA2 (*)  (evalDirect' s da1) (evalDirect' s da2)
+evalDirect' s (DDiv da1 da2)   = liftA2 quot (evalDirect' s da1) (evalDirect' s da2)
+evalDirect' s (DFDiv da1 da2)  = liftA2 (/)  (evalDirect' s da1) (evalDirect' s da2)
+evalDirect' s (DNeg  da')      = negate <$> evalDirect' s da'
+evalDirect' s (DCmp c da1 da2) = liftA2 (<=>) (evalDirect' s da1) (evalDirect' s da2)
   where
     (<=>) = case c of
       DGt  -> (>)
       DGte -> (>=)
       DLt  -> (<)
       DLte -> (<=)
-evalDirect s (DEq b da1 da2) = (evalDirect s da1 == evalDirect s da2) == b
-evalDirect s (DCastInt a)    = fromIntegral (evalDirect s a)
-evalDirect s DNullptr        = nullPtr
+evalDirect' s (DEq b da1 da2) = (b ==) <$> liftA2 (==) (evalDirect' s da1) (evalDirect' s da2)
+evalDirect' s (DCastInt a)    = fromIntegral <$> evalDirect' s a
+evalDirect' s DNullptr        = Right nullPtr
 
 evalDirects :: (All Fuzzable p) => PState -> DirAttributes c p -> Args p
 evalDirects _ Nil       = Nil
 evalDirects s (a :* as) = I (evalDirect s a) :* evalDirects s as
 
+onValue :: (a -> a) -> (DirectAttribute c a -> DirectAttribute c a) -> DirectAttribute c a -> DirectAttribute c a
+onValue f g (Value v) = Value (f v)
+onValue f g d         = g d
+
+onValue2 :: (a -> a -> a)
+         -> (DirectAttribute c a -> DirectAttribute c a -> DirectAttribute c a)
+         -> DirectAttribute c a -> DirectAttribute c a -> DirectAttribute c a
+onValue2 f g (Value v) (Value v') = Value (f v v')
+onValue2 f g d         d'         = g d d'
+
 simplifyDirect :: Typeable a => PState -> DirectAttribute c a -> DirectAttribute c a
 simplifyDirect s (Value v)        = Value v
-simplifyDirect s (DNot  d)        = DNot   (simplifyDirect s d)
+simplifyDirect s (DNot  d)        = onValue not DNot (simplifyDirect s d)
 simplifyDirect s (Get   k)        = maybe  (Get k) Value (lookUp k s)
-simplifyDirect s (DAnd da1 da2)   = DAnd   (simplifyDirect s da1) (simplifyDirect s da2)
-simplifyDirect s (DOr  da1 da2)   = DOr    (simplifyDirect s da1) (simplifyDirect s da2)
-simplifyDirect s (DPlus da1 da2)  = DPlus  (simplifyDirect s da1) (simplifyDirect s da2)
-simplifyDirect s (DMinus da1 da2) = DMinus (simplifyDirect s da1) (simplifyDirect s da2)
-simplifyDirect s (DMul da1 da2)   = DMul   (simplifyDirect s da1) (simplifyDirect s da2)
-simplifyDirect s (DDiv da1 da2)   = DDiv   (simplifyDirect s da1) (simplifyDirect s da2)
-simplifyDirect s (DFDiv da1 da2)  = DFDiv  (simplifyDirect s da1) (simplifyDirect s da2)
-simplifyDirect s (DNeg  da')      = DNeg   (simplifyDirect s da')
-simplifyDirect s (DCmp c da1 da2) = DCmp c (simplifyDirect s da1) (simplifyDirect s da2)
+simplifyDirect s (DAnd da1 da2)   = onValue2 (&&) DAnd   (simplifyDirect s da1) (simplifyDirect s da2)
+simplifyDirect s (DOr  da1 da2)   = onValue2 (||) DOr    (simplifyDirect s da1) (simplifyDirect s da2)
+simplifyDirect s (DPlus da1 da2)  = onValue2 (+)  DPlus  (simplifyDirect s da1) (simplifyDirect s da2)
+simplifyDirect s (DMinus da1 da2) = onValue2 (-)  DMinus (simplifyDirect s da1) (simplifyDirect s da2)
+simplifyDirect s (DMul da1 da2)   = onValue2 (*)  DMul   (simplifyDirect s da1) (simplifyDirect s da2)
+simplifyDirect s (DDiv da1 da2)   = onValue2 quot DDiv   (simplifyDirect s da1) (simplifyDirect s da2)
+simplifyDirect s (DFDiv da1 da2)  = onValue2 (/)  DFDiv  (simplifyDirect s da1) (simplifyDirect s da2)
+simplifyDirect s (DNeg  da')      = onValue negate DNeg (simplifyDirect s da')
+simplifyDirect s (DCmp c da1 da2) = DCmp c (simplifyDirect s da1) (simplifyDirect s da2) -- TODO
 simplifyDirect s (DEq b da1 da2)  = DEq  b (simplifyDirect s da1) (simplifyDirect s da2)
 simplifyDirect s (DCastInt a)     = DCastInt (simplifyDirect s a)
 simplifyDirect s DNullptr         = DNullptr

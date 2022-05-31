@@ -15,6 +15,7 @@ import Data.Kind (Type)
 import qualified Data.Serialize as S
 import Data.Word (Word8, Word64)
 import qualified Test.HAPI.Serialize as HS
+import Control.Monad (replicateM)
 
 data ByteSupplierError
   = CerealError String
@@ -62,36 +63,34 @@ instance ByteSupplier BiDir FBSupplier where
 data EQSupplier = EQSupplier {eqFwBS :: ByteString, eqBwBS :: ByteString, originalFW :: ByteString}
 
 mkEQBS :: ByteString -> EQSupplier
-mkEQBS bs = EQSupplier fw bw' fw
+mkEQBS bs = EQSupplier fw bw fw
   where
     (fw, bw) = BS.breakEnd (== magicSeparator) bs
-    bw' = BS.reverse bw
 
 instance ByteSupplier BiDir EQSupplier where
   eatBytes FW getter (EQSupplier fw bw fwo) = case S.runGetState getter fw 0 of
     Left err
       | BS.length fw >= 32768 -> Left (CerealError err)
-      | otherwise             -> eatBytes BW getter (EQSupplier (resample fw fwo) bw fwo)
+      | otherwise             -> eatBytes FW getter (EQSupplier resample bw fwo)
       where
-        resample bw bwo = foldr ($!) bw (replicate ((1024 `quot` BS.length bwo) `max` 1) (<> bwo))
+        resample = foldr ($!) fw (replicate ((1024 `quot` BS.length fwo) `max` 1) (<> fwo))
     Right (a, fw') -> Right (a, EQSupplier fw' bw fwo)
 
   eatBytes BW getter (EQSupplier fw bw fwo) = case S.runGetState getter bw 0 of
     Left err       ->  Left (CerealError err)
     Right (a, bw') -> Right (a, EQSupplier fw bw' fwo)
 
-  remainLen BW (EQSupplier _ bw _) = BS.length bw
   remainLen FW (EQSupplier _ _ fwo)
     | BS.null fwo = 0
-    | otherwise = maxBound -- Effectively infinite as we are reusing FW
+    | otherwise   = maxBound -- Effectively infinite as we are reusing FW
+  remainLen BW (EQSupplier _ bw _) = BS.length bw
 
 deriving instance Show EQSupplier
 
 magicSeparator :: Word8
 magicSeparator = 0xFF
 
--- eq = mkEQBS $ "\255\255" <> BS.concat (replicate 30 "\247")
-
+eq = mkEQBS $ "\255" <> "\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\164\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\229\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\228\&5555555555555555555\140\216\DC2\NUL\NUL\NUL\NUL\NUL555555555555554\NAK555iiiii555555\205\&55555555555*5$555555555555555550000000000089694392858552\140\216\DC2\NUL\NUL\NUL\NUL\NUL545\NAK5555555555\n"
 -- tget :: S.Get String
 -- tget = do
 --   x <- HS.hget @Word64
@@ -102,4 +101,12 @@ magicSeparator = 0xFF
 --     !x <- HS.hget
 --     go (x:as) (i - 1)
 
--- xx = eatBackward (tget) eq
+xx = do
+  (a1, b) <- eatBackward (S.get @Word8) eq
+  (a2, b) <- eatBackward (S.get @Word8) b
+  (a3, b) <- eatBackward (S.get @Word8) b
+  (a4, b) <- eatBackward (S.get @Word8) b
+  (a5, b) <- eatBackward (S.get @Word8) b
+  (a6, b) <- eatBackward (S.get @Word8) b
+  (a7, b) <- eatBackward (S.get @Word8) b
+  return (a1, a2, a3, a4, a5, a6, a7)
