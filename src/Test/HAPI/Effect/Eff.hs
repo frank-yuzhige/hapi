@@ -11,12 +11,13 @@
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use newtype instead of data" #-}
 
 module Test.HAPI.Effect.Eff (
     module Control.Algebra
   , EnvA (..)
   , EnvIOAC (..)
-  , EnvCtx
   , Alg
   , Eff
   , envCtx
@@ -24,6 +25,9 @@ module Test.HAPI.Effect.Eff (
   , debugIO
   , runEnv
   , runEnvIO
+  , runEnvIODebug
+  , runEnvIO'
+  , EnvCtx(..)
 ) where
 import Data.Kind (Type)
 import Control.Monad.IO.Class (MonadIO (liftIO))
@@ -33,28 +37,37 @@ import Text.Printf (printf)
 import Control.Algebra hiding (Has)
 import qualified Control.Algebra as A
 import Data.Functor.Identity (Identity (runIdentity, Identity))
+import Control.Carrier.Reader (ReaderC, ask, asks, runReader)
+import Control.Monad
 
 
-type EnvCtx = ()
+data EnvCtx = MkEnvCtx { isDebug :: Bool }
+
+defaultEnvCtx :: EnvCtx
+defaultEnvCtx = MkEnvCtx { isDebug = False }
 
 data EnvA (m :: Type -> Type) a where
   EnvCtx     ::           EnvA m EnvCtx
   Debug      :: String -> EnvA m ()
   DebugIO    :: IO a   -> EnvA m ()
 
-newtype EnvIOAC m a = EnvIOAC { runEnvIOAC :: m a }
+newtype EnvIOAC m a = EnvIOAC { runEnvIOAC :: ReaderC EnvCtx m a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadFail)
 
 instance (Algebra sig m, MonadIO m) => Algebra (EnvA :+: sig) (EnvIOAC m) where
   alg hdl sig ctx = EnvIOAC $ case sig of
-    L EnvCtx      -> return $ ctx $> ()
+    L EnvCtx      -> do
+      c <- ask
+      return $ ctx $> c
     L (Debug msg) -> do
-      liftIO $ hPutStrLn stderr (printf "[DEBUG]: %s" msg)
+      dbg <- asks isDebug
+      when dbg (liftIO $ hPutStrLn stderr (printf "[DEBUG]: %s" msg))
       return $ ctx $> ()
     L (DebugIO a) -> do
-      liftIO a
+      dbg <- asks isDebug
+      liftIO (when dbg (a >> pure()))
       return $ ctx $> ()
-    R other       -> alg (runEnvIOAC . hdl) other ctx
+    R other       -> alg (runEnvIOAC . hdl) (R other) ctx
 
 
 newtype EnvAC (m :: Type -> Type) a = EnvAC { runEnvAC :: m a }
@@ -62,7 +75,7 @@ newtype EnvAC (m :: Type -> Type) a = EnvAC { runEnvAC :: m a }
 
 instance (Algebra sig m) => Algebra (EnvA :+: sig) (EnvAC m) where
   alg hdl sig ctx = EnvAC $ case sig of
-    L EnvCtx      -> return $ ctx $> ()
+    L EnvCtx      -> return $ ctx $> defaultEnvCtx
     L (Debug   _) -> return $ ctx $> ()
     L (DebugIO _) -> return $ ctx $> ()
     R other       -> alg (runEnvAC . hdl) other ctx
@@ -88,8 +101,14 @@ debugIO = send . DebugIO
 
 -- runner
 
+runEnvIO' :: MonadIO m => EnvCtx -> EnvIOAC m a -> m a
+runEnvIO' e = runReader e . runEnvIOAC
+
 runEnvIO :: MonadIO m => EnvIOAC m a -> m a
-runEnvIO = runEnvIOAC
+runEnvIO = runEnvIO' defaultEnvCtx
+
+runEnvIODebug :: MonadIO m => EnvIOAC m a -> m a
+runEnvIODebug = runEnvIO' (defaultEnvCtx { isDebug = True })
 
 runEnv :: EnvAC Identity a -> a
 runEnv = run . runEnvAC

@@ -8,15 +8,16 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Test.HAPI.ApiTrace.CodeGen.C.DataType where
 import Test.HAPI.ApiTrace.TyConst (TyConst(..))
-import Language.C (CExpr, CDeclSpec, CDerivedDeclr, CDeclr, CTypeSpec, CTypeSpecifier (..), undefNode)
+import Language.C (CExpr, CDeclSpec, CDerivedDeclr, CDeclr, CTypeSpec, CTypeSpecifier (..), undefNode, CPartDesignator (CMemberDesig), CInitializer (CInitExpr))
 import Test.HAPI.ApiTrace.CodeGen.C.Util
 import Data.Data (Typeable, Proxy (..))
 import Test.HAPI.Constraint (type (:<>:))
 import Foreign
-import Foreign.C (CInt(..), CChar(..), CIntPtr(..), CLong(..), CULong(..), CUChar(..), CPtrdiff(..), CLLong(..), CULLong(..), CUInt(..), CUIntPtr(..), CSize(..))
+import Foreign.C (CInt(..), CChar(..), CIntPtr(..), CLong(..), CULong(..), CUChar(..), CPtrdiff(..), CLLong(..), CULLong(..), CUInt(..), CUIntPtr(..), CSize(..), CStringLen(..), castCCharToChar, castCUCharToChar)
 import Data.Hashable (Hashable)
 import Data.Serialize (Serialize)
 import Language.C.Data.Ident (internalIdent)
@@ -27,7 +28,6 @@ class TyConstC a where
   toCType  :: proxy a -> (CTypeSpec, CDeclr -> CDeclr)
 
 type CCodeGen = TyConstC :<>: Typeable
-
 
 instance TyConstC () where
   toCConst _ = cIntConst 0
@@ -57,21 +57,27 @@ instance TyConstC CChar where
   toCConst  = cIntConst . fromIntegral
   toCType _ = (CCharType undefNode, id)
 
-instance TyConstC String where
-  toCConst  = cStrConst
-  toCType _ = (CCharType undefNode, ptr)
+instance TyConstC String where   --- TO typedef struct CBytes { char * bytes; size_t size; }
+  toCConst s = cBytesLit (cStrConst s) (toCConst (length s))
+  toCType _  = ctype "CBytes"
 
+instance TyConstC [CChar] where   --- TO typedef struct CBytes { char * bytes; size_t size; }
+  toCConst s = cBytesLit (cStrConst (map castCCharToChar s)) (toCConst (length s))
+  toCType _  = ctype "CBytes"
+
+instance TyConstC [CUChar] where   --- TO typedef struct CBytes { char * bytes; size_t size; }
+  toCConst s = cBytesLit (cStrConst (map castCUCharToChar s)) (toCConst (length s))
+  toCType _  = ctype "CBytes"
 
 instance TyConstC a
   => TyConstC (Ptr a) where
   toCConst  = cPtrConst
-  toCType _ = (ty, ptr . f)
+  toCType _ = (t, ptr . f)
     where
-      (ty, f) = toCType (Proxy @a)
+      (t, f) = toCType (Proxy @a)
 
 ctype :: String -> (CTypeSpec, CDeclr -> CDeclr)
 ctype s = (ty (internalIdent s), id)
-
 
 -- C DataType Extra Instances
 deriving instance Hashable CInt

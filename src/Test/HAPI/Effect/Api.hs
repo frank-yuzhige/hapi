@@ -38,6 +38,7 @@ import Control.Concurrent (newEmptyMVar, forkOS, putMVar, readMVar, takeMVar, ne
 import Test.HAPI.Util.TH (fatalError, FatalErrorKind (FATAL_ERROR, HAPI_BUG))
 import Text.Printf (printf)
 import Test.HAPI.PState (PState, PKey, record)
+import Test.HAPI.Effect.Eff (Alg, debug)
 
 -- | Wrapper to the original Api
 data Api (api :: ApiDefinition) (c :: Type -> Constraint) (m :: Type -> Type) a where
@@ -82,7 +83,7 @@ newtype ApiFFIAC (api :: ApiDefinition) (c :: Type -> Constraint) m a = ApiFFIAC
 runApiFFI :: forall api c m a. Monad m => ApiFFIAC api c m a -> m a
 runApiFFI = runApiFFIAC
 
-instance ( Algebra sig m
+instance ( Alg sig m
          , HasForeignDef api
          , HasForeign sig m
          , Has (State PState) sig m
@@ -95,7 +96,7 @@ instance ( Algebra sig m
       case apiArgsAreValid call args of
         Just err -> throwError (ApiError (showApiFromPat call (args2Pat args)) err)
         Nothing  -> do
-      -- liftIO $ putStrLn $ showApiFromPat call (args2Pat args)
+          debug $ showApiFromPat call (args2Pat args)
           r <- evalForeign call args
           modify @PState (record k r)
           return (ctx $> ())

@@ -5,7 +5,7 @@
 module Test.HAPI.ApiTrace.CodeGen.C.Emit (
   emitCCode
 ) where
-import Language.C (CExtDecl, pretty)
+import Language.C
 import Data.Text (Text)
 import qualified Data.Text as T
 import Text.Printf (printf)
@@ -15,6 +15,7 @@ import Test.HAPI.Constraint (CMembers)
 import Test.HAPI.ApiTrace.CodeGen.C.DataType (CCodeGen)
 import Test.HAPI.ApiTrace.CodeGen.C.Data (Entry2BlockC, traceMain)
 import Test.HAPI.ApiTrace.Core (ApiTrace)
+import Test.HAPI.ApiTrace.CodeGen.C.Util (struct, ptr, charTy)
 
 
 hapiRequiredIncludes :: [Text]
@@ -41,12 +42,21 @@ hapiHeadComment = [r|
  */
 |]
 
+hapiTypeDefs :: Text
+hapiTypeDefs = T.unlines $ map (fromString . show . pretty)
+  [ cbytes
+  , cubytes
+  ]
+  where
+    cbytes  = CDeclExt $ struct "CBytes" [("bytes", [CCharType undefNode], ptr), ("size", [CIntType undefNode], id)]
+    cubytes = CDeclExt $ struct "CUBytes" [("bytes", [CUnsigType undefNode, CCharType undefNode], ptr), ("size", [CIntType undefNode], id)]
 
 decl2CCode :: [Text] -> CExtDecl -> Text
 decl2CCode headers cext = T.unlines
   [ hapiHeadComment
   , sysIncludeHeaders
   , apiIncludeHeaders
+  , hapiTypeDefs
   , fromString $ show $ pretty cext
   ]
   where

@@ -22,7 +22,7 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Algebra (Algebra)
 import Data.ByteString (ByteString)
 import Test.HAPI.Effect.Api ( runApiFFI, runApiTrace )
-import Test.HAPI.Effect.Eff ( runEnvIO, debug )
+import Test.HAPI.Effect.Eff ( runEnvIO, debug, runEnvIODebug )
 import Test.HAPI.Effect.Entropy ( EntropyAC(runEntropyAC), EntropyCounter (EntropyCounter) )
 import Test.HAPI.Effect.Orchestration ( runOrchestrationViaBytes )
 import Test.HAPI.Effect.Property
@@ -50,6 +50,7 @@ import Test.HAPI.Effect.VarUpdate (runVarUpdateTrace, VarUpdateError (VarUpdateE
 
 data LibFuzzerConduct = LibFuzzerConduct
   { llvmFuzzerTestOneInputM :: CString -> CSize -> IO CInt
+  , llvmFuzzerDebugM        :: CString -> CSize -> IO CInt
   , mainM                   :: IO ()
   }
 
@@ -61,17 +62,18 @@ libFuzzerConductViaAASTG :: ( ValidApiDef api
                             , Typeable c)
                          => [String] -> AASTG api c -> LibFuzzerConduct
 libFuzzerConductViaAASTG headers aastg = LibFuzzerConduct
-  { llvmFuzzerTestOneInputM = _llvmFuzzerTestOneInputM aastg
+  { llvmFuzzerTestOneInputM = _llvmFuzzerTestOneInputM aastg False
+  , llvmFuzzerDebugM        = _llvmFuzzerTestOneInputM aastg True
   , mainM                   = _traceMainM headers aastg
   }
 
 _llvmFuzzerTestOneInputM :: ( ValidApiDef api
                             , CMembers HSerialize c
                             , Typeable c)
-                         => AASTG api c -> CString -> CSize -> IO CInt
-_llvmFuzzerTestOneInputM aastg str size = do
+                         => AASTG api c -> Bool -> CString -> CSize -> IO CInt
+_llvmFuzzerTestOneInputM aastg dbg str size = do
   bs <- BS.packCStringLen (str, fromIntegral size)
-  runFuzzTest aastg bs
+  runFuzzTest aastg bs dbg
   return 0
 
 _traceMainM :: ( ValidApiDef api
@@ -115,12 +117,14 @@ runFuzzTest :: forall api c sig m.
              , ValidApiDef api)
           => AASTG api c
           -> ByteString
+          -> Bool             -- is debug
           -> m ()
-runFuzzTest aastg bs
+runFuzzTest aastg bs dbg
   | entropy < 128 || qvs == 0 = return ()
-  | otherwise = runEnvIO $ do
-    qvsErr <- runError @QVSError      (return . Left . show) return
-      $ runError @PropertyError (fail . show) pure
+  | otherwise = (if dbg then runEnvIODebug else runEnvIO) $ do
+    debug $ printf "Running HAPI libfuzzer in debug mode..."
+    qvsErr <- runError @QVSError (return . Left . show) return
+      $ runError @PropertyError  (fail . show) pure
       $ runError @VarUpdateError (fail . show) pure
       $ runState (\s a -> return a) PS.emptyPState
       $ runProperty @(PropertyA c)
@@ -137,6 +141,7 @@ runFuzzTest aastg bs
       $ synthEntropyStub @api @c aastg
     -- return ()
     case qvsErr of
+      Left err              -> debug $ printf "error: %s" err
       Right ENTROPY_EXHAUST -> debug $ printf "bad libfuzzer input causes entropy to exhaust, supply=%s" (show supply)
       _ -> return ()
   where

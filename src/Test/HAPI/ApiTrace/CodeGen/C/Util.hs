@@ -221,7 +221,7 @@ defCompoundLit :: String -> CInitList -> CExpr
 defCompoundLit str xs =
   CCompoundLit (CDecl [defTy str] [] undefNode) xs undefNode
 
-csu :: CStructTag -> String -> [(String, CTypeSpec)] -> CDecl
+csu :: CStructTag -> String -> [(String, [CTypeSpec], CDeclr -> CDeclr)] -> CDecl
 csu tag ident fields = CDecl
   [CStorageSpec $ CTypedef undefNode, CTypeSpec $ CSUType structTy undefNode]
   [(Just $ fromString ident, Nothing, Nothing)]
@@ -232,18 +232,18 @@ csu tag ident fields = CDecl
                      (Just $ map structify fields)
                      []
                      undefNode
-  structify (name, ty) = CDecl [CTypeSpec ty]
-                               [(Just (fromString name), Nothing, Nothing)]
+  structify (name, ty, f) = CDecl (map CTypeSpec ty)
+                               [(Just (f $ fromString name), Nothing, Nothing)]
                                undefNode
 
-csu1 :: CStructTag -> String -> [(String, CTypeSpec)] -> CDecl
+csu1 :: CStructTag -> String -> [(String, [CTypeSpec], CDeclr -> CDeclr)] -> CDecl
 csu1 tag ident fields = CDecl [CTypeSpec $ CSUType structTy undefNode]
                               [(Just $ fromString ident, Nothing, Nothing)]
                               undefNode
  where
   structTy = CStruct tag Nothing (Just $ map structify fields) [] undefNode
-  structify (name, ty) =
-    CDecl [CTypeSpec ty] [(Just (fromString name), Nothing, Nothing)] undefNode
+  structify (name, ty, f) =
+    CDecl (map CTypeSpec ty) [(Just (f $ fromString name), Nothing, Nothing)] undefNode
 
 csu2 :: CStructTag -> String -> [CDecl] -> CDecl
 csu2 tag ident fields = CDecl
@@ -266,14 +266,14 @@ cenum ident fields = CDecl
 
 -- | Create a structure, for example @struct "foo" [("bar", intTy)]@ is
 -- @typedef struct foo {int bar;} foo;@
-struct :: String -> [(String, CTypeSpec)] -> CDecl
+struct :: String -> [(String, [CTypeSpec], CDeclr -> CDeclr)] -> CDecl
 struct = csu CStructTag
 
 -- | Equivalent to 'struct' but generates a C union instead.
-union :: String -> [(String, CTypeSpec)] -> CDecl
+union :: String -> [(String, [CTypeSpec], CDeclr -> CDeclr)] -> CDecl
 union = csu CUnionTag
 
-anoyUnion :: String -> [(String, CTypeSpec)] -> CDecl
+anoyUnion :: String -> [(String, [CTypeSpec], CDeclr -> CDeclr)] -> CDecl
 anoyUnion = csu1 CUnionTag
 
 (!) :: CExpr -> CExpr -> CExpr
@@ -356,6 +356,21 @@ ternary i t e = CCond i (Just t) e undefNode
 -- | Greater than or equal to, @a >=: b@ is equivalent to @a >= b@
 (>=:) :: CExpr -> CExpr -> CExpr
 (>=:) = cOp CGeqOp
+
+
+-- Smart constructor for CBytes
+
+cBytesLit :: CExpr -> CExpr -> CExpr
+cBytesLit b s = defCompoundLit "CBytes" [bytes, size]
+    where
+      bytes = ([memberDesig "bytes"], initExp b)
+      size  = ([memberDesig "size"] , initExp s)
+
+cUBytesLit :: CExpr -> CExpr -> CExpr
+cUBytesLit b s = defCompoundLit "CUBytes" [bytes, size]
+    where
+      bytes = ([memberDesig "bytes"], initExp b)
+      size  = ([memberDesig "size"] , initExp s)
 
 instance Num CExpr where
   fromInteger = CConst . flip CIntConst undefNode . cInteger

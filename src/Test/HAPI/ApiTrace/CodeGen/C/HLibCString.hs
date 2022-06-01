@@ -7,6 +7,10 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings #-}
+
 module Test.HAPI.ApiTrace.CodeGen.C.HLibCString where
 
 import Test.HAPI.ApiTrace.CodeGen.C.Util
@@ -23,6 +27,9 @@ import Data.SOP (All)
 import Test.HAPI.Common (Fuzzable)
 import Data.Data (Typeable)
 import Test.HAPI.Args (DirAttributes)
+import Data.Hashable (Hashable)
+import Data.Serialize (Serialize (..))
+import Test.HAPI.Serialize (HSerialize)
 
 
 instance Entry2BlockC HLibCString where
@@ -31,8 +38,10 @@ instance Entry2BlockC HLibCString where
   call2Block x f args = case f of
     PeekCString    -> [liftEToB undefined]
     PeekCStringLen -> [liftEToB undefined]
-    NewCString     -> [liftEToB $ pk2CVar x <-- let [a] = aExprs in a]
+    NewCString     -> [liftEToB $ pk2CVar x <-- let [a] = aExprs in a .: "bytes"]
     StringLen      -> [liftEToB $ pk2CVar x <-- let [a] = aExprs in cStrlen a]
+    NewCBytes      -> [liftEToB $ pk2CVar x <-- let [a] = aExprs in a .: "bytes"]
+    CBytesLen      -> [liftEToB $ pk2CVar x <-- let [a] = aExprs in a .: "size"]
     where
       aExprs = dirAttrs2CExprs @c args
       (ty, _) = toCType x \\ mapDict (productC @CCodeGen) (Dict @(c a))
