@@ -27,14 +27,14 @@ import Test.HAPI.Effect.Entropy ( EntropyAC(runEntropyAC), EntropyCounter (Entro
 import Test.HAPI.Effect.Orchestration ( runOrchestrationViaBytes )
 import Test.HAPI.Effect.Property
     ( PropertyA, PropertyError, runProperty, runPropertyTrace )
-import Test.HAPI.Effect.QVS
-    ( QVSFromOrchestrationAC(runQVSFromOrchestrationAC), QVSError )
+import Test.HAPI.Effect.EVS
+    ( EVSFromOrchestrationAC(runEVSFromOrchestrationAC), EVSError )
 import Test.HAPI.ApiTrace.CodeGen.C.Data ( Entry2BlockC )
 import Test.HAPI.ApiTrace.Core ( ApiTrace )
 import qualified Control.Carrier.Trace.Printing as PRINTING
 import Test.HAPI.Util.ByteSupplier (EQSupplier (EQSupplier), mkEQBS, BiDir (..), ByteSupplier (remainLen))
 import qualified Test.HAPI.PState as PS
-import Test.HAPI.Effect.Orchestration.Labels (QVSSupply, EntropySupply, LabelConsumeDir (labelConsumeDir))
+import Test.HAPI.Effect.Orchestration.Labels (EVSSupply, EntropySupply, LabelConsumeDir (labelConsumeDir))
 import Control.Carrier.Error.Church (runError)
 import Control.Carrier.State.Church (runState)
 import Test.HAPI.AASTG.Synth (synthEntropyStub, execEntropyFuzzerHandler, EntropyStubResult (ENTROPY_EXHAUST))
@@ -123,7 +123,7 @@ runFuzzTest aastg bs dbg
   | entropy < 128 || qvs == 0 = return ()
   | otherwise = (if dbg then runEnvIODebug else runEnvIO) $ do
     debug $ printf "Running HAPI libfuzzer in debug mode..."
-    qvsErr <- runError @QVSError (return . Left . show) return
+    qvsErr <- runError @EVSError (return . Left . show) return
       $ runError @PropertyError  (fail . show) pure
       $ runError @VarUpdateError (fail . show) pure
       $ runState (\s a -> return a) PS.emptyPState
@@ -132,8 +132,8 @@ runFuzzTest aastg bs dbg
       $ runApiFFI @api @c
       $ runVarUpdateEval @api @c
       $ runState @EQSupplier (\s a -> return a) supply
-      $ runOrchestrationViaBytes @QVSSupply     @EQSupplier
-      $ runQVSFromOrchestrationAC @HSerialize @c
+      $ runOrchestrationViaBytes @EVSSupply     @EQSupplier
+      $ runEVSFromOrchestrationAC @HSerialize @c
       $ runOrchestrationViaBytes @EntropySupply @EQSupplier
       $ runState @EntropyCounter (\s a -> return a) 0
       $ runEntropyAC
@@ -147,7 +147,7 @@ runFuzzTest aastg bs dbg
   where
     -- stub           = synthEntropyStub @api @c aastg
     supply         = mkEQBS bs
-    [qvs, entropy] = map (`remainLen` supply) [labelConsumeDir @QVSSupply, labelConsumeDir @EntropySupply]
+    [qvs, entropy] = map (`remainLen` supply) [labelConsumeDir @EVSSupply, labelConsumeDir @EntropySupply]
 
 runFuzzTrace :: forall api c sig m.
               ( MonadIO m
@@ -166,12 +166,12 @@ runFuzzTrace aastg bs headers
   | entropy < 64 || qvs < 32 = do
     liftIO $ printf "The given bytestring input cannot instantiate a fuzz test\n"
     liftIO $ printf "  - Entropy: %d (expect >= 64)\n"
-    liftIO $ printf "  - QVS    : %d (expect >= 32)\n"
+    liftIO $ printf "  - EVS    : %d (expect >= 32)\n"
     return ()
   | otherwise
     = do
       trace <- runEnvIO
-        $ runError @QVSError      (fail . show) pure
+        $ runError @EVSError      (fail . show) pure
         $ runError @PropertyError (fail . show) pure
         $ runError @VarUpdateError (fail . show) pure
         $ runState (\s a -> return a) PS.emptyPState
@@ -180,8 +180,8 @@ runFuzzTrace aastg bs headers
         $ runApiTrace @api @c
         $ runVarUpdateTrace @api @c
         $ runState @EQSupplier (\s a -> return a) supply
-        $ runOrchestrationViaBytes @QVSSupply     @EQSupplier
-        $ runQVSFromOrchestrationAC @HSerialize @c
+        $ runOrchestrationViaBytes @EVSSupply     @EQSupplier
+        $ runEVSFromOrchestrationAC @HSerialize @c
         $ runOrchestrationViaBytes @EntropySupply @EQSupplier
         $ runState @EntropyCounter (\s a -> return a) 0
         $ runEntropyAC

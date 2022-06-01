@@ -30,7 +30,7 @@ import Control.Carrier.Error.Church (runError, ErrorC)
 import Control.Carrier.State.Church (runState, StateC, gets)
 
 import qualified Data.Serialize as S
-import Test.HAPI.Effect.Orchestration.Labels (QVSSupply, LabelConsumeDir (..))
+import Test.HAPI.Effect.Orchestration.Labels (EVSSupply, LabelConsumeDir (..))
 import Test.HAPI.Util.ByteSupplier (ByteSupplier (eatBytes), BiDir (..), eatForward, EQSupplier)
 import Data.Either.Combinators (mapLeft)
 import Test.HAPI.Effect.Eff

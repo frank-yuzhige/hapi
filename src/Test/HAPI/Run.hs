@@ -22,11 +22,11 @@ import Control.Carrier.Error.Church (runError)
 import Control.Carrier.Writer.Church (runWriter)
 import Test.HAPI.Effect.Api (runApiFFI, runApiTrace)
 import Control.Carrier.State.Church (runState)
-import Test.HAPI.Effect.QVS (runQVSFuzzArbitraryAC, QVSFromOrchestrationAC (runQVSFromOrchestrationAC))
+import Test.HAPI.Effect.EVS (runEVSFuzzArbitraryAC, EVSFromOrchestrationAC (runEVSFromOrchestrationAC))
 import Data.ByteString (ByteString)
 import Test.HAPI.Effect.Entropy (EntropyAC(runEntropyAC))
 import Test.HAPI.Effect.Orchestration (runOrchestrationViaBytes)
-import Test.HAPI.Effect.Orchestration.Labels (EntropySupply, QVSSupply)
+import Test.HAPI.Effect.Orchestration.Labels (EntropySupply, EVSSupply)
 import qualified Data.ByteString as BS
 import Data.Word (Word8)
 import Test.HAPI.Common (Fuzzable)
@@ -61,7 +61,7 @@ runFuzzTestNonDet aastg = runEnvIO $ do
     $ runForeign (fail . show) return
     $ runApiFFI @api @c
     $ runVarUpdateEval @api @c
-    $ runQVSFuzzArbitraryAC @c stub
+    $ runEVSFuzzArbitraryAC @c stub
 
 
 data TRACE_MODE = IGNORING | PRINTING

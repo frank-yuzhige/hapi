@@ -9,4 +9,5 @@ import Test.HAPI.Effect.Fuzzer        as X
 import Test.HAPI.Effect.Gen           as X
 import Test.HAPI.Effect.Orchestration as X
 import Test.HAPI.Effect.Property      as X
-import Test.HAPI.Effect.QVS           as X
+import Test.HAPI.Effect.EVS           as X
+import Test.HAPI.Effect.VarUpdate     as X

@@ -8,10 +8,10 @@ import Test.HAPI.Util.ByteSupplier (BiDir (..))
 class LabelConsumeDir l d | l -> d where
   labelConsumeDir :: d
 
-data QVSSupply
+data EVSSupply
 data EntropySupply
 
-instance LabelConsumeDir QVSSupply BiDir where
+instance LabelConsumeDir EVSSupply BiDir where
   labelConsumeDir = FW
 
 instance LabelConsumeDir EntropySupply BiDir where

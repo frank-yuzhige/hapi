@@ -59,7 +59,7 @@ instance ByteSupplier BiDir FBSupplier where
   remainLen FW (FBSupplier fw _) = BS.length fw
   remainLen BW (FBSupplier _ bw) = BS.length bw
 
--- Entropy + QVS Byte Supplier
+-- Entropy + EVS Byte Supplier
 data EQSupplier = EQSupplier {eqFwBS :: ByteString, eqBwBS :: ByteString, originalFW :: ByteString}
 
 mkEQBS :: ByteString -> EQSupplier
@@ -67,7 +67,7 @@ mkEQBS bs = EQSupplier fw bw fw
   where
     (fw', bw) = BS.breakEnd (== magicSeparator) bs
     fw | BS.null fw' = ""
-       | otherwise   = BS.init fw'  -- remove trailing '/255' to add more randomness to QVS supply
+       | otherwise   = BS.init fw'  -- remove trailing '/255' to add more randomness to EVS supply
 
 instance ByteSupplier BiDir EQSupplier where
   eatBytes FW getter (EQSupplier fw bw fwo) = case S.runGetState getter fw 0 of

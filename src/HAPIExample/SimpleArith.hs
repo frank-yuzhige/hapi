@@ -344,7 +344,7 @@ tq = runEnvIO @IO $ t1 `isSubType'` Zero
 --        . runForeign (fail . show)
 --        . runApiFFI @ArithApi
 --        . runState (\s a -> return a) PS.empty
---        . runQVSFuzzArbitraryAC
+--        . runEVSFuzzArbitraryAC
 --        $ stub
 
 -- gogo :: IO ()

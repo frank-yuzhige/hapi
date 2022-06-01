@@ -70,12 +70,12 @@ library
       Test.HAPI.Effect.Api
       Test.HAPI.Effect.Eff
       Test.HAPI.Effect.Entropy
+      Test.HAPI.Effect.EVS
       Test.HAPI.Effect.Fuzzer
       Test.HAPI.Effect.Gen
       Test.HAPI.Effect.Orchestration
       Test.HAPI.Effect.Orchestration.Labels
       Test.HAPI.Effect.Property
-      Test.HAPI.Effect.QVS
       Test.HAPI.Effect.VarUpdate
       Test.HAPI.HLib.HLibCString
       Test.HAPI.HLib.HLibFS

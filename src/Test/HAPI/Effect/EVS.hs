@@ -16,10 +16,10 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 {-
-Quantified Value Generation Effect
+Exogenous Value Generation Effect
 -}
 
-module Test.HAPI.Effect.QVS where
+module Test.HAPI.Effect.EVS where
 import Control.Algebra (Algebra (alg), type (:+:) (L, R), Has, send)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Test.HAPI.Effect.Gen (GenAC(runGenAC), GenA (LiftGenA), liftGenA, oneof, oneof')
@@ -40,7 +40,7 @@ import Test.HAPI.Args (Args, pattern (::*), Attribute (..), validate, DirectAttr
 import Data.SOP.Dict (mapAll)
 import Data.Serialize (Serialize)
 import Test.HAPI.Effect.Orchestration (Orchestration, nextInstruction, OrchestrationError)
-import Test.HAPI.Effect.Orchestration.Labels (QVSSupply)
+import Test.HAPI.Effect.Orchestration.Labels (EVSSupply)
 import Data.Type.Equality (castWith, TestEquality (testEquality), apply)
 import Type.Reflection ( TypeRep, typeOf, Typeable, typeRep )
 import Test.HAPI.Constraint (type (:>>>:), castC)
@@ -54,90 +54,90 @@ import qualified Test.HAPI.Serialize as HS
 import qualified Data.Serialize as S
 
 
--- Quantified Value Supplier
-data QVS (c :: Type -> Constraint) (m :: Type -> Type) a where
-  QDirect    :: (Typeable a)      => DirectAttribute c a    -> QVS c m a
-  QExogenous :: (Fuzzable a, c a) => ExogenousAttribute c a -> QVS c m a
+-- Exogenous Value Supplier
+data EVS (c :: Type -> Constraint) (m :: Type -> Type) a where
+  EDirect    :: (Typeable a)      => DirectAttribute c a    -> EVS c m a
+  EExogenous :: (Fuzzable a, c a) => ExogenousAttribute c a -> EVS c m a
 
-data QVSError = QVSError { causedAttribute :: String, errorMessage :: String }
+data EVSError = EVSError { causedAttribute :: String, errorMessage :: String }
   deriving Show
 
-mkQVS :: forall c a m. Typeable c => Attribute c a -> QVS c m a
-mkQVS (Direct    d) = QDirect d
-mkQVS (Exogenous e) = QExogenous e
+mkEVS :: forall c a m. Typeable c => Attribute c a -> EVS c m a
+mkEVS (Direct    d) = EDirect d
+mkEVS (Exogenous e) = EExogenous e
 
--- | Convert attribute to QVS
-attributes2QVSs :: forall c p m. Typeable c => Attributes c p -> NP (QVS c m) p
-attributes2QVSs Nil = Nil
-attributes2QVSs (a :* as) = mkQVS a :* attributes2QVSs as
+-- | Convert attribute to EVS
+attributes2EVSs :: forall c p m. Typeable c => Attributes c p -> NP (EVS c m) p
+attributes2EVSs Nil = Nil
+attributes2EVSs (a :* as) = mkEVS a :* attributes2EVSs as
 
 -- | Generate values in HList
-qvs2m :: (Has (QVS c) sig m) => NP (QVS c m) p -> m (Args p)
-qvs2m Nil = return Nil
-qvs2m (qvs :* q) = do
-  a <- send qvs
-  s <- qvs2m q
+evs2m :: (Has (EVS c) sig m) => NP (EVS c m) p -> m (Args p)
+evs2m Nil = return Nil
+evs2m (evs :* q) = do
+  a <- send evs
+  s <- evs2m q
   return (a ::* s)
 
-qvs2Direct :: (Has (QVS c :+: State PState) sig m) => QVS c m a -> m (DirectAttribute c a)
-qvs2Direct qvs = case qvs of
-    QDirect d     -> gets (`simplifyDirect` d)
-    QExogenous {} -> Value <$> send qvs
+evs2Direct :: (Has (EVS c :+: State PState) sig m) => EVS c m a -> m (DirectAttribute c a)
+evs2Direct evs = case evs of
+    EDirect d     -> gets (`simplifyDirect` d)
+    EExogenous {} -> Value <$> send evs
 
-qvs2Directs :: (Has (QVS c :+: State PState) sig m) => NP (QVS c m) p -> m (DirAttributes c p)
-qvs2Directs Nil = return Nil
-qvs2Directs (qvs :* q) = do
-  d <- qvs2Direct qvs
-  s <- qvs2Directs q
+evs2Directs :: (Has (EVS c :+: State PState) sig m) => NP (EVS c m) p -> m (DirAttributes c p)
+evs2Directs Nil = return Nil
+evs2Directs (evs :* q) = do
+  d <- evs2Direct evs
+  s <- evs2Directs q
   return (d :* s)
 
 
-newtype QVSFuzzArbitraryAC (c :: Type -> Constraint) m a = QVSFuzzArbitraryAC { runQVSFuzzArbitraryAC :: m a }
+newtype EVSFuzzArbitraryAC (c :: Type -> Constraint) m a = EVSFuzzArbitraryAC { runEVSFuzzArbitraryAC :: m a }
   deriving (Functor, Applicative, Monad, MonadFail, MonadIO)
 
-instance (Algebra sig m, Members (State PState :+: GenA) sig, c :>>>: Arbitrary) => Algebra (QVS c :+: sig) (QVSFuzzArbitraryAC c m) where
-  alg hdl sig ctx = QVSFuzzArbitraryAC $ case sig of
-    L qvs   -> resolveQVS qvs
-    R other -> alg (runQVSFuzzArbitraryAC . hdl) other ctx
+instance (Algebra sig m, Members (State PState :+: GenA) sig, c :>>>: Arbitrary) => Algebra (EVS c :+: sig) (EVSFuzzArbitraryAC c m) where
+  alg hdl sig ctx = EVSFuzzArbitraryAC $ case sig of
+    L evs   -> resolveEVS evs
+    R other -> alg (runEVSFuzzArbitraryAC . hdl) other ctx
     where
-      resolveQVS (qvs :: QVS c n a) = case qvs of
-        QDirect d -> do
+      resolveEVS (evs :: EVS c n a) = case evs of
+        EDirect d -> do
           s <- get @PState
           return (ctx $> evalDirect s d)
-        QExogenous Anything     -> do
+        EExogenous Anything     -> do
           v <- liftGenA (arbitrary \\ castC @Arbitrary (Dict @(c a)))
           return (ctx $> v)
-        QExogenous (IntRange l r) -> do
+        EExogenous (IntRange l r) -> do
           v <- liftGenA (chooseInt (l, r))
           return (ctx $> v)
-        QExogenous (Range    l r) -> do
+        EExogenous (Range    l r) -> do
           v <- liftGenA (chooseEnum (l, r))
           return (ctx $> v)
         -- Exogenous AnyOf xs     -> do
           -- a <- oneof' (return <$> xs)
-          -- resolveQVS (QVS a)
+          -- resolveEVS (EVS a)
 
--- newtype QVSFromStdinAC (c :: Type -> Constraint) m a = QVSFromStdinAC { runQVSFromStdinAC :: m a }
+-- newtype EVSFromStdinAC (c :: Type -> Constraint) m a = EVSFromStdinAC { runEVSFromStdinAC :: m a }
 --   deriving (Functor, Applicative, Monad, MonadIO, MonadFail)
 
 -- instance ( Algebra sig m
---          , Has (Error QVSError)          sig m
+--          , Has (Error EVSError)          sig m
 --          , Has (State PState)            sig m
 --          , MonadIO m
 --          , c :>>>: Read)
---       => Algebra (QVS c :+: sig) (QVSFromStdinAC c m) where
---   alg hdl sig ctx = QVSFromStdinAC $ case sig of
---     L qvs -> do
+--       => Algebra (EVS c :+: sig) (EVSFromStdinAC c m) where
+--   alg hdl sig ctx = EVSFromStdinAC $ case sig of
+--     L evs -> do
 --       input <- case attr of
 --         Direct (Get x)                          -> do
 --           v <- gets @PState (lookUp x)
 --           case v of
---             Nothing -> throwError (QVSError (show attr) "Variable not in scope!")
+--             Nothing -> throwError (EVSError (show attr) "Variable not in scope!")
 --             Just a  -> return a
 --         Direct (Value v) -> return v
 --         Exogenous (a :: ExogenousAttribute c a) -> liftIO (putStrLn "Please provide input: " >> readAndValidate attr) \\ castC @Read (Dict @(c a))
 --       return (ctx $> input)
---     R other -> alg (runQVSFromStdinAC . hdl) other ctx
+--     R other -> alg (runEVSFromStdinAC . hdl) other ctx
 --     where
 --       readAndValidate attr = do
 --         a <- readLn
@@ -145,36 +145,36 @@ instance (Algebra sig m, Members (State PState :+: GenA) sig, c :>>>: Arbitrary)
 --           then return a
 --           else fail "Not in range"
 
-newtype QVSFromOrchestrationAC (c0 :: Type -> Constraint) (c :: Type -> Constraint) m a = QVSFromOrchestrationAC { runQVSFromOrchestrationAC :: m a }
+newtype EVSFromOrchestrationAC (c0 :: Type -> Constraint) (c :: Type -> Constraint) m a = EVSFromOrchestrationAC { runEVSFromOrchestrationAC :: m a }
   deriving (Functor, Applicative, Monad, MonadFail)
 
-instance ( Has (Orchestration QVSSupply) sig m
+instance ( Has (Orchestration EVSSupply) sig m
          , Has (State PState)            sig m
-         , Has (Error QVSError)          sig m
+         , Has (Error EVSError)          sig m
          , c :>>>: Serialize)
-      => Algebra (QVS c :+: sig) (QVSFromOrchestrationAC Serialize c m) where
-  alg hdl sig ctx = QVSFromOrchestrationAC $ case sig of
-    L qvs   -> resolveQVS qvs
-    R other -> alg (runQVSFromOrchestrationAC . hdl) other ctx
+      => Algebra (EVS c :+: sig) (EVSFromOrchestrationAC Serialize c m) where
+  alg hdl sig ctx = EVSFromOrchestrationAC $ case sig of
+    L evs   -> resolveEVS evs
+    R other -> alg (runEVSFromOrchestrationAC . hdl) other ctx
     where
-      resolveQVS (qvs :: QVS c n a) = case qvs of
-        QDirect d -> do
+      resolveEVS (evs :: EVS c n a) = case evs of
+        EDirect d -> do
           s <- get @PState
           return (ctx $> evalDirect s d)
-        QExogenous a@Anything     -> do
+        EExogenous a@Anything     -> do
           v <- next (show a) \\ castC @Serialize (Dict @(c a))
           return (ctx $> v)
-        QExogenous a@(IntRange l r) -> do
+        EExogenous a@(IntRange l r) -> do
           v <- next (show a)
           return (ctx $> sampleRange l r v)
-        QExogenous a@(Range    l r) -> do
+        EExogenous a@(Range    l r) -> do
           v <- next (show a)
           return (ctx $> sampleRange l r v)
         where
           next attr = do
-            x <- nextInstruction @QVSSupply S.get
+            x <- nextInstruction @EVSSupply S.get
             case x of
-              Nothing -> throwError (QVSError attr "QVS supplier exhausted")
+              Nothing -> throwError (EVSError attr "EVS supplier exhausted")
               Just  a -> return a
 
           sampleRange l r v = toEnum $ l' + (v `mod` (r' - l' + 1))
@@ -183,33 +183,33 @@ instance ( Has (Orchestration QVSSupply) sig m
               r' = fromEnum r
 
 
-instance ( Has (Orchestration QVSSupply) sig m
+instance ( Has (Orchestration EVSSupply) sig m
          , Has (State PState)            sig m
-         , Has (Error QVSError)          sig m
+         , Has (Error EVSError)          sig m
          , c :>>>: HSerialize)
-      => Algebra (QVS c :+: sig) (QVSFromOrchestrationAC HSerialize c m) where
-  alg hdl sig ctx = QVSFromOrchestrationAC $ case sig of
-    L qvs   -> resolveQVS qvs
-    R other -> alg (runQVSFromOrchestrationAC . hdl) other ctx
+      => Algebra (EVS c :+: sig) (EVSFromOrchestrationAC HSerialize c m) where
+  alg hdl sig ctx = EVSFromOrchestrationAC $ case sig of
+    L evs   -> resolveEVS evs
+    R other -> alg (runEVSFromOrchestrationAC . hdl) other ctx
     where
-      resolveQVS (qvs :: QVS c n a) = case qvs of
-        QDirect d -> do
+      resolveEVS (evs :: EVS c n a) = case evs of
+        EDirect d -> do
           s <- get @PState
           return (ctx $> evalDirect s d)
-        QExogenous a@Anything     -> do
+        EExogenous a@Anything     -> do
           v <- next (show a) \\ castC @HSerialize (Dict @(c a))
           return (ctx $> v)
-        QExogenous a@(IntRange l r) -> do
+        EExogenous a@(IntRange l r) -> do
           v <- next (show a)
           return (ctx $> sampleRange l r v)
-        QExogenous a@(Range    l r) -> do
+        EExogenous a@(Range    l r) -> do
           v <- next (show a)
           return (ctx $> sampleRange l r v)
         where
           next attr = do
-            x <- nextInstruction @QVSSupply HS.hget
+            x <- nextInstruction @EVSSupply HS.hget
             case x of
-              Nothing -> throwError (QVSError attr "QVS supplier exhausted")
+              Nothing -> throwError (EVSError attr "EVS supplier exhausted")
               Just  a -> return a
 
           sampleRange l r v = toEnum $ l' + (v `mod` (r' - l' + 1))
