@@ -15,7 +15,6 @@ module Test.HAPI.ApiTrace.CodeGen.C.HLibCString where
 
 import Test.HAPI.ApiTrace.CodeGen.C.Util
 import Test.HAPI.ApiTrace.CodeGen.C.Data (Entry2BlockC (..), call2BlockDefault, dirAttrs2CExprs, pk2CVar)
-import Test.HAPI.Constraint (CMembers, castC, productC)
 import Test.HAPI.ApiTrace.CodeGen.C.DataType (CCodeGen, TyConstC (..))
 import Test.HAPI.ApiTrace.Core (ApiTraceEntry (..))
 import Language.C.Syntax.AST (CBlockItem, CBinaryOp (..), CExpr)
@@ -30,6 +29,7 @@ import Test.HAPI.Args (DirAttributes)
 import Data.Hashable (Hashable)
 import Data.Serialize (Serialize (..))
 import Test.HAPI.Serialize (HSerialize)
+import Test.HAPI.Constraint (CMembers, productC)
 
 
 instance Entry2BlockC HLibCString where

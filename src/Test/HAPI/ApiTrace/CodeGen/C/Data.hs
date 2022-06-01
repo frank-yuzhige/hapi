@@ -21,7 +21,7 @@ import Test.HAPI.ApiTrace.CodeGen.C.Util
 import Test.HAPI.PState ( PKey(getPKeyID, PKey), emptyPKeySet, addPKey2Set, PKeySetEntry (..), PKeySet )
 import Test.HAPI.Api (ApiName (..), ApiDefinition, type (:$$:) (..))
 import Data.SOP (All, NP (..))
-import Test.HAPI.Constraint (type (:>>>:), castC, CMembers, productC)
+import Test.HAPI.Constraint (type (:>>>:), CMembers, productC, witnessC)
 import Data.Constraint ((\\), Dict (..), mapDict)
 import Test.HAPI.Common (Fuzzable)
 import Test.HAPI.Args (DirectAttribute (..), DirAttributes, DACompOp (..))
@@ -66,10 +66,10 @@ traceDecls xs = fromExtras <> fromVars
     collectVar [] = emptyPKeySet
     collectVar (TraceCall (x :: PKey a) _ _ : xs)
       | isVoidTy @a = collectVar xs
-      | otherwise   = addPKey2Set x \\ castC @Typeable (Dict @(c a)) $ collectVar xs
+      | otherwise   = addPKey2Set x \\ witnessC @Typeable @c @a $ collectVar xs
     collectVar (TraceDirect (x :: PKey a) _ : xs)
       | isVoidTy @a = collectVar xs
-      | otherwise   = addPKey2Set x \\ castC @Typeable (Dict @(c a)) $ collectVar xs
+      | otherwise   = addPKey2Set x \\ witnessC @Typeable @c @a $ collectVar xs
     collectVar (_                           : xs) = collectVar xs
 
     collectExtra :: [ApiTraceEntry api c] -> [CBlockItem]

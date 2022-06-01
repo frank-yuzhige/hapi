@@ -8,7 +8,6 @@ module Test.HAPI.ApiTrace.CodeGen.C.HLibFS where
 
 import Test.HAPI.ApiTrace.CodeGen.C.Util
 import Test.HAPI.ApiTrace.CodeGen.C.Data (Entry2BlockC (..), dirAttrs2CExprs, pk2CVar)
-import Test.HAPI.Constraint (CMembers, castC, productC)
 import Test.HAPI.ApiTrace.CodeGen.C.DataType (CCodeGen, TyConstC (..))
 import Test.HAPI.ApiTrace.Core (ApiTraceEntry (..))
 import Language.C.Syntax.AST (CBlockItem, CBinaryOp (..), CExpr)

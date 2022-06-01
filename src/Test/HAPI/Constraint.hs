@@ -13,6 +13,7 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE QuantifiedConstraints #-}
 
 module Test.HAPI.Constraint where
 import Data.Kind ( Type, Constraint )
@@ -63,6 +64,9 @@ instance {-# OVERLAPPABLE #-}
 castC :: forall g f a. (f :>>>: g) => Dict (f a) -> Dict (g a)
 castC = mapDict projEntailment
 
+witnessC :: forall g f a. (f :>>>: g, f a) => Dict (g a)
+witnessC = castC @g (Dict @(f a))
+
 transC :: forall f g h a. (f :>>>: g, g :>>>: h) => f a :- h a
 transC = trans (projEntailment @g @h) (projEntailment @f @g)
 
@@ -71,9 +75,6 @@ productC = Sub $ Dict \\ f1 \\ f2
   where
     f1 = projEntailment @f @g @a
     f2 = projEntailment @f @h @a
-
-dikt :: forall c a. (c a) => Dict (c a)
-dikt = Dict
 
 -- castL = mapDict projEntailment
 

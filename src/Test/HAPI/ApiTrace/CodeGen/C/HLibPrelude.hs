@@ -11,7 +11,7 @@ import qualified Test.HAPI.HLib.HLibPrelude as HLib
 import Test.HAPI.PrimApi (Prim(..), Prim' (BinaryOp))
 import Test.HAPI.ApiTrace.CodeGen.C.Util
 import Data.SOP (NP(..))
-import Test.HAPI.Constraint (CMembers, productC, dikt)
+import Test.HAPI.Constraint (CMembers, productC)
 import Language.C (CBlockItem, CBinaryOp (..))
 import Data.Constraint (mapDict, (\\), Dict (..))
 import Test.HAPI.Args (DirectAttribute, DirAttributes)

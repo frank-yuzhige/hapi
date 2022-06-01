@@ -43,7 +43,7 @@ import Test.HAPI.Effect.Orchestration (Orchestration, nextInstruction, Orchestra
 import Test.HAPI.Effect.Orchestration.Labels (EVSSupply)
 import Data.Type.Equality (castWith, TestEquality (testEquality), apply)
 import Type.Reflection ( TypeRep, typeOf, Typeable, typeRep )
-import Test.HAPI.Constraint (type (:>>>:), castC)
+import Test.HAPI.Constraint (type (:>>>:), witnessC)
 import Data.Constraint ((\\), mapDict, Dict (..))
 import Control.Effect.Error (Error, liftEither, throwError)
 import Control.Carrier.Error.Either (runError)
@@ -105,7 +105,7 @@ instance (Algebra sig m, Members (State PState :+: GenA) sig, c :>>>: Arbitrary)
           s <- get @PState
           return (ctx $> evalDirect s d)
         EExogenous Anything     -> do
-          v <- liftGenA (arbitrary \\ castC @Arbitrary (Dict @(c a)))
+          v <- liftGenA (arbitrary \\ witnessC @Arbitrary @c @a)
           return (ctx $> v)
         EExogenous (IntRange l r) -> do
           v <- liftGenA (chooseInt (l, r))
@@ -132,7 +132,7 @@ instance ( Algebra sig m
       return (ctx $> evalDirect s d)
     L (EExogenous (a :: ExogenousAttribute c a) ) -> do
       liftIO $ print a
-      input <- liftIO (putStrLn "Please provide input: " >> readAndValidate a) \\ castC @Read (Dict @(c a))
+      input <- liftIO (putStrLn "Please provide input: " >> readAndValidate a) \\ witnessC @Read @c @a
       return (ctx $> input)
     R other -> alg (runEVSFromStdinAC . hdl) other ctx
     where
@@ -159,7 +159,7 @@ instance ( Has (Orchestration EVSSupply) sig m
           s <- get @PState
           return (ctx $> evalDirect s d)
         EExogenous a@Anything     -> do
-          v <- next (show a) \\ castC @Serialize (Dict @(c a))
+          v <- next (show a) \\ witnessC @Serialize @c @a
           return (ctx $> v)
         EExogenous a@(IntRange l r) -> do
           v <- next (show a)
@@ -194,7 +194,7 @@ instance ( Has (Orchestration EVSSupply) sig m
           s <- get @PState
           return (ctx $> evalDirect s d)
         EExogenous a@Anything     -> do
-          v <- next (show a) \\ castC @HSerialize (Dict @(c a))
+          v <- next (show a) \\ witnessC @HSerialize @c @a
           return (ctx $> v)
         EExogenous a@(IntRange l r) -> do
           v <- next (show a)
