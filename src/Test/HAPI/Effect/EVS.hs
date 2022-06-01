@@ -117,33 +117,30 @@ instance (Algebra sig m, Members (State PState :+: GenA) sig, c :>>>: Arbitrary)
           -- a <- oneof' (return <$> xs)
           -- resolveEVS (EVS a)
 
--- newtype EVSFromStdinAC (c :: Type -> Constraint) m a = EVSFromStdinAC { runEVSFromStdinAC :: m a }
---   deriving (Functor, Applicative, Monad, MonadIO, MonadFail)
+newtype EVSFromStdinAC (c :: Type -> Constraint) m a = EVSFromStdinAC { runEVSFromStdinAC :: m a }
+  deriving (Functor, Applicative, Monad, MonadIO, MonadFail)
 
--- instance ( Algebra sig m
---          , Has (Error EVSError)          sig m
---          , Has (State PState)            sig m
---          , MonadIO m
---          , c :>>>: Read)
---       => Algebra (EVS c :+: sig) (EVSFromStdinAC c m) where
---   alg hdl sig ctx = EVSFromStdinAC $ case sig of
---     L evs -> do
---       input <- case attr of
---         Direct (Get x)                          -> do
---           v <- gets @PState (lookUp x)
---           case v of
---             Nothing -> throwError (EVSError (show attr) "Variable not in scope!")
---             Just a  -> return a
---         Direct (Value v) -> return v
---         Exogenous (a :: ExogenousAttribute c a) -> liftIO (putStrLn "Please provide input: " >> readAndValidate attr) \\ castC @Read (Dict @(c a))
---       return (ctx $> input)
---     R other -> alg (runEVSFromStdinAC . hdl) other ctx
---     where
---       readAndValidate attr = do
---         a <- readLn
---         if validate attr a
---           then return a
---           else fail "Not in range"
+instance ( Algebra sig m
+         , Has (Error EVSError)          sig m
+         , Has (State PState)            sig m
+         , MonadIO m
+         , c :>>>: Read)
+      => Algebra (EVS c :+: sig) (EVSFromStdinAC c m) where
+  alg hdl sig ctx = EVSFromStdinAC $ case sig of
+    L (EDirect    d) -> do
+      s <- get @PState
+      return (ctx $> evalDirect s d)
+    L (EExogenous (a :: ExogenousAttribute c a) ) -> do
+      liftIO $ print a
+      input <- liftIO (putStrLn "Please provide input: " >> readAndValidate a) \\ castC @Read (Dict @(c a))
+      return (ctx $> input)
+    R other -> alg (runEVSFromStdinAC . hdl) other ctx
+    where
+      readAndValidate attr = do
+        a <- readLn
+        if validate attr a
+          then return a
+          else fail "Not in range"
 
 newtype EVSFromOrchestrationAC (c0 :: Type -> Constraint) (c :: Type -> Constraint) m a = EVSFromOrchestrationAC { runEVSFromOrchestrationAC :: m a }
   deriving (Functor, Applicative, Monad, MonadFail)

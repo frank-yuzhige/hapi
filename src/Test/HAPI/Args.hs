@@ -194,11 +194,11 @@ simplifyDirect s (DCastInt a)     = DCastInt (simplifyDirect s a)
 simplifyDirect s DNullptr         = DNullptr
 
 -- | Check if the provided value satisfies the attribute
-validate :: Attribute c a -> a -> Bool
+validate :: ExogenousAttribute c a -> a -> Bool
 validate attr a = case attr of
-  Exogenous (IntRange l r) -> l <= a && a <= r
-  Exogenous (Range    l r) -> l <= a && a <= r
-  _                        -> True
+  IntRange l r -> l <= a && a <= r
+  Range    l r -> l <= a && a <= r
+  _            -> True
 
 attributesEq :: forall a b c c1.
               ( Typeable a
