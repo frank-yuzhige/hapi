@@ -361,16 +361,16 @@ ternary i t e = CCond i (Just t) e undefNode
 -- Smart constructor for CBytes
 
 cBytesLit :: CExpr -> CExpr -> CExpr
-cBytesLit b s = defCompoundLit "CBytes" [bytes, size]
+cBytesLit s b = defCompoundLit "CBytes" [size, bytes]
     where
-      bytes = ([memberDesig "bytes"], initExp b)
       size  = ([memberDesig "size"] , initExp s)
+      bytes = ([memberDesig "bytes"], initExp b)
 
 cUBytesLit :: CExpr -> CExpr -> CExpr
-cUBytesLit b s = defCompoundLit "CUBytes" [bytes, size]
+cUBytesLit s b = defCompoundLit "CUBytes" [size, bytes]
     where
-      bytes = ([memberDesig "bytes"], initExp b)
       size  = ([memberDesig "size"] , initExp s)
+      bytes = ([memberDesig "bytes"], initExp b)
 
 instance Num CExpr where
   fromInteger = CConst . flip CIntConst undefNode . cInteger

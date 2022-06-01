@@ -36,8 +36,8 @@ instance Entry2BlockC HLibCString where
   call2Block :: forall c p a. (CMembers CCodeGen c, All Fuzzable p, Typeable a, All c p, c a)
              => PKey a -> HLibCString p a -> DirAttributes c p -> [CBlockItem]
   call2Block x f args = case f of
-    PeekCString    -> [liftEToB undefined]
-    PeekCStringLen -> [liftEToB undefined]
+    PeekCString    -> [liftEToB $ pk2CVar x <-- let [a] = aExprs in cBytesLit (cStrlen a) a]
+    PeekCStringLen -> [liftEToB $ pk2CVar x <-- let [a, b] = aExprs in cBytesLit b a]
     NewCString     -> [liftEToB $ pk2CVar x <-- let [a] = aExprs in a .: "bytes"]
     StringLen      -> [liftEToB $ pk2CVar x <-- let [a] = aExprs in cStrlen a]
     NewCBytes      -> [liftEToB $ pk2CVar x <-- let [a] = aExprs in a .: "bytes"]

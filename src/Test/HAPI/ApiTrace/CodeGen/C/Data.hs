@@ -131,7 +131,9 @@ dirAttr2CExpr (DCmp c x y) = CBinary op     (dirAttr2CExpr x) (dirAttr2CExpr y) 
           DGte -> CGeqOp
           DLt  -> CLeOp
           DLte -> CLeqOp
-dirAttr2CExpr (DCastInt x) = castTy (dirAttr2CExpr x) intSpec
+dirAttr2CExpr d@(DCastInt x :: DirectAttribute c b) = castTy (dirAttr2CExpr x) s
+  where
+    (s, _) = toCType d \\ mapDict (productC @CCodeGen) (Dict @(c b))
 dirAttr2CExpr DNullptr     = cNull
 
 dirAttrs2CExprs :: forall c p. (All c p, CMembers CCodeGen c) => DirAttributes c p -> [CExpr]

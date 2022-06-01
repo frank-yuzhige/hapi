@@ -58,16 +58,16 @@ instance TyConstC CChar where
   toCType _ = (CCharType undefNode, id)
 
 instance TyConstC String where   --- TO typedef struct CBytes { char * bytes; size_t size; }
-  toCConst s = cBytesLit (cStrConst s) (toCConst (length s))
+  toCConst s = cBytesLit (toCConst (length s)) (cStrConst s)
   toCType _  = ctype "CBytes"
 
 instance TyConstC [CChar] where   --- TO typedef struct CBytes { char * bytes; size_t size; }
-  toCConst s = cBytesLit (cStrConst (map castCCharToChar s)) (toCConst (length s))
+  toCConst s = cBytesLit (toCConst (length s)) (cStrConst (map castCCharToChar s))
   toCType _  = ctype "CBytes"
 
-instance TyConstC [CUChar] where   --- TO typedef struct CBytes { char * bytes; size_t size; }
-  toCConst s = cBytesLit (cStrConst (map castCUCharToChar s)) (toCConst (length s))
-  toCType _  = ctype "CBytes"
+instance TyConstC [CUChar] where   --- TO typedef struct CUBytes { char * bytes; size_t size; }
+  toCConst s = cBytesLit (toCConst (length s)) (cStrConst (map castCUCharToChar s))
+  toCType _  = ctype "CUBytes"
 
 instance TyConstC a
   => TyConstC (Ptr a) where
