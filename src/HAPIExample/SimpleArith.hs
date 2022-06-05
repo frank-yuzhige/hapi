@@ -319,9 +319,6 @@ q = do
   -- y <- runEnvIO @IO $ deriveProcCtxs x
   -- print y
 
-shite = pretty $ entryFun @ArithApi @(CCodeGen :<>: Fuzzable) "main" (traceCall (PKey "x") Add (Value 10 :* Value 20 :* Nil))
-
-
 t1 = Act (ActGen (PKey @Int "i1") (anything @C)) (Act (ActGen (PKey @Int "i0") (anything @C)) Zero)
 tq = runEnvIO @IO $ t1 `isSubType'` Zero
 -- test = do

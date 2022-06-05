@@ -1,9 +1,11 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Test.HAPI.ApiTrace.CodeGen.C.Util where
 
 import           Language.C
 import           Data.String
 import Foreign (Ptr)
+import Text.Printf (printf)
 
 -- Internal use only
 
@@ -141,6 +143,17 @@ decl
   -> CDecl
 decl ty name exp = CDecl
   [ty]
+  [(Just name, flip CInitExpr undefNode `fmap` exp, Nothing)]
+  undefNode
+
+decl'
+  :: [CDeclSpec]       -- ^ The declaration specifier, usually this is a type
+  -> CDeclr      -- ^ Equivalent to the name of the object being declared. Often this will
+                       -- make use of the overloaded string instance for 'CDeclr's
+  -> Maybe CExpr -- ^ The optional init expression
+  -> CDecl
+decl' tys name exp = CDecl
+  tys
   [(Just name, flip CInitExpr undefNode `fmap` exp, Nothing)]
   undefNode
 
@@ -295,8 +308,8 @@ infixl 8 !:
 sizeOfDecl :: CDecl -> CExpr
 sizeOfDecl decl = CSizeofType decl undefNode
 
-sizeOfTy :: CTypeSpec -> CExpr
-sizeOfTy ty = CSizeofType (CDecl [CTypeSpec ty] [] undefNode) undefNode
+sizeOfTy :: [CTypeSpec] -> CExpr
+sizeOfTy ty = CSizeofType (CDecl (map CTypeSpec ty) [] undefNode) undefNode
 
 cmalloc :: CExpr -> CExpr
 cmalloc expr = fromString "malloc" # [expr]
@@ -337,6 +350,9 @@ exp `castTo` ty = CCast ty exp undefNode
 castTy :: CExpr -> CTypeSpec -> CExpr
 castTy exp ty = CCast (ty2Decl ty) exp undefNode
 
+castTy' :: CExpr -> [CTypeSpec] -> CExpr
+castTy' exp ts = CCast (CDecl (map CTypeSpec ts) [] undefNode) exp undefNode
+
 -- | The ternary operator in C. @ternary a b c@ will turn into @a ? b : c@.
 ternary :: CExpr -> CExpr -> CExpr -> CExpr
 ternary i t e = CCond i (Just t) e undefNode
@@ -360,11 +376,21 @@ ternary i t e = CCond i (Just t) e undefNode
 
 -- Smart constructor for CBytes
 
+cStructLit :: String -> [(String, CExpr)] -> CExpr
+cStructLit t fs = defCompoundLit t (map mkMember fs)
+  where mkMember (m, e) = ([memberDesig m] , initExp e)
+
+cUnionLit :: String -> String -> CExpr -> CExpr
+cUnionLit t m e = cStructLit t [(m, e)]
+
+cProdLit :: String -> [CExpr] -> CExpr
+cProdLit t fs = cStructLit t [(fromString $ printf "p%d" i, f) | (i :: Int, f) <- [0..] `zip` fs]
+
+cSumLit :: String -> [CExpr] -> CExpr
+cSumLit t fs = cStructLit t [(fromString $ printf "s%d" i, f) | (i :: Int, f) <- [0..] `zip` fs]
+
 cBytesLit :: CExpr -> CExpr -> CExpr
-cBytesLit s b = defCompoundLit "CBytes" [size, bytes]
-    where
-      size  = ([memberDesig "size"] , initExp s)
-      bytes = ([memberDesig "bytes"], initExp b)
+cBytesLit s b = cStructLit "CBytes" [("size", s), ("bytes", b)]
 
 cUBytesLit :: CExpr -> CExpr -> CExpr
 cUBytesLit s b = defCompoundLit "CUBytes" [size, bytes]

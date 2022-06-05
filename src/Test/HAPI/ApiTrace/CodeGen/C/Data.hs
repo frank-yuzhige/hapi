@@ -25,15 +25,19 @@ import Test.HAPI.Constraint (type (:>>>:), CMembers, productC, witnessC)
 import Data.Constraint ((\\), Dict (..), mapDict)
 import Test.HAPI.Common (Fuzzable)
 import Test.HAPI.Args (DirectAttribute (..), DirAttributes, DACompOp (..))
-import Test.HAPI.ApiTrace.CodeGen.C.DataType (CCodeGen, TyConstC (..))
+import Test.HAPI.ApiTrace.CodeGen.C.DataType (CCodeGen, TyConstC (..), toCType)
 import Test.HAPI.ApiTrace.TyConst (TyConst(..))
 import Data.List (nub)
 import qualified Test.HAPI.Util.TypeRepMap as TM
 import qualified Data.Set as S
-import Data.Data (Typeable)
+import Data.Data (Typeable, Proxy (..))
 import Data.Type.Equality (TestEquality(..))
 import Type.Reflection (typeRep)
 import Data.Maybe (isJust)
+import Test.HAPI.ApiTrace.CodeGen.C.State (CCodeGenState, recordType, HasCodeGenC, recordTypes, emptyCCodeGenState)
+import Control.Algebra (Has, run)
+import Control.Effect.State (State)
+import Control.Carrier.State.Church (runState)
 
 class (ApiName api) => Entry2BlockC (api :: ApiDefinition) where
   call2Block :: forall c p a. (CMembers CCodeGen c, ApiName api, All Fuzzable p, Typeable a, All c p, c a)
@@ -57,8 +61,10 @@ entry2Block = \case
   TraceContIf da       -> [CBlockStmt $ cContIf   (dirAttr2CExpr da)]
   TraceDirect x da     -> [liftEToB   $ pk2CVar x <-- dirAttr2CExpr da]
 
-traceDecls :: forall api c. (CMembers CCodeGen c, Entry2BlockC api) => [ApiTraceEntry api c] -> [CBlockItem]
-traceDecls xs = fromExtras <> fromVars
+traceDecls :: forall api c sig m. (CMembers CCodeGen c, Entry2BlockC api, HasCodeGenC sig m) => [ApiTraceEntry api c] -> m [CBlockItem]
+traceDecls xs = do
+  extras <- collectExtra xs
+  return $ extras <> fromVars
   where
     fromExtras = collectExtra xs
     fromVars   = concat $ TM.toListWith (\(PKeySetEntry s) -> [makeDecl k \\ mapDict (productC @CCodeGen) d | (k, d) <- S.toList s]) $ collectVar xs
@@ -72,13 +78,25 @@ traceDecls xs = fromExtras <> fromVars
       | otherwise   = addPKey2Set x \\ witnessC @Typeable @c @a $ collectVar xs
     collectVar (_                           : xs) = collectVar xs
 
-    collectExtra :: [ApiTraceEntry api c] -> [CBlockItem]
-    collectExtra []                     = []
-    collectExtra (TraceCall x f a : xs) = map CBlockDecl (extraDecls x f a) <> collectExtra xs
-    collectExtra (_ : xs)               = collectExtra xs
+    collectExtra :: [ApiTraceEntry api c] -> m [CBlockItem]
+    collectExtra xs = concat <$> mapM go xs
+      where
+        go (TraceCall (x :: PKey a) f a) = do
+          recordType x \\ witnessC @TyConstC @c @a
+          recordTypes @c a
+          return $ map CBlockDecl (extraDecls x f a)
+        go (TraceDirect (x :: PKey a) a) = do
+          recordType x \\ witnessC @TyConstC @c @a
+          return []
+        go _ = return []
+
+
+    -- collectExtra []                     = []
+    -- collectExtra (TraceCall x f a : xs) = map CBlockDecl (extraDecls x f a) <> collectExtra xs
+    -- collectExtra (_ : xs)               = collectExtra xs
 
     makeDecl :: (CCodeGen a) => PKey a -> CBlockItem
-    makeDecl (x :: PKey a) = CBlockDecl $ decl (CTypeSpec ty) (f $ cDeclr $ getPKeyID x) Nothing
+    makeDecl (x :: PKey a) = CBlockDecl $ decl' (map CTypeSpec ty) (f $ cDeclr $ getPKeyID x) Nothing
       where
         (ty, f) = toCType x
 
@@ -87,11 +105,12 @@ entryFun :: forall api c.
           , Entry2BlockC api)
        => String            -- entryFunctionName
        -> ApiTrace api c    -- Trace
-       -> CFunDef
-entryFun fn trace = fun [intTy] fn [] body
+       -> (CFunDef, CCodeGenState)
+entryFun fn trace = (fun [intTy] fn [] body, st)
   where
-    body = CCompound [] blocks undefNode
-    blocks = traceDecls (trace2List trace)
+    body = CCompound [] blocks' undefNode
+    (st, blocks) = run $ runState (curry return) emptyCCodeGenState (traceDecls (trace2List trace))
+    blocks' = blocks
           <> concatMap entry2Block (trace2List trace)
           <> [CBlockStmt $ creturn $ cIntConst 0]
 
@@ -99,8 +118,10 @@ traceMain :: forall api c.
            ( CMembers CCodeGen c
            , Entry2BlockC api)
         => ApiTrace api c
-        -> CExtDecl
-traceMain trace = CFDefExt $ entryFun "main" trace
+        ->  (CExtDecl, CCodeGenState)
+traceMain trace = (CFDefExt fn, st)
+  where
+    (fn, st) = entryFun "main" trace
 
 isVoidTy :: forall a proxy. (Typeable a) => Bool
 isVoidTy = isJust $ testEquality (typeRep @a) (typeRep @())
@@ -111,7 +132,15 @@ pk2CVar = cVar . getPKeyID
 api2CVar :: ApiName api => api p a -> CExpr
 api2CVar a = cVar $ apiNameUnder "C" a
 
-dirAttr2CExpr :: forall c a. (CMembers CCodeGen c) => DirectAttribute c a -> CExpr
+
+dirAttrCollectType :: forall c a sig m. (CMembers CCodeGen c, c a, HasCodeGenC sig m) => DirectAttribute c a -> m ()
+dirAttrCollectType _ = recordType (Proxy @a) \\ witnessC @TyConstC @c @a
+
+dirAttrsCollectType :: forall c p sig m. (CMembers CCodeGen c, All c p, HasCodeGenC sig m) => DirAttributes c p -> m ()
+dirAttrsCollectType Nil = return ()
+dirAttrsCollectType (d :* ds) = dirAttrCollectType d >> dirAttrsCollectType ds
+
+dirAttr2CExpr :: forall c a. (CMembers CCodeGen c, c a) => DirectAttribute c a -> CExpr
 dirAttr2CExpr (Value a)   = toCConst a \\ mapDict (productC @CCodeGen) (Dict @(c a))
 dirAttr2CExpr (Get   x)   = pk2CVar x
 dirAttr2CExpr (DNot  x)   = CUnary  CNegOp (dirAttr2CExpr x) undefNode
@@ -131,7 +160,7 @@ dirAttr2CExpr (DCmp c x y) = CBinary op     (dirAttr2CExpr x) (dirAttr2CExpr y) 
           DGte -> CGeqOp
           DLt  -> CLeOp
           DLte -> CLeqOp
-dirAttr2CExpr d@(DCastInt x :: DirectAttribute c b) = castTy (dirAttr2CExpr x) s
+dirAttr2CExpr d@(DCastInt x :: DirectAttribute c b) = castTy' (dirAttr2CExpr x) s
   where
     (s, _) = toCType d \\ mapDict (productC @CCodeGen) (Dict @(c b))
 dirAttr2CExpr DNullptr     = cNull

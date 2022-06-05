@@ -40,7 +40,7 @@ class (sup :: Constraint1) :>>>: (sub :: Constraint1) where
   projEntailment :: sup a :- sub a
 
 instance {-# OVERLAPPABLE #-} f :>>>: f where
-  projEntailment = refl
+  projEntailment = Sub Dict
   {-# INLINE projEntailment #-}
 
 instance {-# OVERLAPPABLE #-}

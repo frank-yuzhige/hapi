@@ -41,7 +41,7 @@ import Control.Monad (when)
 data Orchestration label (m :: Type -> Type) a where
   NextInstruction :: (Serialize a, Show a, Typeable a) => S.Get a -> Orchestration label m (Maybe a)
 
-nextInstruction :: forall label a c sig m. (Has (Orchestration label) sig m, Serialize a, Show a, Typeable a) => S.Get a -> m (Maybe a)
+nextInstruction :: forall label a sig m. (Has (Orchestration label) sig m, Serialize a, Show a, Typeable a) => S.Get a -> m (Maybe a)
 nextInstruction = send . NextInstruction @a @label
 
 newtype OrchestrationError = OrchestrationError String
@@ -62,8 +62,8 @@ runOrchestrationViaBytes = runOrchestrationViaBytesAC
 
 instance ( Alg sig m
         --  , Members (Error OrchestrationError) sig
-         , ByteSupplier BiDir supply
-         , LabelConsumeDir label BiDir
+         , ByteSupplier dir supply
+         , LabelConsumeDir label dir
          , Members (State supply) sig)
       => Algebra (Orchestration label :+: sig) (OrchestrationViaBytesAC label supply m) where
   alg hdl sig ctx = OrchestrationViaBytesAC $ case sig of

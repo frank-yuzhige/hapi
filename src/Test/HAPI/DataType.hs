@@ -22,6 +22,7 @@ import Data.Constraint.Forall (Forall)
 import Test.HAPI.Common (Fuzzable)
 import Test.HAPI.VPtr (VPtrTable)
 import Data.SOP (All)
+import Test.HAPI.Constraint (type (:<>:), type (:>>>:), CMembers)
 
 
 
@@ -73,3 +74,6 @@ class Fuzzable t => TyIso c t where
 -- projAllSub = Sub projEntailment
 --   where
 --     fc = projEntailment @f @c
+
+-- x = some @(Read :<>: Show) "123"
+-- x = Dict @((Eq :<>: Show :<>: Read) :>>>: (Eq :<>: Read))

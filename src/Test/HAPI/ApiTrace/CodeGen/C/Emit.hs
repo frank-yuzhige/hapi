@@ -13,10 +13,14 @@ import Text.Printf (printf)
 import Data.String (fromString)
 import Text.RawString.QQ
 import Test.HAPI.Constraint (CMembers)
-import Test.HAPI.ApiTrace.CodeGen.C.DataType (CCodeGen)
+import Test.HAPI.ApiTrace.CodeGen.C.DataType (CCodeGen, CBaseType, baseType2TypeDef, baseType2TypeDefCandidates)
 import Test.HAPI.ApiTrace.CodeGen.C.Data (Entry2BlockC, traceMain)
 import Test.HAPI.ApiTrace.Core (ApiTrace)
 import Test.HAPI.ApiTrace.CodeGen.C.Util (struct, ptr, charTy)
+import Data.List (nub)
+import Test.HAPI.ApiTrace.CodeGen.C.State (CCodeGenState, declBaseTypes)
+import Control.Lens ((^.))
+import qualified Data.Set as S
 
 
 hapiRequiredIncludes :: [Text]
@@ -43,21 +47,18 @@ hapiHeadComment = [r|
  */
 |]
 
-hapiTypeDefs :: Text
-hapiTypeDefs = T.unlines $ map (fromString . show . pretty)
-  [ cbytes
-  , cubytes
-  ]
-  where
-    cbytes  = CDeclExt $ struct "CBytes" [("bytes", [CCharType undefNode], ptr), ("size", [CIntType undefNode], id)]
-    cubytes = CDeclExt $ struct "CUBytes" [("bytes", [CUnsigType undefNode, CCharType undefNode], ptr), ("size", [CIntType undefNode], id)]
+makeTypeDefs :: [CBaseType] -> [CExtDecl]
+makeTypeDefs ts = map baseType2TypeDef $ nub $ concatMap baseType2TypeDefCandidates ts
 
-decl2CCode :: [Text] -> CExtDecl -> Text
-decl2CCode headers cext = T.unlines
+hapiTypeDefs :: [CBaseType] -> Text
+hapiTypeDefs = T.unlines . map (fromString . show . pretty) . makeTypeDefs
+
+decl2CCode :: [Text] -> CCodeGenState -> CExtDecl -> Text
+decl2CCode headers st cext = T.unlines
   [ hapiHeadComment
   , sysIncludeHeaders
   , apiIncludeHeaders
-  , hapiTypeDefs
+  , hapiTypeDefs (S.toList $ st ^. declBaseTypes)
   , fromString $ show $ pretty cext
   ]
   where
@@ -70,4 +71,7 @@ emitCCode :: forall c api.
         => [String]
         -> ApiTrace api c
         -> Text
-emitCCode headers trace = decl2CCode (map T.pack headers) (traceMain trace)
+emitCCode headers trace = decl2CCode (map T.pack headers) st mn
+
+  where
+    (mn, st) = traceMain trace

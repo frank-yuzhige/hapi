@@ -170,4 +170,4 @@ gChannelCount handle = do
 
 instance TyConstC OggOpusFile where
   toCConst _ = undefined -- Phantom type
-  toCType  _ = ctype "OggOpusFile"
+  toCBType _ = CBNamed "OggOpusFile"

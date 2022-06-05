@@ -35,7 +35,7 @@ import Test.HAPI.PState (PKey, PState, PStateSupports (lookUp))
 import Test.HAPI.Common (Fuzzable)
 import Data.Maybe (fromJust)
 import Data.HList (HList (HNil), HMap,type  (:~:) (Refl))
-import Data.SOP ( Proxy(Proxy), NP(..), All, hcmap )
+import Data.SOP ( Proxy(Proxy), NP(..), All, hcmap, I (..) )
 import Test.HAPI.Args (Args, pattern (::*), Attribute (..), validate, DirectAttribute (..), ExogenousAttribute (..), Attributes, evalDirect, DirAttributes, simplifyDirect)
 import Data.SOP.Dict (mapAll)
 import Data.Serialize (Serialize)
@@ -43,7 +43,7 @@ import Test.HAPI.Effect.Orchestration (Orchestration, nextInstruction, Orchestra
 import Test.HAPI.Effect.Orchestration.Labels (EVSSupply)
 import Data.Type.Equality (castWith, TestEquality (testEquality), apply)
 import Type.Reflection ( TypeRep, typeOf, Typeable, typeRep )
-import Test.HAPI.Constraint (type (:>>>:), witnessC)
+import Test.HAPI.Constraint (type (:>>>:), witnessC, CMembers)
 import Data.Constraint ((\\), mapDict, Dict (..))
 import Control.Effect.Error (Error, liftEither, throwError)
 import Control.Carrier.Error.Either (runError)
@@ -77,7 +77,7 @@ evs2m Nil = return Nil
 evs2m (evs :* q) = do
   a <- send evs
   s <- evs2m q
-  return (a ::* s)
+  return (I a :* s)
 
 evs2Direct :: (Has (EVS c :+: State PState) sig m) => EVS c m a -> m (DirectAttribute c a)
 evs2Direct evs = case evs of
@@ -95,7 +95,7 @@ evs2Directs (evs :* q) = do
 newtype EVSFuzzArbitraryAC (c :: Type -> Constraint) m a = EVSFuzzArbitraryAC { runEVSFuzzArbitraryAC :: m a }
   deriving (Functor, Applicative, Monad, MonadFail, MonadIO)
 
-instance (Algebra sig m, Members (State PState :+: GenA) sig, c :>>>: Arbitrary) => Algebra (EVS c :+: sig) (EVSFuzzArbitraryAC c m) where
+instance (Algebra sig m, Members (State PState :+: GenA) sig, CMembers Arbitrary c) => Algebra (EVS c :+: sig) (EVSFuzzArbitraryAC c m) where
   alg hdl sig ctx = EVSFuzzArbitraryAC $ case sig of
     L evs   -> resolveEVS evs
     R other -> alg (runEVSFuzzArbitraryAC . hdl) other ctx
@@ -124,7 +124,7 @@ instance ( Algebra sig m
          , Has (Error EVSError)          sig m
          , Has (State PState)            sig m
          , MonadIO m
-         , c :>>>: Read)
+         , CMembers Read c)
       => Algebra (EVS c :+: sig) (EVSFromStdinAC c m) where
   alg hdl sig ctx = EVSFromStdinAC $ case sig of
     L (EDirect    d) -> do
@@ -148,7 +148,7 @@ newtype EVSFromOrchestrationAC (c0 :: Type -> Constraint) (c :: Type -> Constrai
 instance ( Has (Orchestration EVSSupply) sig m
          , Has (State PState)            sig m
          , Has (Error EVSError)          sig m
-         , c :>>>: Serialize)
+         , CMembers Serialize c)
       => Algebra (EVS c :+: sig) (EVSFromOrchestrationAC Serialize c m) where
   alg hdl sig ctx = EVSFromOrchestrationAC $ case sig of
     L evs   -> resolveEVS evs
@@ -183,7 +183,7 @@ instance ( Has (Orchestration EVSSupply) sig m
 instance ( Has (Orchestration EVSSupply) sig m
          , Has (State PState)            sig m
          , Has (Error EVSError)          sig m
-         , c :>>>: HSerialize)
+         , CMembers HSerialize c)
       => Algebra (EVS c :+: sig) (EVSFromOrchestrationAC HSerialize c m) where
   alg hdl sig ctx = EVSFromOrchestrationAC $ case sig of
     L evs   -> resolveEVS evs
