@@ -20,6 +20,9 @@ type HLibPrelude = Prim HLibPreludeTag
 (-) = Prim "-" $ BinaryOp (P.-)
 (*) = Prim "*" $ BinaryOp (P.*)
 
+div, mod :: P.Integral a => HLibPrelude '[a, a] a
+div = Prim "div" $ Arity2 P.div
+mod = Prim "mod" $ Arity2 P.mod
 
 (&&) = Prim "&&" $ BinaryOp (P.&&)
 (||) = Prim "||" $ BinaryOp (P.||)

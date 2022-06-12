@@ -28,55 +28,55 @@ import Data.Graph.Inductive.Example (a)
 
 type Constraint1 = Type -> Constraint
 
--- | Unary Constraint Conjunction: @(f :<>: g) a@ is the same as @f a@ and @g a@
-class (f t, g t) => (f :<>: g) t where
+-- | Unary Constraint Product: @(f :<>: g) a@ is the same as @f a@ and @g a@
+class (f t, g t) => (f :<>: g) t
 
-instance (f t, g t) => (f :<>: g) t where
+instance (f t, g t) => (f :<>: g) t
 
 infixr 4 :<>:
 
--- | Unary Constraint a la carte, @projEntailment@ provides a "witness" to the entailment relation that @sup a@ entails @sub a@
+-- | Unary Constraint a la carte, @ucEntailment@ provides a "witness" to the entailment relation that @sup a@ entails @sub a@
 class (sup :: Constraint1) :>>>: (sub :: Constraint1) where
-  projEntailment :: sup a :- sub a
+  ucEntailment :: sup a :- sub a
 
 instance {-# OVERLAPPABLE #-} f :>>>: f where
-  projEntailment = Sub Dict
-  {-# INLINE projEntailment #-}
+  ucEntailment = Sub Dict
+  {-# INLINE ucEntailment #-}
 
 instance {-# OVERLAPPABLE #-}
          (f :<>: r) :>>>: f where
-  projEntailment = Sub Dict
-  {-# INLINE projEntailment #-}
+  ucEntailment = Sub Dict
+  {-# INLINE ucEntailment #-}
 
 instance {-# OVERLAPPABLE #-}
          (r :>>>: f)
       => (l :<>: r) :>>>: f where
-  projEntailment = unmapDict $ \d -> mapDict (projEntailment @r @f) (Dict \\ d)
-  {-# INLINE projEntailment #-}
+  ucEntailment = unmapDict $ \d -> mapDict (ucEntailment @r @f) (Dict \\ d)
+  {-# INLINE ucEntailment #-}
 
 instance {-# OVERLAPPABLE #-}
          ((l1 :<>: l2 :<>: l3) :>>>: f)
       => ((l1 :<>: l2) :<>: l3) :>>>: f where
-  projEntailment = unmapDict $ \d -> mapDict (projEntailment @(l1 :<>: l2 :<>: l3) @f) (Dict \\ d)
-  {-# INLINE projEntailment #-}
+  ucEntailment = unmapDict $ \d -> mapDict (ucEntailment @(l1 :<>: l2 :<>: l3) @f) (Dict \\ d)
+  {-# INLINE ucEntailment #-}
 
--- | Cast a witness of a Constraint1 satisfies a type, by applying an entailment via projEntailment.
+-- | Cast a witness of a Constraint1 satisfies a type, by applying an entailment via ucEntailment.
 castC :: forall g f a. (f :>>>: g) => Dict (f a) -> Dict (g a)
-castC = mapDict projEntailment
+castC = mapDict ucEntailment
 
 witnessC :: forall g f a. (f :>>>: g, f a) => Dict (g a)
 witnessC = castC @g (Dict @(f a))
 
 transC :: forall f g h a. (f :>>>: g, g :>>>: h) => f a :- h a
-transC = trans (projEntailment @g @h) (projEntailment @f @g)
+transC = trans (ucEntailment @g @h) (ucEntailment @f @g)
 
 productC :: forall s g h f a. (f :>>>: g, f :>>>: h, s ~ (g :<>: h)) => f a :- (g :<>: h) a
 productC = Sub $ Dict \\ f1 \\ f2
   where
-    f1 = projEntailment @f @g @a
-    f2 = projEntailment @f @h @a
+    f1 = ucEntailment @f @g @a
+    f2 = ucEntailment @f @h @a
 
--- castL = mapDict projEntailment
+-- castL = mapDict ucEntailment
 
 -- castR ::  forall f l2 a l1. (CMembers (l1 :<>: l2) f) => Dict (f a) -> Dict (l2 a)
 -- castR = _

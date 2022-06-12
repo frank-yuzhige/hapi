@@ -71,9 +71,9 @@ class Fuzzable t => TyIso c t where
 
 
 -- projAllSub :: forall f c p. (f :>>>: c, All f p) :- All c p
--- projAllSub = Sub projEntailment
+-- projAllSub = Sub ucEntailment
 --   where
---     fc = projEntailment @f @c
+--     fc = ucEntailment @f @c
 
 -- x = some @(Read :<>: Show) "123"
 -- x = Dict @((Eq :<>: Show :<>: Read) :>>>: (Eq :<>: Read))

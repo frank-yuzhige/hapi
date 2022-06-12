@@ -87,6 +87,7 @@ instance ( Alg sig m
          , HasForeignDef api
          , HasForeign sig m
          , Has (State PState) sig m
+         , Has Trace sig m
          , MonadIO m)
       => Algebra (Api api c :+: sig) (ApiFFIAC api c m) where
   alg hdl sig ctx = ApiFFIAC $ case sig of
@@ -96,7 +97,7 @@ instance ( Alg sig m
       case apiArgsAreValid call args of
         Just err -> throwError (ApiError (showApiFromPat call (args2Pat args)) err)
         Nothing  -> do
-          debug $ showApiFromPat call (args2Pat args)
+          trace $ showApiFromPat call (args2Pat args)
           r <- evalForeign call args
           modify @PState (record k r)
           return (ctx $> ())

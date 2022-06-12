@@ -9,7 +9,7 @@
 module Test.HAPI.AASTG.Synth where
 import Control.Algebra (Has, type (:+:), send)
 import Test.HAPI.Effect.Api (Api, mkCall)
-import Test.HAPI.Effect.EVS (EVS(..), attributes2EVSs, evs2m, evs2Direct, evs2Directs, mkEVS)
+import Test.HAPI.Effect.EVS (EVS(..), attributes2EVSs, evs2m, mkEVS, resolveAttrViaEVS, resolveAttrsViaEVS)
 import Control.Effect.State (State, modify, get)
 import Test.HAPI.PState (PState, PStateSupports (record, forget), PKey (PKey))
 import Test.HAPI.Effect.Property (PropertyA (..))
@@ -44,7 +44,7 @@ synthStub (AASTG start edges _) = synth start
 
 synthOneStep :: forall api c sig m. (Has (Fuzzer api c) sig m, Typeable c) => Edge api c -> m TravEventResult
 synthOneStep (Update s e k a) = do
-  v <- evs2Direct $ mkEVS @c a
+  v <- resolveAttrViaEVS a
   send (VarUpdate @_ @c @api k v)
   return NO_RESULT
 synthOneStep (ContIf s e p) = do
@@ -55,7 +55,7 @@ synthOneStep (Assert s e p) = do
   return NO_RESULT
 synthOneStep (APICall s e x api args) = do
   -- 1. Resolve Attributes (Into EVS)
-  attrs <- evs2Directs @c (attributes2EVSs args)
+  attrs <- resolveAttrsViaEVS args
   -- 2. Make APICall using evs
   mkCall @c x api attrs
   -- 3. Store return value in state

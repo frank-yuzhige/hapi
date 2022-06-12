@@ -65,6 +65,7 @@ library
       Test.HAPI.Common
       Test.HAPI.Conduct
       Test.HAPI.Conduct.LibFuzzer
+      Test.HAPI.Conduct.Quickcheck
       Test.HAPI.Constraint
       Test.HAPI.DataType
       Test.HAPI.Effect

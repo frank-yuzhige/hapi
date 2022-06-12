@@ -47,6 +47,8 @@ import qualified Test.HAPI.ApiTrace.CodeGen.C.Emit as C
 import qualified Data.Text.IO as T
 import Text.Printf (printf)
 import Test.HAPI.Effect.VarUpdate (runVarUpdateTrace, VarUpdateError (VarUpdateError), runVarUpdateEval)
+import Test.HAPI.Run (TRACE_MODE(IGNORING))
+import qualified Control.Carrier.Trace.Ignoring as IGNORING
 
 data LibFuzzerConduct = LibFuzzerConduct
   { llvmFuzzerTestOneInputM :: CString -> CSize -> IO CInt
@@ -129,6 +131,7 @@ runFuzzTest aastg bs dbg
       $ runState (\s a -> return a) PS.emptyPState
       $ runProperty @(PropertyA c)
       $ runForeign (return . Left . show) (return . Right)
+      $ IGNORING.runTrace
       $ runApiFFI @api @c
       $ runVarUpdateEval @api @c
       $ runState @EQSupplier (\s a -> return a) supply

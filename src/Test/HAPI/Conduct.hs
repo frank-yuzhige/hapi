@@ -3,4 +3,5 @@ module Test.HAPI.Conduct (
 ) where
 
 import Test.HAPI.Conduct.LibFuzzer as X
+import Test.HAPI.Conduct.Quickcheck as X
 

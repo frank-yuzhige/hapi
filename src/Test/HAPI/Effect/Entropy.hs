@@ -35,6 +35,8 @@ import Control.Effect.State (State, modify, get)
 import Text.Printf (printf)
 import Control.Monad (when)
 import Data.Maybe (isNothing)
+import Test.HAPI.Effect.Gen (GenA, liftGenA)
+import Test.QuickCheck (Arbitrary(arbitrary))
 
 newtype EntropyCounter = EntropyCounter Int
   deriving (Eq, Ord, Num, Real, Enum, Integral, Show)
@@ -59,10 +61,6 @@ instance ( Alg sig m
     L (GetEntropy r)
       | r <= 0    -> fatalError 'alg FATAL_ERROR
         "Attempt to get an negative entropy value. If you are not using the internal EntropySupplier API, please file this as a BUG."
-      -- | r == 1  -> do
-        -- modify @EntropyCounter (+1)
-        -- step <- get @EntropyCounter
-        -- return (ctx $> if step > maxEntropyStep then Just 0 else Nothing)
       -- We use entropy bytestring's length to indicate how long the traversal is.
       -- So even if we only have one out edge, we still eat a byte to avoid infinite loop.
       | otherwise -> do
@@ -75,3 +73,28 @@ instance ( Alg sig m
             -- when (isNothing mi) (debug $ printf "%s: exhaust due to getter error entropy = %s" (show 'alg) (show step))
             return (ctx $> ((\i -> fromIntegral i `mod` r) <$> mi))
     R other -> alg (runEntropyAC . hdl) other ctx
+
+
+newtype EntropyAGenC m a = EntropyAGenC { runEntropyAGenC :: m a }
+  deriving (Functor, Applicative, Monad, MonadFail)
+
+instance ( Alg sig m
+         , Members GenA sig
+         , Members (State EntropyCounter) sig)
+         => Algebra (EntropySupplier :+: sig) (EntropyAGenC m) where
+  alg hdl sig ctx = EntropyAGenC $ case sig of
+    L (GetEntropy r)
+      | r <= 0    -> fatalError 'alg FATAL_ERROR
+        "Attempt to get an negative entropy value. If you are not using the internal EntropySupplier API, please file this as a BUG."
+      -- We use entropy bytestring's length to indicate how long the traversal is.
+      -- So even if we only have one out edge, we still eat a byte to avoid infinite loop.
+      | otherwise -> do
+        modify @EntropyCounter (+1)
+        step <- get @EntropyCounter
+        if step > maxEntropyStep
+          then return (ctx $> Nothing)
+          else do
+            i <- liftGenA $ arbitrary @Word8
+            -- when (isNothing mi) (debug $ printf "%s: exhaust due to getter error entropy = %s" (show 'alg) (show step))
+            return (ctx $> Just (fromIntegral i `mod` r))
+    R other -> alg (runEntropyAGenC . hdl) other ctx

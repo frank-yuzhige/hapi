@@ -1,6 +1,7 @@
 module Test.HAPI (
   module X,
   NP(..),
+  Arbitrary
 ) where
 
 import Test.HAPI.AASTG      as X
@@ -19,3 +20,4 @@ import Test.HAPI.VPtr       as X
 
 -- Re-exports
 import Data.SOP.NP (NP(..))
+import Test.QuickCheck (Arbitrary)

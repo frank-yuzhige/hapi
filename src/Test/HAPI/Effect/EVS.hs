@@ -14,6 +14,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE LambdaCase #-}
 
 {-
 Exogenous Value Generation Effect
@@ -22,7 +23,7 @@ Exogenous Value Generation Effect
 module Test.HAPI.Effect.EVS where
 import Control.Algebra (Algebra (alg), type (:+:) (L, R), Has, send)
 import Control.Monad.IO.Class (MonadIO (liftIO))
-import Test.HAPI.Effect.Gen (GenAC(runGenAC), GenA (LiftGenA), liftGenA, oneof, oneof')
+import Test.HAPI.Effect.Gen (GenAC(runGenAC), GenA (LiftGenA), liftGenA)
 import Test.QuickCheck (Arbitrary(arbitrary), chooseInt, chooseEnum)
 import Data.Kind (Constraint, Type)
 import Data.Functor (($>))
@@ -35,7 +36,7 @@ import Test.HAPI.PState (PKey, PState, PStateSupports (lookUp))
 import Test.HAPI.Common (Fuzzable)
 import Data.Maybe (fromJust)
 import Data.HList (HList (HNil), HMap,type  (:~:) (Refl))
-import Data.SOP ( Proxy(Proxy), NP(..), All, hcmap, I (..) )
+import Data.SOP ( Proxy(Proxy), NP(..), All, hcmap, I (..), type (:.:) (Comp) )
 import Test.HAPI.Args (Args, pattern (::*), Attribute (..), validate, DirectAttribute (..), ExogenousAttribute (..), Attributes, evalDirect, DirAttributes, simplifyDirect)
 import Data.SOP.Dict (mapAll)
 import Data.Serialize (Serialize)
@@ -52,45 +53,41 @@ import Test.HAPI.Util.TH (fatalError, FatalErrorKind (FATAL_ERROR))
 import Test.HAPI.Serialize (HSerialize)
 import qualified Test.HAPI.Serialize as HS
 import qualified Data.Serialize as S
+import Control.Applicative (liftA2)
 
 
 -- Exogenous Value Supplier
 data EVS (c :: Type -> Constraint) (m :: Type -> Type) a where
-  EDirect    :: (Typeable a)      => DirectAttribute c a    -> EVS c m a
-  EExogenous :: (Fuzzable a, c a) => ExogenousAttribute c a -> EVS c m a
+  EExogenous :: (Fuzzable a, c a) => ExogenousAttribute c a -> EVS c m (DirectAttribute c a)
 
 data EVSError = EVSError { causedAttribute :: String, errorMessage :: String }
   deriving Show
 
-mkEVS :: forall c a m. Typeable c => Attribute c a -> EVS c m a
-mkEVS (Direct    d) = EDirect d
+mkEVS :: forall c a m. Typeable c => Attribute c a -> EVS c m (DirectAttribute c a)
 mkEVS (Exogenous e) = EExogenous e
 
+
 -- | Convert attribute to EVS
-attributes2EVSs :: forall c p m. Typeable c => Attributes c p -> NP (EVS c m) p
+attributes2EVSs :: forall c p m. Typeable c => Attributes c p -> NP (EVS c m :.: DirectAttribute c) p
 attributes2EVSs Nil = Nil
-attributes2EVSs (a :* as) = mkEVS a :* attributes2EVSs as
+attributes2EVSs (a :* as) = Comp (mkEVS a) :* attributes2EVSs as
 
 -- | Generate values in HList
-evs2m :: (Has (EVS c) sig m) => NP (EVS c m) p -> m (Args p)
+evs2m :: (Has (EVS c) sig m) => NP (EVS c m :.: f) p -> m (NP f p)
 evs2m Nil = return Nil
-evs2m (evs :* q) = do
+evs2m (Comp evs :* q) = do
   a <- send evs
   s <- evs2m q
-  return (I a :* s)
+  return (a :* s)
 
-evs2Direct :: (Has (EVS c :+: State PState) sig m) => EVS c m a -> m (DirectAttribute c a)
-evs2Direct evs = case evs of
-    EDirect d     -> gets (`simplifyDirect` d)
-    EExogenous {} -> Value <$> send evs
+resolveAttrViaEVS :: forall c a sig m. (Has (EVS c) sig m) => Attribute c a -> m (DirectAttribute c a)
+resolveAttrViaEVS = \case
+  Direct    d -> return d
+  Exogenous e -> send $ EExogenous @_ @c e
 
-evs2Directs :: (Has (EVS c :+: State PState) sig m) => NP (EVS c m) p -> m (DirAttributes c p)
-evs2Directs Nil = return Nil
-evs2Directs (evs :* q) = do
-  d <- evs2Direct evs
-  s <- evs2Directs q
-  return (d :* s)
-
+resolveAttrsViaEVS :: forall c p sig m. (Has (EVS c) sig m) => Attributes c p -> m (DirAttributes c p)
+resolveAttrsViaEVS Nil       = return Nil
+resolveAttrsViaEVS (a :* as) = liftA2 (:*) (resolveAttrViaEVS a) (resolveAttrsViaEVS as)
 
 newtype EVSFuzzArbitraryAC (c :: Type -> Constraint) m a = EVSFuzzArbitraryAC { runEVSFuzzArbitraryAC :: m a }
   deriving (Functor, Applicative, Monad, MonadFail, MonadIO)
@@ -100,18 +97,15 @@ instance (Algebra sig m, Members (State PState :+: GenA) sig, CMembers Arbitrary
     L evs   -> resolveEVS evs
     R other -> alg (runEVSFuzzArbitraryAC . hdl) other ctx
     where
-      resolveEVS (evs :: EVS c n a) = case evs of
-        EDirect d -> do
-          s <- get @PState
-          return (ctx $> evalDirect s d)
-        EExogenous Anything     -> do
-          v <- liftGenA (arbitrary \\ witnessC @Arbitrary @c @a)
-          return (ctx $> v)
+      resolveEVS evs = case evs of
+        EExogenous (Anything :: ExogenousAttribute c a) -> do
+          v <- liftGenA (arbitrary @a \\ witnessC @Arbitrary @c @a)
+          return (ctx $> Value v)
         EExogenous (IntRange l r) -> do
-          v <- liftGenA (chooseInt (l, r))
+          v <- Value <$> liftGenA (chooseInt (l, r))
           return (ctx $> v)
         EExogenous (Range    l r) -> do
-          v <- liftGenA (chooseEnum (l, r))
+          v <- Value <$> liftGenA (chooseEnum (l, r))
           return (ctx $> v)
         -- Exogenous AnyOf xs     -> do
           -- a <- oneof' (return <$> xs)
@@ -127,13 +121,10 @@ instance ( Algebra sig m
          , CMembers Read c)
       => Algebra (EVS c :+: sig) (EVSFromStdinAC c m) where
   alg hdl sig ctx = EVSFromStdinAC $ case sig of
-    L (EDirect    d) -> do
-      s <- get @PState
-      return (ctx $> evalDirect s d)
     L (EExogenous (a :: ExogenousAttribute c a) ) -> do
       liftIO $ print a
       input <- liftIO (putStrLn "Please provide input: " >> readAndValidate a) \\ witnessC @Read @c @a
-      return (ctx $> input)
+      return (ctx $> Value input)
     R other -> alg (runEVSFromStdinAC . hdl) other ctx
     where
       readAndValidate attr = do
@@ -154,19 +145,16 @@ instance ( Has (Orchestration EVSSupply) sig m
     L evs   -> resolveEVS evs
     R other -> alg (runEVSFromOrchestrationAC . hdl) other ctx
     where
-      resolveEVS (evs :: EVS c n a) = case evs of
-        EDirect d -> do
-          s <- get @PState
-          return (ctx $> evalDirect s d)
-        EExogenous a@Anything     -> do
+      resolveEVS evs = case evs of
+        EExogenous a@(Anything :: ExogenousAttribute c a) -> do
           v <- next (show a) \\ witnessC @Serialize @c @a
-          return (ctx $> v)
+          return (ctx $> Value v)
         EExogenous a@(IntRange l r) -> do
           v <- next (show a)
-          return (ctx $> sampleRange l r v)
+          return (ctx $> Value (sampleRange l r v))
         EExogenous a@(Range    l r) -> do
           v <- next (show a)
-          return (ctx $> sampleRange l r v)
+          return (ctx $> Value (sampleRange l r v))
         where
           next attr = do
             x <- nextInstruction @EVSSupply S.get
@@ -189,19 +177,16 @@ instance ( Has (Orchestration EVSSupply) sig m
     L evs   -> resolveEVS evs
     R other -> alg (runEVSFromOrchestrationAC . hdl) other ctx
     where
-      resolveEVS (evs :: EVS c n a) = case evs of
-        EDirect d -> do
-          s <- get @PState
-          return (ctx $> evalDirect s d)
-        EExogenous a@Anything     -> do
+      resolveEVS evs = case evs of
+        EExogenous a@(Anything :: ExogenousAttribute c a)    -> do
           v <- next (show a) \\ witnessC @HSerialize @c @a
-          return (ctx $> v)
+          return (ctx $> Value v)
         EExogenous a@(IntRange l r) -> do
           v <- next (show a)
-          return (ctx $> sampleRange l r v)
+          return (ctx $> Value (sampleRange l r v))
         EExogenous a@(Range    l r) -> do
           v <- next (show a)
-          return (ctx $> sampleRange l r v)
+          return (ctx $> Value (sampleRange l r v))
         where
           next attr = do
             x <- nextInstruction @EVSSupply HS.hget

@@ -46,7 +46,7 @@ do
 
 type EdgeDir = (NodeID, NodeID)
 
-type EdgeCon proxy (api :: ApiDefinition) (c :: Type -> Constraint) m a = EdgeDir -> proxy api c -> m a
+type EdgeCon (api :: ApiDefinition) (c :: Type -> Constraint) m a = EdgeDir -> Building api c -> m a
 
 data VAR
 
@@ -102,10 +102,10 @@ sNewEdge = send . NewEdgeB
 
 -- | Lift to EdgeCon to make it more handy (User can write Builder <%> newNode)
 
-newNode :: forall api c proxy sig m. Has (BuildAASTG api c) sig m => EdgeCon proxy api c m NodeID
+newNode :: forall api c proxy sig m. Has (BuildAASTG api c) sig m => EdgeCon api c m NodeID
 newNode _ _ = send (NewNodeB @api @c)
 
-currNode :: forall api c proxy sig m. Has (BuildAASTG api c) sig m => EdgeCon proxy api c m NodeID
+currNode :: forall api c proxy sig m. Has (BuildAASTG api c) sig m => EdgeCon api c m NodeID
 currNode _ _ = send (CurrNodeB @api @c)
 
 -- | Build Function
@@ -121,18 +121,18 @@ infixr 5 %>
 infixr 4 <%
 
 (<%>) :: forall api c proxy sig m a. (Has (BuildAASTG api c) sig m)
-      => proxy api c -> EdgeCon proxy api c m a -> m a
+      => Building api c -> EdgeCon api c m a -> m a
 p <%> ec = do
   s <- sCurrNode @api @c
   e <- sNewNode  @api @c
   p <% (s, e) %> ec
 
 val :: forall t api c sig m proxy. (Has (BuildAASTG api c) sig m, Fuzzable t, c t, Typeable c)
-    => t -> EdgeCon proxy api c m (PKey t)
+    => t -> EdgeCon api c m (PKey t)
 val v = decl (value v)
 
 decl :: forall t api c sig m proxy. (Has (BuildAASTG api c) sig m, Fuzzable t, c t, Typeable c)
-    => Attribute c t -> EdgeCon proxy api c m (PKey t)
+     => Attribute c t -> EdgeCon api c m (PKey t)
 decl attr (s, e) _ = do
   x <- sNewVar @api @c
   sNewEdge @api @c (Update s e x attr)
@@ -148,7 +148,7 @@ call_ :: forall api apis c sig m a p args proxy.
       , InjNP args (Attribute c) p)
    => api p a
    -> args
-   -> EdgeCon proxy apis c m ()
+   -> EdgeCon apis c m ()
 call_ f args e p = void $ call @_ @apis f args e p
 
 call :: forall api apis c sig m a p args proxy.
@@ -160,7 +160,7 @@ call :: forall api apis c sig m a p args proxy.
        , InjNP args (Attribute c) p)
     => api p a
     -> args
-    -> EdgeCon proxy apis c m (PKey a)
+    -> EdgeCon apis c m (PKey a)
 call f args (s, e) _ = do
   x <- sNewVar @apis @c
   sNewEdge @apis @c (APICall s e x (injApi f) (injNP args))
@@ -173,7 +173,7 @@ assert :: forall apis c sig m proxy.
        , c Bool
        , Typeable c)
     => DirectAttribute c Bool
-    -> EdgeCon proxy apis c m ()
+    -> EdgeCon apis c m ()
 assert k (s, e) _ = do
   sNewEdge @apis @c (Assert s e k)
   sSetNode @apis @c e
@@ -184,7 +184,7 @@ contIf :: forall apis c sig m proxy.
         , c Bool
         , Typeable c)
      => DirectAttribute c Bool
-     -> EdgeCon proxy apis c m ()
+     -> EdgeCon apis c m ()
 contIf k (s, e) _ = do
   sNewEdge @apis @c (ContIf s e k)
   sSetNode @apis @c e
@@ -193,7 +193,7 @@ redirect :: forall apis c sig m proxy.
        ( Has (BuildAASTG apis c) sig m
        , Fuzzable Bool
        , c Bool)
-    => EdgeCon proxy apis c m ()
+    => EdgeCon apis c m ()
 redirect (s, e) _ = do
   sNewEdge @apis @c (Redirect s e)
   sSetNode @apis @c e
@@ -225,7 +225,7 @@ assertTrue :: forall api apis c sig m p args proxy.
             , Fuzzable Bool)
           => api p Bool
           -> args
-          -> EdgeCon proxy apis c m (PKey Bool)
+          -> EdgeCon apis c m (PKey Bool)
 assertTrue f args (s, e) p = do
   i <- sNewNode @apis @c
   b <- p <%(s, i)%> call f args
@@ -241,7 +241,7 @@ assertFalse :: forall api apis c sig m p args proxy.
              , Fuzzable Bool)
            => api p Bool
            -> args
-           -> EdgeCon proxy apis c m (PKey Bool)
+           -> EdgeCon apis c m (PKey Bool)
 assertFalse f args (s, e) p = do
   i <- sNewNode @apis @c
   b <- p <%(s, i)%> call f args
@@ -257,7 +257,7 @@ ifTrue :: forall api apis c sig m p args proxy.
             , Fuzzable Bool)
           => api p Bool
           -> args
-          -> EdgeCon proxy apis c m (PKey Bool)
+          -> EdgeCon apis c m (PKey Bool)
 ifTrue f args (s, e) p = do
   i <- sNewNode @apis @c
   b <- p <%(s, i)%> call f args
@@ -273,7 +273,7 @@ ifFalse :: forall api apis c sig m p args proxy.
              , Fuzzable Bool)
            => api p Bool
            -> args
-           -> EdgeCon proxy apis c m (PKey Bool)
+           -> EdgeCon apis c m (PKey Bool)
 ifFalse f args (s, e) p = do
   i <- sNewNode @apis @c
   b <- p <%(s, i)%> call f args
