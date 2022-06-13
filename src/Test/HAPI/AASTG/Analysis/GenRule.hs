@@ -69,15 +69,15 @@ ruleApplicable i rule@(GenRule pre gen post uptm) aastg = do
             xs <- concat <$> traverse (checkPost vsb edge') (allNodes $ castAASTG aastg)
             if isRedirEdge gen
               then return xs
-              else return $ (maxNodeID (castAASTG aastg) + 1, vsb) : xs
+              else return $ xs <> [(maxNodeID (castAASTG aastg) + 1, vsb)]
   where
     ti = procTypeUBOf i aastg
     uptm2 = procTypes $ typeCheckCtx aastg
     checkPost vsb e' j = do
-      mv <- boundProcType uptm post `isSubType'` boundProcType uptm2 (edge2Act e' $ procTypeUBOf j aastg)
+      mv <- boundProcType uptm post `isSubType'` boundProcType uptm2 (procTypeUBOf j aastg)
       case mv >>= unifyVarSubstitution vsb of
         Nothing   -> return []
-        Just vsb' -> return [(j, vsb')]
+        Just vsb' -> debug (printf "post sat!: %d: %s \n" j (show $ procTypeUBOf j aastg)) >> return [(j, vsb')]
 
 applyRuleOn ::
              ( Alg sig m

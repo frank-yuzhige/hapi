@@ -41,11 +41,10 @@ conduct = libFuzzerConductViaAASTG ["opusfile"] $ castAASTG g
     g1 = runEnv $ runBuildTypedAASTG @A @C gOpenFile
     g2 = runEnv $ runBuildTypedAASTG @A @C gOpenMemory
 
-ggg :: IO (TypedAASTG A C)
-ggg = runEnvIO @IO $ do
+ggg :: IO ()
+ggg = runEnvIO $ do
   x <- coalesceRuleAASTGs 500 [g1, g2]
-  debugIO $ previewAASTG $ castAASTG x
-  return x
+  debugIO $! previewAASTG $! castAASTG x
   where
     g1 = runEnv $ runBuildTypedAASTG @A @C gOpenFile
     g2 = runEnv $ runBuildTypedAASTG @A @C gOpenMemory

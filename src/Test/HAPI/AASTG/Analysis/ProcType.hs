@@ -271,11 +271,11 @@ isSubTypeUB (UnboundedProcTypeMap uptm) sub sup
               checkAny []         = empty
               checkAny (b' : bs') = a ~<=~ b' <|> checkAny bs' --- ???
           (Act a'@(ActGen xa ga) ta, Act b'@(ActGen xb gb) tb) -> do
-            debug $ printf "%s: here" (show 'isSubTypeUB)
+            -- debug $ printf "%s: here" (show 'isSubTypeUB)
             proof <- liftMaybe $ testEquality (typeOf ga) (typeOf gb)
             let s0 = singletonVarSub xb (castWith (apply Refl $ inner proof) xa)
             s1 <- getVarSubFromArgs look look a b (castWith proof ga :* Nil) (gb :* Nil)
-            debug $ printf "%s: varsub ok" (show 'isSubTypeUB)
+            -- debug $ printf "%s: varsub ok" (show 'isSubTypeUB)
             s2 <- liftMaybe $ s0 `unifyVarSubstitution` s1
             s3 <- ta ~<=~ tb
             liftMaybe $ s2 `unifyVarSubstitution` s3
