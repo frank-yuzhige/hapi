@@ -231,22 +231,31 @@ isSubType' sub sup = runState (\s a -> return a) emptySubTypeCtx      -- Pitfall
 -- | Check if the given @sub@ type is a sub-type of the given @sup@ type
 --   Return the variable substitution that instantiates such sub-type relation.
 isSubType :: forall sig m. (Eff (NonDet :+: State SubTypeCtx) sig m) => ProcType -> ProcType -> m VarSubstitution
-isSubType = isSubTypeUB (UnboundedProcTypeMap IM.empty)
+isSubType a b = isSubTypeUB (a, UnboundedProcTypeMap IM.empty) (b, UnboundedProcTypeMap IM.empty)
+
+
+isSubTypeUB' :: Alg sig m
+             => (ProcType, UnboundedProcTypeMap)
+             -> (ProcType, UnboundedProcTypeMap)
+             -> m (Maybe VarSubstitution)
+isSubTypeUB' sub sup = runState (\s a -> return a) emptySubTypeCtx      -- Pitfall: first state then nondet. Other way round will stop propagation of state between (<|>)
+  $ runNonDet (liftA2 (A.<|>)) (return . Just) (return Nothing)
+  $ isSubTypeUB sub sup
 
 -- | Check if the given @sub@ type is a sub-type of the given @sup@ type
 --   Return the variable substitution that instantiates such sub-type relation.
 isSubTypeUB :: forall sig m.
              ( Eff (NonDet :+: State SubTypeCtx) sig m )
-          => UnboundedProcTypeMap
-          -> ProcType
-          -> ProcType
+          => (ProcType, UnboundedProcTypeMap)
+          -> (ProcType, UnboundedProcTypeMap)
           -> m VarSubstitution
-isSubTypeUB (UnboundedProcTypeMap uptm) sub sup
+isSubTypeUB (sub, UnboundedProcTypeMap subm) (sup, UnboundedProcTypeMap supm)
   = do
   -- debug $ printf "%s: Checking ... \n>>  %s\n>>  %s" (show 'isSubTypeUB) (show sub) (show sup)
   sub ~<=~ sup
   where
-    look x = fromMaybe Zero $ IM.lookup x uptm
+    looka x = fromMaybe Zero $ IM.lookup x subm
+    lookb x = fromMaybe Zero $ IM.lookup x supm
     a ~<=~ b = do
       checked <- gets (HS.member (a, b) . view checkedPairs)
       if checked then return emptyVarSub else do
@@ -256,9 +265,9 @@ isSubTypeUB (UnboundedProcTypeMap uptm) sub sup
           (Zero, Zero) ->
             return emptyVarSub
           (SVar x, _) ->
-            look x ~<=~ b
+            looka x ~<=~ b
           (_, SVar y) ->
-            a ~<=~ look y
+            a ~<=~ lookb y
           (Mu {}, _) ->
             unroll a ~<=~ b
           (_, Mu {}) ->
@@ -278,7 +287,7 @@ isSubTypeUB (UnboundedProcTypeMap uptm) sub sup
             -- debug $ printf "%s: here" (show 'isSubTypeUB)
             proof <- liftMaybe $ testEquality (typeOf ga) (typeOf gb)
             let s0 = singletonVarSub xb (castWith (apply Refl $ inner proof) xa)
-            s1 <- getVarSubFromArgs look look a b (castWith proof ga :* Nil) (gb :* Nil)
+            s1 <- getVarSubFromArgs looka lookb a b (castWith proof ga :* Nil) (gb :* Nil)
             -- debug $ printf "%s: varsub ok" (show 'isSubTypeUB)
             s2 <- liftMaybe $ s0 `unifyVarSubstitution` s1
             s3 <- ta ~<=~ tb
@@ -290,7 +299,7 @@ isSubTypeUB (UnboundedProcTypeMap uptm) sub sup
                 xa' = castWith (apply Refl pa) xa
                 s0  = singletonVarSub xb xa'
             -- debug $ printf "%s: API call is eq" (show 'isSubTypeUB)
-            s1 <- getVarSubFromArgs look look a b as' bs
+            s1 <- getVarSubFromArgs looka lookb a b as' bs
             -- debug $ printf "%s: varsub ok" (show 'isSubTypeUB)
             s2 <- liftMaybe $ s0 `unifyVarSubstitution` s1
             -- debug $ printf "%s: unify ok" (show 'isSubTypeUB)
@@ -298,12 +307,12 @@ isSubTypeUB (UnboundedProcTypeMap uptm) sub sup
             liftMaybe $ s2 `unifyVarSubstitution` s3
           (Act a'@(ActAssert da) ta, Act b'@(ActAssert db) tb) -> do
             proof <- liftMaybe $ testEquality (typeOf da) (typeOf db)
-            s1 <- getVarSubFromArgs look look a b (Direct (castWith proof da) :* Nil) (Direct db :* Nil)
+            s1 <- getVarSubFromArgs looka lookb a b (Direct (castWith proof da) :* Nil) (Direct db :* Nil)
             s2 <- ta ~<=~ tb
             liftMaybe $ unifyVarSubstitution s1 s2
           (Act a'@(ActContIf da) ta, Act b'@(ActContIf db) tb) -> do
             proof <- liftMaybe $ testEquality (typeOf da) (typeOf db)
-            s1 <- getVarSubFromArgs look look a b (Direct (castWith proof da) :* Nil) (Direct db :* Nil)
+            s1 <- getVarSubFromArgs looka lookb a b (Direct (castWith proof da) :* Nil) (Direct db :* Nil)
             s2 <- ta ~<=~ tb
             liftMaybe $ unifyVarSubstitution s1 s2
             -- if a == b then ta ~<=~ tb else empty

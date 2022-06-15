@@ -4,7 +4,7 @@
 {-# LANGUAGE BangPatterns #-}
 
 module Test.HAPI.AASTG.Analysis.GenRule where
-import Test.HAPI.AASTG.Analysis.ProcType (ProcType, UnboundedProcTypeMap (coerce2Bounded), isSubType', (!*), boundProcType, edge2Act)
+import Test.HAPI.AASTG.Analysis.ProcType (ProcType, UnboundedProcTypeMap (coerce2Bounded), isSubType', (!*), boundProcType, edge2Act, isSubTypeUB')
 import Test.HAPI.AASTG.Core (AASTG (..), NodeID, edgesFrom2EdgesTo, allNodes, Edge, startNode, endNode, allEdges, singletonAASTG, addEdge, changeEdgeNode, edgesFrom, isEquivalentEdge, isUpdateEdge, isRedirEdge)
 import Test.HAPI.Effect.Eff (Alg, debug)
 import Test.HAPI.AASTG.Analysis.Rename (VarSubstitution, renameVars, maxNodeID, unifyVarSubstitution, renameVarsInEdge)
@@ -51,7 +51,7 @@ ruleApplicable :: (Alg sig m, ApiName api, Typeable c)
                -> TypedAASTG api c
                -> m [(NodeID, VarSubstitution)]
 ruleApplicable i rule@(GenRule pre gen post uptm) aastg = do
-  mv <- boundProcType uptm2 ti `isSubType'` boundProcType uptm pre
+  mv <- (ti, uptm2) `isSubTypeUB'` (pre, uptm)
   case mv of
     Nothing  -> do
       debug $ printf "%s: pre failed on %s! \n %s \n %s" (show 'ruleApplicable) (show i) (show (boundProcType uptm pre)) (show (boundProcType uptm2 ti))
@@ -74,7 +74,7 @@ ruleApplicable i rule@(GenRule pre gen post uptm) aastg = do
     ti = procTypeUBOf i aastg
     uptm2 = procTypes $ typeCheckCtx aastg
     checkPost vsb e' j = do
-      mv <-  boundProcType uptm2 (procTypeUBOf j aastg) `isSubType'` boundProcType uptm post
+      mv <- (procTypeUBOf j aastg, uptm2) `isSubTypeUB'` (post, uptm)
       case mv >>= unifyVarSubstitution vsb of
         Nothing   -> return []
         Just vsb' -> debug (printf "post sat!: %d: %s \n" j (show $ procTypeUBOf j aastg)) >> return [(j, vsb')]

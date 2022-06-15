@@ -175,7 +175,7 @@ upperSubNode :: Alg sig m
 upperSubNode ptm n1 n2 = do
   ans <- runState (\s a -> return a) emptySubTypeCtx
        $ runNonDet (liftA2 (A.<|>)) (return . Just) (return Nothing)
-       $ isSubTypeUB ptm (ptm !* n1) (ptm !* n2)
+       $ isSubTypeUB (ptm !* n1, ptm) (ptm !* n2, ptm)
   when (isJust ans) $ debug $ printf "%s: %d <= %d, %s" (show 'upperSubNode) n1 n2 (show ans)
   return ans
 
@@ -210,14 +210,6 @@ coalesceRuleOneStep ta rules = do
           -- debug $ printf "%s: i=%s, rule: %s" (show 'coalesceRuleOneStep) (show i) (show rule)
           -- debug $ printf "%s: x = %s" (show 'coalesceRuleOneStep) (show x)
           return (Just (i, rule, ri), fromJust x)
-      -- forM vsbs $ \(j, vsb) -> do
-      --   _
-      -- case mvsb of
-      --   Nothing  -> go uptm1 xs
-      --   Just vsb -> do
-      --     debug $ printf "%s: r <= t: %s" (show 'coalesceRuleOneStep) (show (r, t))
-      --     let ans = unsafeApplyRule r x vsb aastg
-      --     return (Just (x, r), ans)
 
 autoCoalesceRule :: ( Alg sig m
                     , ApiName api
