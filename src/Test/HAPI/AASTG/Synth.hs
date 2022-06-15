@@ -9,7 +9,7 @@
 module Test.HAPI.AASTG.Synth where
 import Control.Algebra (Has, type (:+:), send)
 import Test.HAPI.Effect.Api (Api, mkCall)
-import Test.HAPI.Effect.EVS (EVS(..), attributes2EVSs, evs2m, mkEVS, resolveAttrViaEVS, resolveAttrsViaEVS)
+import Test.HAPI.Effect.EVS (EVS(..), evs2m, resolveAttrViaEVS, resolveAttrsViaEVS)
 import Control.Effect.State (State, modify, get)
 import Test.HAPI.PState (PState, PStateSupports (record, forget), PKey (PKey))
 import Test.HAPI.Effect.Property (PropertyA (..))

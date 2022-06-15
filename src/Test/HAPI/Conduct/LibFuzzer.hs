@@ -12,9 +12,9 @@ import qualified Data.ByteString as BS
 import Foreign.C (CString, CSize, CInt)
 import Test.HAPI.Api (ValidApiDef, runForeign)
 import Test.HAPI.Common ( Fuzzable )
-import Options.Applicative (Parser, strArgument, help, info, (<**>), helper, fullDesc, progDesc, header, execParser, metavar, switch, long, short, showDefault, value)
-import Control.Monad (when, void)
-import Test.HAPI.AASTG.GraphViz (previewAASTG)
+import Options.Applicative (Parser, strArgument, help, info, (<**>), helper, fullDesc, progDesc, header, execParser, metavar, switch, long, short, showDefault, value, strOption)
+import Control.Monad (when, void, unless)
+import Test.HAPI.AASTG.GraphViz (previewAASTG, aastg2GraphViz, toGraph)
 import Language.C (CConst, CExpr, Pretty (pretty))
 import Test.HAPI.Constraint ( CMembers, type (:<>:), type (:>>>:) )
 import Test.HAPI.ApiTrace.CodeGen.C.DataType (CCodeGen)
@@ -49,6 +49,10 @@ import Text.Printf (printf)
 import Test.HAPI.Effect.VarUpdate (runVarUpdateTrace, VarUpdateError (VarUpdateError), runVarUpdateEval)
 import Test.HAPI.Run (TRACE_MODE(IGNORING))
 import qualified Control.Carrier.Trace.Ignoring as IGNORING
+import Data.GraphViz.Commands.IO (writeDotFile)
+import System.Directory (makeAbsolute)
+import Data.GraphViz (GraphvizParams(..), setDirectedness, graphToDot, nonClusteredParams, toLabel)
+import Data.Graph.Inductive (Gr)
 
 data LibFuzzerConduct = LibFuzzerConduct
   { llvmFuzzerTestOneInputM :: CString -> CSize -> IO CInt
@@ -87,6 +91,14 @@ _traceMainM :: ( ValidApiDef api
 _traceMainM headers aastg = do
   opt <- execParser opts
   when (previewGraph opt) (previewAASTG aastg)
+  unless (null $ graphFilePath opt) $ do
+    let g      = toGraph @Gr aastg
+        params = nonClusteredParams { fmtNode = \ (_,l) -> [toLabel l]
+                                    , fmtEdge = \ (_, _, l) -> [toLabel l]
+                                    }
+        dg     = setDirectedness graphToDot params g
+    path <- makeAbsolute (graphFilePath opt)
+    writeDotFile path dg
   case bsFilePath opt of
     ""   -> return ()
     path -> do
@@ -99,14 +111,16 @@ _traceMainM headers aastg = do
       <> header   "HAPI LibFuzzer Tracer" )
 
 data TraceOpt = TraceOpt
-  { bsFilePath   :: !FilePath
-  , previewGraph :: !Bool
+  { bsFilePath    :: !FilePath
+  , previewGraph  :: !Bool
+  , graphFilePath :: !FilePath
   }
 
 traceOpt :: Parser TraceOpt
 traceOpt = TraceOpt
   <$> strArgument (metavar "PATH" <> help "LibFuzzer generated crash file location" <> value "")
   <*> switch      (long "preview" <> short 'p' <> help "To preview AASTG" <> showDefault)
+  <*> strOption   (metavar "DPATH" <> long "dot-path" <> short 'd' <> help "AASTG Dot Graph output location" <> value "")
 
 
 

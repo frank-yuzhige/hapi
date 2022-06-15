@@ -51,7 +51,7 @@ ruleApplicable :: (Alg sig m, ApiName api, Typeable c)
                -> TypedAASTG api c
                -> m [(NodeID, VarSubstitution)]
 ruleApplicable i rule@(GenRule pre gen post uptm) aastg = do
-  mv <- boundProcType uptm pre `isSubType'` boundProcType uptm2 ti
+  mv <- boundProcType uptm2 ti `isSubType'` boundProcType uptm pre
   case mv of
     Nothing  -> do
       debug $ printf "%s: pre failed on %s! \n %s \n %s" (show 'ruleApplicable) (show i) (show (boundProcType uptm pre)) (show (boundProcType uptm2 ti))
@@ -74,7 +74,7 @@ ruleApplicable i rule@(GenRule pre gen post uptm) aastg = do
     ti = procTypeUBOf i aastg
     uptm2 = procTypes $ typeCheckCtx aastg
     checkPost vsb e' j = do
-      mv <- boundProcType uptm post `isSubType'` boundProcType uptm2 (procTypeUBOf j aastg)
+      mv <-  boundProcType uptm2 (procTypeUBOf j aastg) `isSubType'` boundProcType uptm post
       case mv >>= unifyVarSubstitution vsb of
         Nothing   -> return []
         Just vsb' -> debug (printf "post sat!: %d: %s \n" j (show $ procTypeUBOf j aastg)) >> return [(j, vsb')]

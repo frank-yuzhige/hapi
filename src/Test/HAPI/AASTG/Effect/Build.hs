@@ -139,6 +139,13 @@ decl attr (s, e) _ = do
   sSetNode @api @c e
   return x
 
+update :: forall t api c sig m proxy. (Has (BuildAASTG api c) sig m, Fuzzable t, c t, Typeable c)
+       => PKey t -> Attribute c t -> EdgeCon api c m (PKey t)
+update k attr (s, e) _ = do
+  sNewEdge @api @c (Update s e k attr)
+  sSetNode @api @c e
+  return k
+
 call_ :: forall api apis c sig m a p args proxy.
       ( Has (BuildAASTG apis c) sig m
       , ApiMember api apis
@@ -279,6 +286,23 @@ ifFalse f args (s, e) p = do
   b <- p <%(s, i)%> call f args
   p <%(i, e)%> contIf (DNot (Get b))
   return b
+
+while :: forall apis c sig m.
+       ( Has (BuildAASTG apis c) sig m
+       , Typeable c
+       , c Bool)
+      => DirectAttribute c Bool
+      -> m ()
+      -> EdgeCon apis c m ()
+while cond body _ _ = do
+  c <- p <%> currNode
+  p <%> contIf cond
+  body
+  c' <- p <%> currNode
+  p <%(c', c)%> redirect
+  sSetNode @apis @c c
+  p <%> contIf (DNot cond)
+  where p = Building @apis @c
 
 
 instance ( Has (State [Edge api c]) sig m

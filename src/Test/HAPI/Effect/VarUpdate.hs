@@ -67,8 +67,6 @@ instance ( Algebra sig m
 
 
 instance ( Algebra sig m
-         , Has (State PState) sig m
-         , Has (Error VarUpdateError) sig m
          , Has (Writer (ApiTrace api c)) sig m)
       => Algebra (VarUpdate api c :+: sig) (VarUpdateCA (VUTrace api c) m) where
   alg hdl sig ctx = VarUpdateCA $ case sig of

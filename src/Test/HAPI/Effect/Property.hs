@@ -81,8 +81,6 @@ runPropertyTrace :: forall err api c sig m a. PropertyTraceAC err api c m a -> m
 runPropertyTrace = runPropertyTraceAC
 
 instance ( Algebra sig m
-         , Has (Error err) sig m
-         , Has (State PState) sig m
          , Has (Writer (ApiTrace api c)) sig m
          , Property (PropertyA c) err PState
          , c Bool) => Algebra (PropertyA c :+: sig) (PropertyTraceAC err api c m) where

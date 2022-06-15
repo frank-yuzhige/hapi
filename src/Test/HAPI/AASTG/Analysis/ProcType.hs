@@ -251,7 +251,7 @@ isSubTypeUB (UnboundedProcTypeMap uptm) sub sup
       checked <- gets (HS.member (a, b) . view checkedPairs)
       if checked then return emptyVarSub else do
         modify $ over checkedPairs $ HS.insert (a, b)
-        debug $ printf "%s: Checking ... \n>>  %s\n>>  %s" (show 'isSubTypeUB <> ":~<=~") (show a) (show b)
+        -- debug $ printf "%s: Checking ... \n>>  %s\n>>  %s" (show 'isSubTypeUB <> ":~<=~") (show a) (show b)
         case (a, b) of
           (Zero, Zero) ->
             return emptyVarSub
@@ -266,7 +266,11 @@ isSubTypeUB (UnboundedProcTypeMap uptm) sub sup
           (Par as, _) -> do
             vs <- mapM (~<=~ b) as
             liftMaybe $ foldr (\v a -> a >>= unifyVarSubstitution v) (Just emptyVarSub) vs
-          (_, Par bs) -> checkAny bs
+          (_, Par bs) -> do
+            -- debug $ printf "%s: Checking RHS par" (show 'isSubTypeUB)
+            cd <- gets (HS.member (a, b) . view checkedPairs)
+            -- debug $ printf "%s: HS Member: %s" (show 'isSubTypeUB) (show cd)
+            checkAny bs
             where
               checkAny []         = empty
               checkAny (b' : bs') = a ~<=~ b' <|> checkAny bs' --- ???
@@ -427,6 +431,9 @@ instance Eq Action where
     Just proof -> castWith (apply Refl $ inner proof) x == y
                && castWith proof a == b
   ActAssert p   == ActAssert q = case testEquality (typeOf p) (typeOf q) of
+    Nothing    -> False
+    Just proof -> castWith proof p == q
+  ActContIf p   == ActContIf q = case testEquality (typeOf p) (typeOf q) of
     Nothing    -> False
     Just proof -> castWith proof p == q
   _ == _ = False

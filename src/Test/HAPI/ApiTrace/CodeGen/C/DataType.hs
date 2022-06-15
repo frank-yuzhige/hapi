@@ -9,6 +9,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DefaultSignatures #-}
 
 module Test.HAPI.ApiTrace.CodeGen.C.DataType where
 import Test.HAPI.ApiTrace.TyConst (TyConst(..))
@@ -93,6 +94,9 @@ baseType2CGen b = (baseType2CType b, foldr (.) id (replicate (baseType2CPtrLevel
 toCType  :: TyConstC a => proxy a -> ([CTypeSpec], CDeclr -> CDeclr)
 toCType = baseType2CGen . toCBType
 
+ctype :: String -> (CTypeSpec, CDeclr -> CDeclr)
+ctype s = (ty (internalIdent s), id)
+
 class Typeable a => TyConstC a where
   toCConst    :: a -> CExpr
   toCBType    :: proxy a -> CBaseType
@@ -106,7 +110,6 @@ instance TyConstC () where
 instance TyConstC Int where
   toCConst   = cIntConst . fromIntegral
   toCBType _ = CBInt
-
 
 instance TyConstC CInt where
   toCConst   = cIntConst . fromIntegral
@@ -127,6 +130,22 @@ instance TyConstC Char where
 instance TyConstC CChar where
   toCConst   = cIntConst . fromIntegral
   toCBType _ = CBChar
+
+instance TyConstC Int8 where
+  toCConst = cIntConst . fromIntegral
+  toCBType _ = CBInt
+
+instance TyConstC Int16 where
+  toCConst = cIntConst . fromIntegral
+  toCBType _ = CBInt
+
+instance TyConstC Int32 where
+  toCConst = cIntConst . fromIntegral
+  toCBType _ = CBInt
+
+instance TyConstC Int64 where
+  toCConst = cIntConst . fromIntegral
+  toCBType _ = CBInt
 
 instance TyConstC String where
   toCConst s = cProdLit (showBaseType (toCBType (I s))) [toCConst (length s), cStrConst s]
@@ -149,9 +168,6 @@ instance (TyConstC a, TyConstC b)
   => TyConstC (a, b) where
   toCConst (a, b) = cProdLit (showBaseType (toCBType (I (a, b)))) [toCConst a, toCConst b]
   toCBType _      = CBProd [toCBType (Proxy @a), toCBType (Proxy @b)]
-
-ctype :: String -> (CTypeSpec, CDeclr -> CDeclr)
-ctype s = (ty (internalIdent s), id)
 
 -- C DataType Extra Instances
 deriving instance Hashable CInt
@@ -201,3 +217,5 @@ instance HSerialize CUIntPtr
 deriving instance Hashable CPtrdiff
 deriving instance Serialize CPtrdiff
 instance HSerialize CPtrdiff
+
+-- instance HSerialize Int16

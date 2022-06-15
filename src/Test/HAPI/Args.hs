@@ -112,6 +112,31 @@ range a b = Exogenous @c $ Range a b
 irange :: forall c a. (Fuzzable Int, c Int, Typeable c) => Int -> Int -> Attribute c Int
 irange a b = Exogenous @c $ IntRange a b
 
+
+(.&&) :: (c Bool) => DirectAttribute c Bool -> DirectAttribute c Bool -> DirectAttribute c Bool
+(.&&) = DAnd
+(.||) :: (c Bool) => DirectAttribute c Bool -> DirectAttribute c Bool -> DirectAttribute c Bool
+(.||) = DOr
+(.+) :: (c a, Num a) => DirectAttribute c a -> DirectAttribute c a -> DirectAttribute c a
+(.+) = DPlus
+(.-) :: (c a, Num a) => DirectAttribute c a -> DirectAttribute c a -> DirectAttribute c a
+(.-) = DMinus
+(.*) :: (c a, Num a) => DirectAttribute c a -> DirectAttribute c a -> DirectAttribute c a
+(.*) = DMul
+(.//) :: (c a, Num a, Integral a) => DirectAttribute c a -> DirectAttribute c a -> DirectAttribute c a
+(.//) = DDiv
+(./) :: (c a, Num a, Fractional a) => DirectAttribute c a -> DirectAttribute c a -> DirectAttribute c a
+(./) = DFDiv
+
+(.>), (.<), (.>=), (.<=) :: (c a, Fuzzable a, Ord a) => DirectAttribute c a -> DirectAttribute c a -> DirectAttribute c Bool
+(.>) = DCmp DGt
+(.<) = DCmp DLt
+(.>=) = DCmp DGte
+(.<=) = DCmp DLte
+(.==), (.!=) :: (c a, Fuzzable a, Eq  a) => DirectAttribute c a -> DirectAttribute c a -> DirectAttribute c Bool
+(.==) = DEq True
+(.!=) = DEq False
+
 args2Pat :: forall p. All Fuzzable p => Args p -> ArgPattern p
 args2Pat = hcmap (Proxy @Fuzzable) (K . show . unI)
 
@@ -247,7 +272,7 @@ instance Show a => Show (DirectAttribute c a) where
   show (DDiv da1 da2)   = printf "(%s // %s)" (show da1) (show da2)
   show (DFDiv da1 da2)  = printf "(%s / %s)" (show da1) (show da2)
   show (DNeg da')       = printf "-%s" (show da')
-  show (DCmp c da1 da2) = printf "(%s %s %s)" (showCmp c) (show da1) (show da2)
+  show (DCmp c da1 da2) = printf "(%s %s %s)" (show da1) (showCmp c) (show da2)
     where
       showCmp DGt  = ">"
       showCmp DGte = ">="
