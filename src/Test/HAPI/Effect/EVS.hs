@@ -63,14 +63,6 @@ data EVS (c :: Type -> Constraint) (m :: Type -> Type) a where
 data EVSError = EVSError { causedAttribute :: String, errorMessage :: String }
   deriving Show
 
-mkEVS :: forall c a m. Typeable c => Attribute c a -> EVS c m (DirectAttribute c a)
-mkEVS (Exogenous e) = EExogenous e
-
-
--- | Convert attribute to EVS
-attributes2EVSs :: forall c p m. Typeable c => Attributes c p -> NP (EVS c m :.: DirectAttribute c) p
-attributes2EVSs Nil = Nil
-attributes2EVSs (a :* as) = Comp (mkEVS a) :* attributes2EVSs as
 
 -- | Generate values in HList
 evs2m :: (Has (EVS c) sig m) => NP (EVS c m :.: f) p -> m (NP f p)

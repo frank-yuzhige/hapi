@@ -25,11 +25,7 @@ data HLibPtr :: ApiDefinition where
 
   -- Memory Allocation
   Malloc       :: (Storable a) => HLibPtr '[]           (Ptr a)
-  -- Calloc       :: (Storable a) => HLibPtr '[]           (Ptr a)
-  -- Realloc      :: (Storable a) => HLibPtr '[Ptr a]      (Ptr a)
   MallocBytes  ::                 HLibPtr '[Int]        (Ptr a)
-  -- CallocBytes  ::                 HLibPtr '[Int]        (Ptr a)
-  -- ReallocBytes ::                 HLibPtr '[Ptr a, Int] (Ptr a)
   Free         ::                 HLibPtr '[Ptr a]      ()
 
 

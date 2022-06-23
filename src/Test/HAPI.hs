@@ -11,7 +11,6 @@ import Test.HAPI.Args       as X
 import Test.HAPI.Common     as X
 import Test.HAPI.Conduct    as X
 import Test.HAPI.Constraint as X
-import Test.HAPI.DataType   as X
 import Test.HAPI.Effect     as X
 import Test.HAPI.PState     as X
 import Test.HAPI.Run        as X

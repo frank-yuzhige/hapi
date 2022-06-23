@@ -90,11 +90,6 @@ traceDecls xs = do
           return []
         go _ = return []
 
-
-    -- collectExtra []                     = []
-    -- collectExtra (TraceCall x f a : xs) = map CBlockDecl (extraDecls x f a) <> collectExtra xs
-    -- collectExtra (_ : xs)               = collectExtra xs
-
     makeDecl :: (CCodeGen a) => PKey a -> CBlockItem
     makeDecl (x :: PKey a) = CBlockDecl $ decl' (map CTypeSpec ty) (f $ cDeclr $ getPKeyID x) Nothing
       where

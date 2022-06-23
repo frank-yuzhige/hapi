@@ -26,6 +26,10 @@ import Test.HAPI.Serialize (HSerialize)
 import Data.List (intercalate)
 import Data.String (fromString)
 import Data.SOP (I(..))
+import qualified Data.ByteString.Lazy as L
+import GHC.Exts (IsList(toList))
+import Data.Text.Internal.Unsafe.Char (unsafeChr)
+import qualified Data.ByteString as S
 
 
 data CBaseType
@@ -97,6 +101,12 @@ toCType = baseType2CGen . toCBType
 ctype :: String -> (CTypeSpec, CDeclr -> CDeclr)
 ctype s = (ty (internalIdent s), id)
 
+cBytesLit :: CExpr -> CExpr -> CExpr
+cBytesLit s b = cStructLit (showBaseType (CBProd [CBInt, CBPtr CBChar])) [("p0", s), ("p1", b)]
+
+cUBytesLit :: CExpr -> CExpr -> CExpr
+cUBytesLit s b = cStructLit (showBaseType (CBProd [CBInt, CBPtr CBUChar])) [("p0", s), ("p1", b)]
+
 class Typeable a => TyConstC a where
   toCConst    :: a -> CExpr
   toCBType    :: proxy a -> CBaseType
@@ -149,6 +159,14 @@ instance TyConstC Int64 where
 
 instance TyConstC String where
   toCConst s = cProdLit (showBaseType (toCBType (I s))) [toCConst (length s), cStrConst s]
+  toCBType _ = CBProd [CBInt, CBPtr CBChar]
+
+instance TyConstC L.ByteString where
+  toCConst s = cProdLit (showBaseType (toCBType (I s))) [toCConst (L.length s), cStrConst (map (unsafeChr . fromIntegral) $ toList s)]
+  toCBType _ = CBProd [CBInt, CBPtr CBChar]
+
+instance TyConstC S.ByteString where
+  toCConst s = cProdLit (showBaseType (toCBType (I s))) [toCConst (S.length s), cStrConst (map (unsafeChr . fromIntegral) $ toList s)]
   toCBType _ = CBProd [CBInt, CBPtr CBChar]
 
 instance TyConstC [CChar] where

@@ -18,7 +18,8 @@ import qualified Data.ByteString as BS
 
 
 data HLibFS :: ApiDefinition where
-  NewFile  :: HLibFS '[String] FilePath
+  NewFile      :: HLibFS '[String] FilePath
+  NewFileBytes :: HLibFS '[ByteString] FilePath
 
 newtype HLibMeta = HLibMeta {_fileId :: Int}
 $(makeLenses ''HLibMeta)
@@ -38,4 +39,11 @@ instance HasForeignDef HLibFS where
     liftIO $ do
       let filepath = "hapi_newfile_" <> show i
       BS.writeFile filepath (fromString content)  -- Use bytestring as String needs to take care of invalid chars in different encodings -- Yuck!
+      return filepath
+  evalForeign NewFileBytes = implE $ \content -> do
+    i <- getsMeta @HLibFS (view fileId)
+    updateMeta @HLibFS (over fileId (+ 1))
+    liftIO $ do
+      let filepath = "hapi_newfile_" <> show i
+      BS.writeFile filepath content
       return filepath

@@ -61,7 +61,6 @@ data TypedAASTG api c = TypedAASTG
 
 data TypeErrorCause
   = UseVariableNotInContext String ProcCtx
-  -- | ReassignVariable        String ProcCtx
   deriving (Show)
 
 typeCheck' :: ApiName api => AASTG api c -> TypedAASTG api c
@@ -94,28 +93,6 @@ typeCheck aastg = do
           Nothing  -> return ()
           Just err -> throwError $ TypeCheckError i (show edge) err
 
-      -- forM_ (edgesFrom i aastg) $ \edge -> case edge of
-      --   Update   _ _ k a      -> checkAttr edge a
-      --   ContIf   _ _ p        -> checkAttr edge (Direct p)
-      --   Assert   _ _ p        -> checkAttr edge (Direct p)
-      --   APICall  _ _ k f args -> checkArgs edge args
-      --   Redirect _ _          -> return ()
-      -- where
-      --   ctx = ctxs IM.! i
-
-      --   checkArgs :: forall p. Edge api c -> Attributes p -> m ()
-      --   checkArgs edge Nil       = return ()
-      --   checkArgs edge (a :* as) = checkAttr edge a >> checkArgs edge as
-
-      --   checkAttr :: forall a. Edge api c -> Attribute a -> m ()
-      --   checkAttr edge = \case
-      --     Direct (Get x) ->
-      --       if x `memberCtx` ctx
-      --         then return ()
-      --         else throwError $ TypeCheckError i (show edge) $ UseVariableNotInContext (getPKeyID x) ctx
-      --     AnyOf as -> mapM_ (checkAttr edge) as
-      --     _        -> return ()
-
 checkEdge :: forall api c sig m.
            (ApiName api
            , Alg sig m)
@@ -142,7 +119,6 @@ checkEdge ctx edge = case edge of
         if x `memberCtx` ctx
           then return Nothing
           else return $ Just $ UseVariableNotInContext (getPKeyID x) ctx
-      -- AnyOf as -> foldr (<|>) Nothing <$> mapM checkAttr as
       _        -> return Nothing
 
 

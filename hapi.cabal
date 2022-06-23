@@ -45,7 +45,6 @@ library
       Test.HAPI.AASTG.Effect.Build
       Test.HAPI.AASTG.Effect.Trav
       Test.HAPI.AASTG.GraphViz
-      Test.HAPI.AASTG.LLVM.Extract
       Test.HAPI.AASTG.Synth
       Test.HAPI.Api
       Test.HAPI.ApiTrace
@@ -67,7 +66,6 @@ library
       Test.HAPI.Conduct.LibFuzzer
       Test.HAPI.Conduct.Quickcheck
       Test.HAPI.Constraint
-      Test.HAPI.DataType
       Test.HAPI.Effect
       Test.HAPI.Effect.Api
       Test.HAPI.Effect.Eff

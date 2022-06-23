@@ -100,8 +100,3 @@ instance (forall (a :: k). Typeable a => Hashable (f a)) => Hashable (TypeRepMap
       hashes = foldr (.) (`hashWithSalt` "TypeRepMap") (toListWith entryHash m)
       entryHash :: forall (a :: ArgKindOf f) . (Typeable a, Hashable (f a)) => f a -> (Int -> Int)
       entryHash k = \salt -> salt `hashWithSalt` (show (typeRep @a), k)
-
--- tm1 :: TypeRepMap (Map.Map Int)
--- tm1 = TM.one (Map.singleton (1 :: Int) (10 :: Int))
--- tm2 :: TypeRepMap (Map.Map Int)
--- tm2 = TM.insert (Map.insert 10 "456" $ Map.singleton (1 :: Int) "123") $ TM.one (Map.singleton (2 :: Int) (10 :: Int))

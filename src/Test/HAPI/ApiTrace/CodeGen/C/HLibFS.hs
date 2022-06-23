@@ -22,8 +22,21 @@ import Language.C (undefNode)
 instance Entry2BlockC HLibFS where
   call2Block x f args = case f of
     NewFile ->
-      [ liftEToB $ pk2CVar x    <-- cStrConst filename
-      , liftEToB $ cVar varname <-- cFOpen (pk2CVar x) (cStrConst "w+") -- FILE *fp = fopen(filepath, "w+");
+      [ liftEToB $ pk2CVar x    <-- toCConst filename
+      , liftEToB $ cVar varname <-- cFOpen (pk2CVar x .: "p1") (cStrConst "w+") -- FILE *fp = fopen(filepath, "w+");
+      , CBlockStmt $ CIf (cVar filename) writeNClose Nothing undefNode
+      ]
+      where
+        [content] = aExprs
+        filename = "hapi_file__" <> show x
+        varname  = filename
+        writeNClose = block
+          [ liftEToB $ cFPuts content (cVar filename)
+          , liftEToB $ cFClose (cVar filename)
+          ]
+    NewFileBytes ->
+      [ liftEToB $ pk2CVar x    <-- toCConst filename
+      , liftEToB $ cVar varname <-- cFOpen (pk2CVar x .: "p1") (cStrConst "w+") -- FILE *fp = fopen(filepath, "w+");
       , CBlockStmt $ CIf (cVar filename) writeNClose Nothing undefNode
       ]
       where
@@ -37,6 +50,7 @@ instance Entry2BlockC HLibFS where
     where
       aExprs = dirAttrs2CExprs args
   extraDecls x f args = case f of
-    NewFile -> [decl fileTy (ptr $ cDeclr ("hapi_file__" <> show x)) Nothing]
+    NewFile      -> [decl fileTy (ptr $ cDeclr ("hapi_file__" <> show x)) Nothing]
+    NewFileBytes -> [decl fileTy (ptr $ cDeclr ("hapi_file__" <> show x)) Nothing]
 
 

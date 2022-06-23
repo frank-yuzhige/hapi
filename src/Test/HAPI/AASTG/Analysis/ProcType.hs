@@ -170,6 +170,7 @@ edge2Act edge t = case edge of
     Act (ActCall mx api args) t
   Redirect n j ->
     t
+
 -- | Infer Unbounded procedure types for all nodes in the given AASTG using iterative algorithm.
 inferProcTypeUB :: forall sig m api c.
                        ( Alg sig m
@@ -375,19 +376,6 @@ getVarSubFromArgs look1 look2 d1 d2 (a :* as) (b :* bs) = do
     unify (DepAttr a) (DepAttr b)
       | a == b    = return TM.empty
       | otherwise = empty
-    -- -- 2 variables are effectively the same, iff they point to some non-variable attribute that is the same.
-    -- -- unify (DepAttr (Direct (Get x1))) (DepAttr (Direct (Get x2))) = do
-    --   -- debug $ printf "%s: var start %s" (show 'getVarSubFromArgs <> ".unify") (show (x1, x2))
-    --   -- dx1 <- lookupPKInType look1 x1 d1
-    --   -- debug $ printf "%s: var %s;" (show 'getVarSubFromArgs <> ".unify") (show (x1, dx1))
-    --   -- dx2 <- lookupPKInType look2 x2 d2
-    --   -- debug $ printf "%s: var %s;" (show 'getVarSubFromArgs <> ".unify") (show (x2, dx2))
-    --   -- TM.adjust (SE . HM.insert x2 x1 . unSE) <$> unify dx1 dx2
-    --   -- return (singletonVarSub x2 x1)
-    -- -- Non-variable attributes are effectively the same, iff they are the same. (lol)
-    -- unify (DepAttr a) (DepAttr b)
-    --   | a == b    = return TM.empty
-    --   | otherwise = empty
     -- Api calls are the same, iff the function they calls are the same, and all arguments are pairwise-effectively the same.
     unify (DepCall x1 f fa) (DepCall x2 g ga) = do
       (_, proof, _) <- liftMaybe $ f `apiEqProofs` g

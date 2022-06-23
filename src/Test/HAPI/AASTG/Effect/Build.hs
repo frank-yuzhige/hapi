@@ -36,18 +36,11 @@ import Data.Data (typeRep, Typeable)
 import Data.Char (toLower, isAlpha)
 import Test.HAPI.AASTG.Analysis.TypeCheck (typeCheck, typeCheck', TypedAASTG)
 
-{-
-do
-  x <- sNewVar (Value 10)
-  y <- sNewVar Anything
-  fork cont1 cont2 cont3
-
--}
-
 type EdgeDir = (NodeID, NodeID)
 
 type EdgeCon (api :: ApiDefinition) (c :: Type -> Constraint) m a = EdgeDir -> Building api c -> m a
 
+-- Eff Label
 data VAR
 
 data Building (api :: ApiDefinition) (c :: Type -> Constraint) = Building
@@ -294,15 +287,25 @@ while :: forall apis c sig m.
       => DirectAttribute c Bool
       -> m ()
       -> EdgeCon apis c m ()
-while cond body _ _ = do
-  c <- p <%> currNode
-  p <%> contIf cond
-  body
-  c' <- p <%> currNode
-  p <%(c', c)%> redirect
-  sSetNode @apis @c c
-  p <%> contIf (DNot cond)
-  where p = Building @apis @c
+while cond body _ _
+  = whileNormalCond    -- Should I use whileForever when cond is true?
+  where
+    p = Building @apis @c
+    whileForever = do
+      c <- p <%> currNode
+      body
+      c' <- p <%> currNode
+      p <%(c', c)%> redirect
+      sSetNode @apis @c c
+
+    whileNormalCond = do
+      c <- p <%> currNode
+      p <%> contIf cond
+      body
+      c' <- p <%> currNode
+      p <%(c', c)%> redirect
+      sSetNode @apis @c c
+      p <%> contIf (DNot cond)
 
 
 instance ( Has (State [Edge api c]) sig m

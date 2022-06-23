@@ -24,7 +24,6 @@ import Test.QuickCheck (Arbitrary)
 import Control.Monad (forM_, join)
 import qualified Test.HAPI.PState as PS
 import qualified Test.HAPI.VPtr as VP
-import Test.HAPI.DataType (BasicSpec)
 import Test.HAPI.PrimApi (Prim)
 import qualified Test.HAPI.HLib.HLibPrelude as HLib
 import Test.HAPI.HLib.HLibPrelude (HLibPrelude)
@@ -354,3 +353,4 @@ tq = runEnvIO @IO $ t1 `isSubType'` Zero
 -- testOneInputM str size = do
 --   bs <- BS.packCStringLen (str, fromIntegral size)
 --   return 0
+

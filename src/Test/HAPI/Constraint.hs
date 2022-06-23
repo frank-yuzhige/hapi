@@ -76,11 +76,6 @@ productC = Sub $ Dict \\ f1 \\ f2
     f1 = ucEntailment @f @g @a
     f2 = ucEntailment @f @h @a
 
--- castL = mapDict ucEntailment
-
--- castR ::  forall f l2 a l1. (CMembers (l1 :<>: l2) f) => Dict (f a) -> Dict (l2 a)
--- castR = _
-
 type family CMembers (sub :: Constraint1) (sup :: Constraint1) :: Constraint where
   CMembers (f :<>: g) s = (CMembers f s, CMembers g s)
   CMembers f          s = s :>>>: f

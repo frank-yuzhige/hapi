@@ -36,7 +36,8 @@ class S.Serialize a => HSerialize a where
   default hget :: S.Serialize a => S.Get a
   hget = S.get
 
-
+hserializeMaxBytesLen :: Integral a => a
+hserializeMaxBytesLen = 2 ^ 17
 
 deriving instance Generic (Ptr a)
 instance S.Serialize (Ptr a) where
@@ -73,14 +74,14 @@ instance HSerialize Any
 instance HSerialize ShortByteString
 instance HSerialize ByteString where
   hget = do
-    x <- hget @Int
-    bs <- S.getBytes (abs $ x `mod` 1024)
+    x <- hget @Word64
+    bs <- S.getBytes (abs $ fromIntegral $ x `mod` hserializeMaxBytesLen)
     return $! B.copy bs
 instance HSerialize IntSet
 instance HSerialize a => HSerialize [a] where
   hget = do
     x <- hget @Word64
-    go [] (abs $ x `mod` 1024)
+    go [] (abs $ x `mod` hserializeMaxBytesLen)
     where
     go as 0 = return $! reverse as
     go as i = do

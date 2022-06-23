@@ -63,7 +63,7 @@ instance ByteSupplier BiDir FBSupplier where
 data EQSupplier = EQSupplier {eqFwBS :: ByteString, eqBwBS :: ByteString, originalFW :: ByteString}
 
 mkEQBS :: ByteString -> EQSupplier
-mkEQBS bs = EQSupplier fw bw fw
+mkEQBS bs = EQSupplier fw (BS.reverse bw) fw
   where
     (fw', bw) = BS.breakEnd (== magicSeparator) bs
     fw | BS.null fw' = ""
@@ -72,8 +72,8 @@ mkEQBS bs = EQSupplier fw bw fw
 instance ByteSupplier BiDir EQSupplier where
   eatBytes FW getter (EQSupplier fw bw fwo) = case S.runGetState getter fw 0 of
     Left err
-      | BS.length fw >= 32768 -> Left (CerealError err)
-      | otherwise             -> eatBytes FW getter (EQSupplier resample bw fwo)
+      | BS.length fw >= (2 ^ 18) -> Left (CerealError err)
+      | otherwise                -> eatBytes FW getter (EQSupplier resample bw fwo)
       where
         resample = foldr ($!) fw (replicate ((1024 `quot` BS.length fwo) `max` 1) (<> fwo))
     Right (a, fw') -> Right (a, EQSupplier fw' bw fwo)

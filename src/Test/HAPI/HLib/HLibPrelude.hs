@@ -28,10 +28,6 @@ mod = Prim "mod" $ Arity2 P.mod
 (||) = Prim "||" $ BinaryOp (P.||)
 not  = Prim "not " $ UnaryOp P.not
 
-
--- len :: P.Foldable t => HLibPrelude '[t a] P.Int
--- len = Prim "length" $ Arity1 P.length
-
 (==) :: P.Eq a => HLibPrelude '[a, a] P.Bool
 (==) = Prim "==" $ BinaryOp (P.==)
 

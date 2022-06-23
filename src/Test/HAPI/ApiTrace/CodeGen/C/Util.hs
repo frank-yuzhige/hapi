@@ -389,15 +389,6 @@ cProdLit t fs = cStructLit t [(fromString $ printf "p%d" i, f) | (i :: Int, f) <
 cSumLit :: String -> [CExpr] -> CExpr
 cSumLit t fs = cStructLit t [(fromString $ printf "s%d" i, f) | (i :: Int, f) <- [0..] `zip` fs]
 
-cBytesLit :: CExpr -> CExpr -> CExpr
-cBytesLit s b = cStructLit "CBytes" [("size", s), ("bytes", b)]
-
-cUBytesLit :: CExpr -> CExpr -> CExpr
-cUBytesLit s b = defCompoundLit "CUBytes" [size, bytes]
-    where
-      size  = ([memberDesig "size"] , initExp s)
-      bytes = ([memberDesig "bytes"], initExp b)
-
 instance Num CExpr where
   fromInteger = CConst . flip CIntConst undefNode . cInteger
   (*)         = cOp CMulOp

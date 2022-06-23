@@ -25,26 +25,9 @@ import GHC.ForeignPtr (ForeignPtr(..), ForeignPtrContents(..))
 class (Typeable t, Show t, Eq t, Hashable t) => Fuzzable t
 
 instance (Typeable t, Show t, Eq t, Hashable t) => Fuzzable t
--- TODO: Fine grain control of Fuzzable instance
--- instance Fuzzable Int
--- instance Fuzzable Char
--- instance Fuzzable String
--- instance (Fuzzable a) => Fuzzable (VPtr a)
-
--- type AllFuzzable p = (All Fuzzable p, All Compos)
 
 type ErrorMsg = String
 
 deriving instance Generic (ForeignPtr a)
-
-
--- instance Serialize ForeignPtrContents where
---   put (PlainForeignPtr ir) = _wa
---   put (MallocPtr mba ir) = _wb
---   put (PlainPtr mba) = _wc
-
--- instance Serialize (ForeignPtr a) where
---   -- put p = put (castPtr2Int p)
---   -- get   = castInt2Ptr <$> get @Int
 
 

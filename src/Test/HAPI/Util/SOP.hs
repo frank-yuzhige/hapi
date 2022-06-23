@@ -8,10 +8,6 @@ import Data.SOP (NP (..))
 class InjNP t f p | t f -> p, p f -> t where
   injNP :: t -> NP f p
 
--- instance InjNP (NP f p) f p where
---   injNP = id
-
-
 instance InjNP () f '[] where
   injNP _ = Nil
 
